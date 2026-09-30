@@ -1,5 +1,9 @@
-// Optional settings. Leave empty to keep everything 100% free and offline-friendly.
+// Optional settings. Leave the backend fields empty to run in free "demo mode" (everything lives inside the link).
 window.ADATE_CONFIG = {
-  // Free Tenor API key (https://developers.google.com/tenor) turns on "search stickers online".
-  tenorKey: ''
+  githubUrl: 'https://github.com/moemenakari/adate',
+  // Free Supabase project (see README + supabase/schema.sql): enables short links, the private inbox and saved answers.
+  supabaseUrl: '',
+  supabaseKey: '',
+  // Text-suggestion endpoint (free, no key). Set to '' to use only the built-in local suggestions.
+  aiUrl: 'https://text.pollinations.ai/'
 };

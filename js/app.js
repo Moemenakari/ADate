@@ -2,6 +2,7 @@
 'use strict';
 const $app = document.getElementById('app');
 const CFG = window.ADATE_CONFIG || {};
+const GITHUB = CFG.githubUrl || 'https://github.com/moemenakari/adate';
 
 /* ------------------------------------------------------------------ helpers */
 function h(tag, attrs, ...kids) {
@@ -12,7 +13,6 @@ function h(tag, attrs, ...kids) {
     if (k === 'class') el.className = v;
     else if (k === 'style') el.style.cssText = v;
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else if (k === 'text') el.textContent = v;
     else el.setAttribute(k, v === true ? '' : v);
   }
   for (const c of kids.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(c));
@@ -20,35 +20,37 @@ function h(tag, attrs, ...kids) {
 }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rand = (a, b) => a + Math.random() * (b - a);
-const safeImg = (u) => typeof u === 'string' && (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(u) || /^https:\/\/[^\s"'()<>]+$/.test(u));
+const safeImg = (u) => typeof u === 'string' && u.length < 600000 && (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(u) || /^https:\/\/[^\s"'()<>]+$/.test(u));
 const safeHex = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : null);
 const digits = (s) => String(s || '').replace(/\D/g, '');
 const deepCopy = (o) => JSON.parse(JSON.stringify(o));
-function fill(str, cfg) {
-  return String(str || '').replace(/\{to\}/g, cfg.to || 'Hey you').replace(/\{from\}/g, cfg.from || 'me');
-}
+const fill = (str, cfg) => String(str || '').replace(/\{to\}/g, cfg.to || 'Hey you').replace(/\{from\}/g, cfg.from || 'me');
+const svgIcon = (id) => (STICKERS[id] || STICKERS['cat-white']).svg;
 function fmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
-  if (!m) return iso || '';
-  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' }) : (iso || '');
 }
+function fmtTime(t) {
+  const m = /^(\d{2}):(\d{2})$/.exec(t || ''); if (!m) return '';
+  const hh = +m[1]; return `${((hh + 11) % 12) + 1}:${m[2]} ${hh < 12 ? 'AM' : 'PM'}`;
+}
+function daysUntil(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return null;
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((new Date(+m[1], +m[2] - 1, +m[3]) - t) / 864e5));
+}
+function pickupText(tpl, iso) {
+  const d = daysUntil(iso); if (d == null) return '';
+  return String(tpl || '').replace(/\{days\}\s*days?/gi, d === 1 ? '1 day' : d + ' days').replace(/\{days\}/g, d);
+}
+const ago = (iso) => { const s = (Date.now() - new Date(iso)) / 1000; if (s < 90) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; };
 
-/* ---- link packing: JSON -> deflate -> base64url (falls back to plain JSON) */
 const toB64u = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const fromB64u = (t) => { t = t.replace(/-/g, '+').replace(/_/g, '/'); while (t.length % 4) t += '='; const s = atob(t); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; };
 async function pipe(bytes, stream) { const w = stream.writable.getWriter(); w.write(bytes); w.close(); return new Uint8Array(await new Response(stream.readable).arrayBuffer()); }
-async function pack(cfg) {
-  const raw = new TextEncoder().encode(JSON.stringify(cfg));
-  if (window.CompressionStream) return 'z' + toB64u(await pipe(raw, new CompressionStream('deflate-raw')));
-  return 'j' + toB64u(raw);
-}
-async function unpack(s) {
-  const kind = s[0], bytes = fromB64u(s.slice(1));
-  const raw = kind === 'z' ? await pipe(bytes, new DecompressionStream('deflate-raw')) : bytes;
-  return JSON.parse(new TextDecoder().decode(raw));
-}
+async function pack(cfg) { const raw = new TextEncoder().encode(JSON.stringify(cfg)); return window.CompressionStream ? 'z' + toB64u(await pipe(raw, new CompressionStream('deflate-raw'))) : 'j' + toB64u(raw); }
+async function unpack(s) { const bytes = fromB64u(s.slice(1)); const raw = s[0] === 'z' ? await pipe(bytes, new DecompressionStream('deflate-raw')) : bytes; return JSON.parse(new TextDecoder().decode(raw)); }
 
-/* ---- images: shrink uploads so they fit inside a link */
 async function shrinkImage(file, max, q) {
   const bmp = await createImageBitmap(file);
   const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
@@ -59,25 +61,22 @@ async function shrinkImage(file, max, q) {
   if (!out.startsWith('data:image/webp')) out = c.toDataURL('image/png');
   return out;
 }
-function pickFile(accept) {
-  return new Promise((res) => {
-    const i = h('input', { type: 'file', accept });
-    i.onchange = () => res(i.files[0] || null);
-    i.click();
-  });
-}
+const pickFile = (accept) => new Promise((res) => { const i = h('input', { type: 'file', accept }); i.onchange = () => res(i.files[0] || null); i.click(); });
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full or blocked */ } }
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* blocked or full */ } }
 };
+const copyText = async (t) => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
 
 /* ------------------------------------------------------------------ config */
+const DEFAULT_VIBE = { romantic: 'sweet', friends: 'funny', coffee: 'sweet', birthday: 'funny', custom: 'sweet' };
+const DEFAULT_PICKUP = '{days} days until I pick you up from your doorstep 🚗';
 function newConfig(type, rel) {
   const p = PRESETS[type];
   return {
-    v: 1, type, rel: rel || '', from: '', to: '', contact: '',
+    v: 2, type, rel: rel || '', vibe: DEFAULT_VIBE[type] || 'sweet', from: '', to: '', contact: '',
     title: p.title, sub: p.sub, caption: '', yay: p.yay, yaySub: p.yaySub,
-    dateTitle: p.dateTitle, dateSub: p.dateSub, dateMode: p.dateMode, fixedDate: '',
+    dateTitle: p.dateTitle, dateSub: p.dateSub, pickup: type === 'birthday' ? '' : DEFAULT_PICKUP, dateMode: p.dateMode, fixedDate: '', fixedTime: '',
     actTitle: p.actTitle, acts: p.acts.slice(), doneTitle: p.doneTitle,
     theme: p.theme, color: '#ff7ab8', clouds: true, wall: null, photo: null, photoSticker: 'cat-white',
     steps: deepCopy(p.steps), yesFx: p.yesFx,
@@ -90,13 +89,15 @@ function newConfig(type, rel) {
     ]
   };
 }
-function sanitize(c) { // config may come from a link: never trust it
+function sanitize(c) { // anything from a link or the server is untrusted
   const t = (v, n = 200) => (typeof v === 'string' ? v.slice(0, n) : '');
   const base = newConfig(PRESETS[c && c.type] ? c.type : 'custom', '');
   const o = Object.assign(base, c || {});
-  ['from', 'to', 'title', 'sub', 'caption', 'yay', 'yaySub', 'dateTitle', 'dateSub', 'actTitle', 'doneTitle', 'rel'].forEach((k) => (o[k] = t(o[k])));
+  ['from', 'to', 'title', 'sub', 'caption', 'yay', 'yaySub', 'dateTitle', 'dateSub', 'pickup', 'actTitle', 'doneTitle', 'rel'].forEach((k) => (o[k] = t(o[k])));
+  o.vibe = AI.VIBES.some((v) => v[0] === o.vibe) ? o.vibe : 'sweet';
   o.contact = digits(o.contact).slice(0, 16);
   o.fixedDate = /^\d{4}-\d{2}-\d{2}$/.test(o.fixedDate) ? o.fixedDate : '';
+  o.fixedTime = /^\d{2}:\d{2}$/.test(o.fixedTime) ? o.fixedTime : '';
   o.theme = THEMES[o.theme] ? o.theme : 'pink';
   o.color = safeHex(o.color) || '#ff7ab8';
   o.wall = safeImg(o.wall) ? o.wall : null;
@@ -117,13 +118,10 @@ function sanitize(c) { // config may come from a link: never trust it
 
 /* ------------------------------------------------------------------ the stage */
 function stickerNode(st) {
-  const d = h('div', { class: 'st' });
-  const inner = h('div', { class: 'bob' });
+  const d = h('div', { class: 'st' }); const inner = h('div', { class: 'bob' });
   if (st.k.startsWith('lib:')) inner.innerHTML = STICKERS[st.k.slice(4)].svg;
   else inner.append(h('img', { src: st.k, alt: '', draggable: 'false' }));
-  d.append(inner);
-  placeSticker(d, st);
-  return d;
+  d.append(inner); placeSticker(d, st); return d;
 }
 function placeSticker(d, st) {
   d.style.left = st.x + '%'; d.style.top = st.y + '%'; d.style.width = st.s + '%';
@@ -131,18 +129,14 @@ function placeSticker(d, st) {
 }
 function frameContent(cfg) {
   const f = h('div', { class: 'frame' });
-  if (cfg.photo) f.append(h('img', { src: cfg.photo, alt: '' }));
-  else f.innerHTML = STICKERS[cfg.photoSticker].svg;
+  if (cfg.photo) f.append(h('img', { src: cfg.photo, alt: '' })); else f.innerHTML = svgIcon(cfg.photoSticker);
   return f;
 }
 function confetti(stage) {
-  const c = h('canvas', { class: 'confetti' });
-  stage.append(c);
-  const r = stage.getBoundingClientRect();
-  c.width = r.width * 1.5; c.height = r.height * 1.5;
-  const g = c.getContext('2d');
-  const cols = ['#ff4d8d', '#ffd84d', '#7fd6ff', '#9be27f', '#c58bff', '#fff'];
-  const ps = Array.from({ length: 110 }, () => ({ x: c.width / 2, y: c.height * 0.45, vx: rand(-9, 9), vy: rand(-16, -3), w: rand(6, 13), c: cols[(Math.random() * cols.length) | 0], a: rand(0, 6), va: rand(-.3, .3) }));
+  const c = h('canvas', { class: 'confetti' }); stage.append(c);
+  const r = stage.getBoundingClientRect(); c.width = r.width * 1.5; c.height = r.height * 1.5;
+  const g = c.getContext('2d'), cols = ['#ff4d8d', '#ffd84d', '#7fd6ff', '#9be27f', '#c58bff', '#fff'];
+  const ps = Array.from({ length: 110 }, () => ({ x: c.width / 2, y: c.height * .45, vx: rand(-9, 9), vy: rand(-16, -3), w: rand(6, 13), c: cols[(Math.random() * cols.length) | 0], a: rand(0, 6), va: rand(-.3, .3) }));
   let t = 0;
   (function tick() {
     g.clearRect(0, 0, c.width, c.height);
@@ -151,7 +145,7 @@ function confetti(stage) {
   })();
 }
 
-/** Builds one stage. opts.edit: static screen + draggable stickers. Otherwise plays the real flow. */
+/** opts: edit (static screen + draggable stickers) | screen | sel | onSelect | onChange | inviteId | onSent */
 function buildStage(cfg, opts) {
   opts = opts || {};
   const th = THEMES[cfg.theme];
@@ -160,100 +154,87 @@ function buildStage(cfg, opts) {
   const vars = cfg.theme === 'custom'
     ? { '--sky': `linear-gradient(color-mix(in srgb,${col} 30%,#fff),${col})`, '--accent': col, '--accent2': `color-mix(in srgb,${col} 65%,#000)`, '--ink': `color-mix(in srgb,${col} 30%,#000)` }
     : { '--sky': th.sky, '--accent': th.accent, '--accent2': th.accent2, '--ink': th.ink };
-  vars['--font'] = th.font;
+  vars['--font'] = th.font; vars['--sceneH'] = th.sceneH || '34%';
   for (const k in vars) el.style.setProperty(k, vars[k]);
 
   const wall = h('div', { class: 'wall' });
   if (cfg.wall) wall.style.backgroundImage = `url("${cfg.wall}")`;
   el.append(wall);
   if (!cfg.wall) {
-    if (th.sky2) el.append(h('div', { class: 'sky2', html: '' }, ''));
-    if (th.sky2) el.querySelector('.sky2').innerHTML = th.sky2();
-    el.append(h('div', { class: 'scene' })); el.querySelector('.scene').innerHTML = th.scene();
+    if (th.sky2) { const s2 = h('div', { class: 'sky2' }); s2.innerHTML = th.sky2(); el.append(s2); }
+    const sc = h('div', { class: 'scene' }); sc.innerHTML = th.scene(); el.append(sc);
   }
   if (cfg.clouds) {
     const cl = h('div', { class: 'clouds' });
     [[6, 46, 0], [22, 62, -20], [48, 54, -35], [70, 70, -8]].forEach(([top, dur, delay], i) => {
       const s = h('span'); s.innerHTML = `<svg viewBox="-16 -30 90 62" xmlns="http://www.w3.org/2000/svg">${th.cloud(0, 0, 1, th.cloudColor)}</svg>`;
-      const svg = s.firstChild; svg.style.top = top + '%'; svg.style.animationDuration = dur + 's'; svg.style.animationDelay = delay + 's'; svg.style.transform = i % 2 ? 'scale(.8)' : '';
-      cl.append(svg);
+      const svg = s.firstChild; svg.style.top = top + '%'; svg.style.animationDuration = dur + 's'; svg.style.animationDelay = delay + 's'; svg.style.transform = i % 2 ? 'scale(.8)' : ''; cl.append(svg);
     });
     el.append(cl);
   }
   const deco = h('div', { class: 'deco' });
-  const em = cfg.theme === 'minecraft' ? ['🟩', '⬜', '✨'] : cfg.theme === 'night' ? ['✨', '⭐', '💜'] : ['💗', '✨', '💖'];
+  const em = cfg.theme === 'minecraft' ? ['🟩', '⬜', '✨'] : th.dark ? ['✨', '⭐', '💜'] : ['💗', '✨', '💖'];
   for (let i = 0; i < 7; i++) deco.append(h('i', { style: `left:${8 + i * 13}%;animation-delay:${-i * 1.7}s;animation-duration:${8 + (i % 3) * 2}s` }, em[i % em.length]));
   el.append(deco);
 
-  const content = h('div', { class: 'content' });
-  const stickers = h('div', { class: 'stickers' });
+  const content = h('div', { class: 'content' }); const stickers = h('div', { class: 'stickers' });
   el.append(content, stickers);
-
-  /* ---- sticker layer */
-  const nodes = [];
   cfg.stickers.forEach((st, i) => {
-    const n = stickerNode(st);
-    n.style.zIndex = i;
-    nodes.push(n);
-    stickers.append(n);
-    if (opts.edit) {
-      n.addEventListener('pointerdown', (e) => {
-        e.preventDefault(); n.setPointerCapture(e.pointerId);
-        opts.onSelect && opts.onSelect(i);
-        const rect = el.getBoundingClientRect();
-        const sx = e.clientX, sy = e.clientY, ox = st.x, oy = st.y;
-        const move = (ev) => { st.x = clamp(ox + (ev.clientX - sx) / rect.width * 100, -5, 105); st.y = clamp(oy + (ev.clientY - sy) / rect.height * 100, -5, 105); placeSticker(n, st); };
-        const up = () => { n.removeEventListener('pointermove', move); n.removeEventListener('pointerup', up); n.removeEventListener('pointercancel', up); opts.onChange && opts.onChange(); };
-        n.addEventListener('pointermove', move); n.addEventListener('pointerup', up); n.addEventListener('pointercancel', up);
-      });
-      if (opts.sel === i) n.classList.add('sel');
-    }
+    const n = stickerNode(st); n.style.zIndex = i; stickers.append(n);
+    if (!opts.edit) return;
+    n.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); n.setPointerCapture(e.pointerId); opts.onSelect && opts.onSelect(i);
+      const rect = el.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = st.x, oy = st.y;
+      const move = (ev) => { st.x = clamp(ox + (ev.clientX - sx) / rect.width * 100, -5, 105); st.y = clamp(oy + (ev.clientY - sy) / rect.height * 100, -5, 105); placeSticker(n, st); };
+      const up = () => { n.removeEventListener('pointermove', move); n.removeEventListener('pointerup', up); n.removeEventListener('pointercancel', up); opts.onChange && opts.onChange(); };
+      n.addEventListener('pointermove', move); n.addEventListener('pointerup', up); n.addEventListener('pointercancel', up);
+    });
+    if (opts.sel === i) n.classList.add('sel');
   });
 
   /* ---- screens */
-  const state = { date: cfg.dateMode === 'fixed' ? cfg.fixedDate : '', act: '' };
+  const state = { date: cfg.dateMode === 'fixed' ? cfg.fixedDate : '', time: cfg.dateMode === 'fixed' ? cfg.fixedTime : '', act: '', noCount: 0, msg: '', sent: false };
   const F = (s) => fill(s, cfg);
   const T = (cls, tag, text) => h(tag, { class: cls }, F(text));
 
   function screenAsk() {
-    let noCount = 0, noScale = 1, yesScale = 1, tx = 0, ty = 0, rot = 0, fade = 1;
+    let noScale = 1, yesScale = 1, tx = 0, ty = 0, rot = 0, fade = 1;
     const cap = h('p', { class: 'nocap' }, ' ');
-    const yes = h('button', { class: 'gbtn yes' }, 'YES ✦');
-    const no = h('button', { class: 'gbtn no' }, 'No');
-    const apply = () => { no.style.transform = `translate(${tx}px,${ty}px) scale(${noScale}) rotate(${rot}deg)`; no.style.opacity = fade; yes.style.transform = `scale(${yesScale})`; btns.style.margin = `${3 + (yesScale - 1) * 7}cqw 0 ${(yesScale - 1) * 7}cqw`; };
+    const yes = h('button', { class: 'gbtn yes' }, 'YES ✦'), no = h('button', { class: 'gbtn no' }, 'No');
     const btns = h('div', { class: 'btns' }, yes, no);
+    const apply = () => { no.style.transform = `translate(${tx}px,${ty}px) scale(${noScale}) rotate(${rot}deg)`; no.style.opacity = fade; yes.style.transform = `scale(${yesScale})`; btns.style.margin = `${3 + (yesScale - 1) * 7}cqw 0 ${(yesScale - 1) * 7}cqw`; };
     yes.onclick = () => go('yay');
     no.onclick = () => {
-      const step = cfg.steps[Math.min(noCount, cfg.steps.length - 1)];
-      noCount++;
+      const step = cfg.steps[Math.min(state.noCount, cfg.steps.length - 1)]; state.noCount++;
       cap.textContent = F(step.t) || ' ';
       if (step.e === 'shrink') noScale = Math.max(.35, noScale * .72);
       else if (step.e === 'fade') fade = Math.max(.25, fade * .6);
-      else if (step.e === 'spin') { rot += 360; }
+      else if (step.e === 'spin') rot += 360;
       else if (step.e === 'shake') no.animate([{ translate: '0' }, { translate: '-2.5cqw' }, { translate: '2.5cqw' }, { translate: '-2cqw' }, { translate: '2cqw' }, { translate: '0' }], { duration: 420 });
       else if (step.e === 'dodge') {
         const S = el.getBoundingClientRect(), b = no.getBoundingClientRect();
-        const left = S.left + rand(8, Math.max(9, S.width - b.width - 8));
-        const top = S.top + S.height * .3 + rand(0, Math.max(1, S.height * .6 - b.height));
-        tx += left - b.left; ty += top - b.top;
+        tx += S.left + rand(8, Math.max(9, S.width - b.width - 8)) - b.left;
+        ty += S.top + S.height * .3 + rand(0, Math.max(1, S.height * .6 - b.height)) - b.top;
       }
       if (cfg.yesFx === 'grow') yesScale = Math.min(2.4, yesScale + .3);
       else if (cfg.yesFx === 'pulse') yes.animate([{ scale: 1 }, { scale: 1.25 }, { scale: 1 }], { duration: 380 });
       apply();
     };
-    return [frameContent(cfg), T('title', 'h1', cfg.title), cfg.sub ? T('subt', 'p', cfg.sub) : null, cfg.caption ? T('caption', 'p', cfg.caption) : null,
-      btns, cap];
+    return [frameContent(cfg), T('title', 'h1', cfg.title), cfg.sub ? T('subt', 'p', cfg.sub) : null, cfg.caption ? T('caption', 'p', cfg.caption) : null, btns, cap];
   }
   function screenYay() {
     setTimeout(() => confetti(el), 60);
     return [frameContent(cfg), T('title', 'h1', cfg.yay), T('sub2', 'p', cfg.yaySub), h('button', { class: 'gbtn', onclick: () => go(cfg.dateMode === 'fixed' ? 'act' : 'date') }, 'Continue →')];
   }
   function screenDate() {
-    const inp = h('input', { type: 'date', min: new Date().toISOString().slice(0, 10), value: state.date });
-    const next = h('button', { class: 'gbtn', disabled: !state.date, onclick: () => go('act') }, 'Next →');
-    inp.oninput = () => { state.date = inp.value; next.disabled = !inp.value; };
-    return [h('div', { class: 'frame', style: 'width:26cqw' }, ''), T('title', 'h1', cfg.dateTitle), cfg.dateSub ? T('sub2', 'p', cfg.dateSub) : null, h('div', { class: 'datebox' }, inp), h('div', { style: 'height:5cqw' }), next]
-      .map((n, i) => { if (i === 0) { n.innerHTML = STICKERS['cat-happy'].svg; } return n; });
+    const inp = h('input', { type: 'date', min: new Date().toISOString().slice(0, 10), value: state.date, 'aria-label': 'Day' });
+    const tm = h('input', { type: 'time', value: state.time, 'aria-label': 'Time' });
+    const pk = h('p', { class: 'caption' });
+    const next = h('button', { class: 'gbtn', disabled: !(state.date && state.time), onclick: () => go('act') }, 'Next →');
+    const upd = () => { state.date = inp.value; state.time = tm.value; next.disabled = !(state.date && state.time); pk.textContent = cfg.pickup && state.date ? pickupText(F(cfg.pickup), state.date) : ''; };
+    inp.oninput = upd; tm.oninput = upd; upd();
+    const fr = h('div', { class: 'frame', style: 'width:24cqw;margin-bottom:3cqw' }); fr.innerHTML = STICKERS['cat-happy'].svg;
+    return [fr, T('title', 'h1', cfg.dateTitle), cfg.dateSub ? T('sub2', 'p', cfg.dateSub) : null, h('div', { class: 'datebox col' }, inp, tm), h('div', { style: 'height:3cqw' }), pk, next];
   }
   function screenAct() {
     if (!cfg.acts.length) return screenDone();
@@ -267,19 +248,38 @@ function buildStage(cfg, opts) {
     return [T('title', 'h1', cfg.actTitle), grid, lock];
   }
   function screenDone() {
-    setTimeout(() => confetti(el), 60);
+    if (!state.sent) setTimeout(() => confetti(el), 60);
     const label = cfg.type === 'birthday' ? 'Bringing' : cfg.type === 'coffee' ? 'Order' : 'Plan';
+    if (state.sent) return [frameContent(cfg), h('h1', { class: 'title' }, 'Sent! 💌'), h('p', { class: 'sub2' }, cfg.from ? `${cfg.from} will see your answer very soon.` : 'Your answer is on its way.'), h('p', { class: 'caption' }, 'You can close this page now 🥰')];
     const t = h('div', { class: 'ticket' });
-    if (state.date) t.append(h('div', null, h('b', null, 'DATE: '), fmtDate(state.date)));
+    if (state.date) t.append(h('div', null, h('b', null, 'DATE: '), fmtDate(state.date) + (state.time ? ' · ' + fmtTime(state.time) : '')));
     if (state.act) t.append(h('div', null, h('b', null, label.toUpperCase() + ': '), state.act));
-    const msg = `${F('{to}')} said YES! 🎉\n${state.date ? 'Date: ' + fmtDate(state.date) + '\n' : ''}${state.act ? label + ': ' + state.act : ''}`.trim();
-    const send = h('button', { class: 'gbtn', onclick: async () => {
-      const phone = digits(cfg.contact);
-      if (phone) return window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
-      try { if (navigator.share) return await navigator.share({ text: msg }); } catch (e) { return; }
-      try { await navigator.clipboard.writeText(msg); send.textContent = 'Copied! Paste it to them 💌'; } catch (e) { send.textContent = 'Screenshot this page 📸'; }
-    } }, 'Send my answer 💌');
-    return [frameContent(cfg), T('title', 'h1', cfg.doneTitle), (state.date || state.act) ? t : null, send];
+    const ta = h('textarea', { class: 'msg', rows: '4', maxlength: '500', 'aria-label': 'Your message' });
+    ta.oninput = () => { state.msg = ta.value; };
+    const tag = h('p', { class: 'caption' }, '✨ writing your message…');
+    async function writeMsg() {
+      tag.textContent = '✨ writing your message…'; ta.disabled = true;
+      const r = await AI.reply({ vibe: cfg.vibe, type: cfg.type, to: cfg.to, from: cfg.from, rel: cfg.rel, date: fmtDate(state.date), time: fmtTime(state.time), act: state.act });
+      state.msg = r.text; ta.value = r.text; ta.disabled = false; tag.textContent = r.ai ? '✨ written by AI · edit it if you like' : '✨ a suggested message · edit it if you like';
+    }
+    const again = h('button', { class: 'gbtn no', style: 'font-size:.75em', onclick: writeMsg }, '↻ Another version');
+    const send = h('button', { class: 'gbtn' }, 'Send to ' + (cfg.from || 'them') + ' 💌');
+    const note = h('p', { class: 'nocap' }, ' ');
+    send.onclick = async () => {
+      const answer = { yes: true, date: state.date, time: state.time, act: state.act, noCount: state.noCount, label };
+      const msg = state.msg || ta.value;
+      send.disabled = true;
+      if (opts.inviteId && window.API && API.enabled) {
+        try { await API.respond(opts.inviteId, answer, msg); state.sent = true; go('done'); opts.onSent && opts.onSent(); return; }
+        catch (e) { note.textContent = 'Could not send. Try again, or share it below.'; send.disabled = false; }
+      }
+      const phone = digits(cfg.contact), text = `${msg}`;
+      if (phone) return window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      try { if (navigator.share) return await navigator.share({ text }); } catch (e) { return; }
+      note.textContent = (await copyText(text)) ? 'Copied. Paste it to them 💌' : 'Screenshot this page 📸'; send.disabled = false;
+    };
+    setTimeout(writeMsg, 50);
+    return [h('h1', { class: 'title', style: 'font-size:1.45em;margin-bottom:.15em' }, F(cfg.doneTitle)), (state.date || state.act) ? t : null, ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw' }, send, again), note];
   }
   const screens = { ask: screenAsk, yay: screenYay, date: screenDate, act: screenAct, done: screenDone };
   function go(name) {
@@ -288,273 +288,337 @@ function buildStage(cfg, opts) {
   }
   if (opts.edit) {
     const s = opts.screen || 'ask';
-    if (s === 'done') { state.date = state.date || (cfg.dateMode === 'fixed' ? cfg.fixedDate : new Date(Date.now() + 864e5 * 5).toISOString().slice(0, 10)); state.act = cfg.acts[0] || ''; }
-    if (s === 'date') { /* empty date shows placeholder */ }
+    if (s === 'done' || s === 'act') { state.date = state.date || new Date(Date.now() + 864e5 * 5).toISOString().slice(0, 10); state.time = state.time || '19:30'; state.act = cfg.acts[0] || ''; }
+    if (s === 'date') { state.date = new Date(Date.now() + 864e5 * 5).toISOString().slice(0, 10); state.time = '19:30'; }
     go(s);
   } else go('ask');
   return { el, go };
 }
 
+/* ------------------------------------------------------------------ shared pieces */
+function footer() {
+  return h('footer', { class: 'foot' },
+    h('div', { class: 'star' }, '⭐ Like this free demo? Star it on GitHub and play it with your partner 💕'),
+    h('a', { class: 'btn pri', href: GITHUB, target: '_blank', rel: 'noopener' }, '⭐ Star on GitHub'),
+    h('div', { class: 'by' }, 'Programming by ', h('a', { href: GITHUB, target: '_blank', rel: 'noopener' }, 'Moemen Akari')));
+}
+const myInvites = () => store.get('adate.mine', []);
+function rememberInvite(rec) { const l = myInvites().filter((x) => x.id !== rec.id); l.unshift(rec); store.set('adate.mine', l.slice(0, 30)); }
+const inviteUrl = (id) => location.href.split('#')[0] + '#/i/' + id;
+const privateUrl = (id, tok) => location.href.split('#')[0] + '#/d/' + id + '.' + tok;
+
 /* ------------------------------------------------------------------ viewer */
-async function viewer(data) {
-  let cfg;
-  try { cfg = sanitize(await unpack(data)); } catch (e) {
-    $app.replaceChildren(h('div', { class: 'viewer' }, h('div', { class: 'err' }, h('h2', null, 'This link looks broken 🥲'), h('p', null, 'Ask the sender to share it again.'), h('a', { href: '#/', style: 'color:#ffb3dd' }, 'Make your own'))));
-    return;
-  }
+function brokenLink() {
+  $app.replaceChildren(h('div', { class: 'viewer' }, h('div', { class: 'err' }, h('h2', null, 'This link looks broken 🥲'), h('p', null, 'Ask the sender to share it again.'), h('a', { href: '#/', style: 'color:#ffb3dd' }, 'Make your own'))));
+}
+async function viewer(kind, data) {
+  let cfg, inviteId = null;
+  try {
+    if (kind === 'i') { cfg = sanitize(await API.open(data)); inviteId = data; if (!cfg) throw 0; }
+    else cfg = sanitize(await unpack(data));
+  } catch (e) { return brokenLink(); }
   document.title = fill(cfg.title, cfg).slice(0, 60);
-  const { el } = buildStage(cfg);
-  $app.replaceChildren(h('div', { class: 'viewer' }, el));
+  $app.replaceChildren(h('div', { class: 'viewer' }, buildStage(cfg, { inviteId }).el));
 }
 
 /* ------------------------------------------------------------------ home */
+const ICON = { romantic: 'cat-love', friends: 'cat-happy', coffee: 'cat-coffee', birthday: 'cat-party', custom: 'sparkle' };
+const TONE = { romantic: 'c-rose', friends: 'c-sky', coffee: 'c-butter', birthday: 'c-lav', custom: 'c-mint' };
 function home() {
   document.title = 'ADate – Make a cute invite';
-  document.body.removeAttribute('data-tab');
-  let rel = null;
-  const draft = store.get('adate.draft', null);
-  const step2 = h('div');
-  const relRow = h('div', { class: 'row' });
-  function drawTypes() {
-    step2.replaceChildren();
-    if (!rel) return;
-    const allowed = RELATIONS.find((r) => r[0] === rel)[2];
-    step2.append(h('h2', null, '2. What is the occasion?'),
-      h('div', { class: 'cards' }, PRESET_ORDER.filter((k) => allowed.includes(k)).map((k) => {
-        const p = PRESETS[k];
-        return h('button', { class: 'card', onclick: () => { store.set('adate.draft', newConfig(k, rel)); location.hash = '#/make'; } },
-          h('span', { class: 'em' }, p.emoji), h('b', null, p.label), h('small', null, p.blurb));
-      })));
-  }
-  RELATIONS.forEach(([id, label]) => {
-    const b = h('button', { class: 'chip', 'aria-pressed': 'false', onclick: () => { rel = id; relRow.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === b ? 'true' : 'false')); drawTypes(); } }, label);
-    relRow.append(b);
+  const draft = store.get('adate.draft', null), mine = myInvites();
+  const cards = PRESET_ORDER.map((k) => {
+    const p = PRESETS[k], c = h('button', { class: `card ${TONE[k]}` + (k === 'custom' ? ' wide' : ''), onclick: () => { store.set('adate.draft', newConfig(k, '')); store.set('adate.draftmeta', null); store.set('adate.step', 0); location.hash = '#/make'; } },
+      h('span', { class: 'ic' }), h('span', null, h('b', null, p.label), h('br'), h('small', null, p.blurb)));
+    c.querySelector('.ic').innerHTML = svgIcon(ICON[k]); return c;
   });
+  const stk = (id, st) => { const d = h('div', { class: 'stk', style: st }); d.innerHTML = svgIcon(id); return d; };
   $app.replaceChildren(h('div', { class: 'wrap' },
-    h('div', { class: 'brand' }, '🐱 ', h('span', null, 'A', h('b', null, 'Date'))),
-    h('div', { class: 'hero' }, h('h1', null, 'Make a cute little invite for your person.'), h('p', null, 'Pick the vibe, add their name, drop in stickers, then send them the link. The "No" button has a mind of its own 😌')),
-    draft ? h('div', { class: 'panel' }, h('h2', null, 'Pick up where you left off'), h('button', { class: 'btn pri', onclick: () => (location.hash = '#/make') }, 'Continue my invite →')) : null,
-    h('div', { class: 'panel' }, h('h2', null, '1. Who is it for?'), relRow, h('div', { style: 'height:16px' }), step2),
-    h('div', { class: 'foot' }, 'Free forever · no sign-up · your invite lives inside the link')));
+    h('div', { class: 'topbar' }, h('div', { class: 'brand' }, '🐱 A', h('b', null, 'Date')), h('span', { class: 'pill' }, 'Free demo')),
+    h('div', { class: 'hero' }, h('div', { class: 'stks' }, stk('cat-orange', 'animation-delay:-1s'), stk('cat-love', 'width:72px'), stk('cat-white', 'animation-delay:-2s')),
+      h('h1', null, 'Ask them out the cute way'), h('p', null, 'Pick a vibe, add their name, and send a link with a sneaky “No” button.')),
+    (draft || (API.enabled && mine.length)) ? h('div', { class: 'row', style: 'justify-content:center;margin-bottom:6px' },
+      draft ? h('button', { class: 'btn pri sm', onclick: () => (location.hash = '#/make') }, '✏️ Continue my invite') : null,
+      API.enabled && mine.length ? h('button', { class: 'btn sm', onclick: () => (location.hash = '#/mine') }, `📬 My invites (${mine.length})`) : null) : null,
+    h('div', { class: 'h2' }, 'What’s the occasion?'), h('div', { class: 'cards' }, cards),
+    footer()));
 }
 
-/* ------------------------------------------------------------------ editor */
+/* ------------------------------------------------------------------ editor (wizard) */
+const ACT_IDEAS = {
+  romantic: ['Dinner date', 'Movie night', 'Sunset walk', 'Picnic', 'Stargazing', 'Coffee & dessert', 'Sea-side drive', 'Board games', 'Cook together', 'Mini golf', 'Surprise me'],
+  friends: ['Gaming night', 'Food run', 'Movie marathon', 'Walk & talk', 'Karaoke', 'Beach day', 'Bowling', 'Road trip', 'Chaos, surprise me'],
+  coffee: ['Latte', 'Iced coffee', 'Cappuccino', 'Hot chocolate', 'Tea', 'Croissant & coffee', 'Surprise me'],
+  birthday: ['Cake', 'A gift', 'Drinks', 'Snacks', 'Music', 'Good vibes only', 'Balloons'],
+  custom: ['Option one', 'Option two', 'Surprise me']
+};
+const REL = [['girlfriend', 'My girlfriend'], ['boyfriend', 'My boyfriend'], ['partner', 'My partner'], ['friend', 'A friend'], ['bestie', 'My bestie']];
+const FX = [['shrink', 'Gets smaller'], ['dodge', 'Runs away'], ['shake', 'Shakes'], ['spin', 'Spins'], ['fade', 'Fades a bit'], ['none', 'Nothing']];
+
 function editor() {
   document.title = 'ADate – Editor';
   let cfg = store.get('adate.draft', null);
   if (!cfg) { location.hash = '#/'; return; }
   cfg = sanitize(cfg);
-  let sel = null, mode = 'edit', screen = 'ask', tab = 'edit';
-  document.body.setAttribute('data-tab', tab);
-
-  const pv = h('div', { class: 'stagewrap' });
+  let step = clamp(store.get('adate.step', 0) | 0, 0, 6), sel = null, mode = 'edit', screen = 'ask';
+  const meta = () => store.get('adate.draftmeta', null); // {id, token} once the invite exists
   const save = () => store.set('adate.draft', cfg);
-  function refresh() {
-    let inst;
-    if (mode === 'edit') inst = buildStage(cfg, { edit: true, screen, sel, onSelect: (i) => { sel = i; refreshSticker(); markSel(); }, onChange: save });
-    else inst = buildStage(cfg, {});
-    pv.replaceChildren(inst.el);
-    screenRow.classList.toggle('hidden', mode !== 'edit');
-  }
-  function markSel() { pv.querySelectorAll('.st').forEach((n, i) => n.classList.toggle('sel', i === sel)); }
-  function change() { save(); refresh(); }
 
-  /* --- field helpers */
-  const text = (label, key, o) => {
+  /* --- live previews (desktop side pane, inline stage on the sticker step) */
+  const pvSide = h('div', { class: 'stagewrap' }); let inline = null;
+  const screenRow = h('div', { class: 'row', style: 'justify-content:center' }, [['ask', 'Ask'], ['yay', 'Yay'], ['date', 'Day'], ['act', 'Options'], ['done', 'Final']].map(([id, l]) =>
+    h('button', { class: 'chip', 'data-s': id, 'aria-pressed': id === screen ? 'true' : 'false', onclick: () => { screen = id; screenRow.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.s === id ? 'true' : 'false')); mode = 'edit'; syncMode(); refresh(); } }, l)));
+  const modeBtns = { edit: h('button', { class: 'chip', onclick: () => { mode = 'edit'; syncMode(); refresh(); } }, '✋ Edit view'), play: h('button', { class: 'chip', onclick: () => { mode = 'play'; syncMode(); refresh(); } }, '▶ Test it') };
+  function syncMode() { for (const k in modeBtns) modeBtns[k].setAttribute('aria-pressed', mode === k ? 'true' : 'false'); screenRow.classList.toggle('hidden', mode !== 'edit'); }
+  function mountStage(box, m) {
+    const inst = m === 'edit' ? buildStage(cfg, { edit: true, screen: box === inline ? 'ask' : screen, sel, onSelect: (i) => { sel = i; markSel(); drawSel(); }, onChange: save }) : buildStage(cfg, {});
+    box.replaceChildren(inst.el);
+  }
+  function refresh() { mountStage(pvSide, mode); if (inline) mountStage(inline, 'edit'); }
+  const stagesOf = () => [pvSide, inline].filter(Boolean).map((b) => b.querySelector('.stickers'));
+  function markSel() { stagesOf().forEach((s) => s && s.querySelectorAll('.st').forEach((n, i) => n.classList.toggle('sel', i === sel))); }
+  function change() { save(); refresh(); }
+  function openPreview() {
+    const m = h('div', { class: 'modal' }); const box = h('div', { class: 'stagewrap' });
+    const play = () => box.replaceChildren(buildStage(cfg, {}).el);
+    m.append(h('div', { class: 'mt' }, h('button', { class: 'btn sm', onclick: play }, '↻ Restart'), h('button', { class: 'btn pri sm', onclick: () => m.remove() }, '✕ Close')), box);
+    m.addEventListener('click', (e) => { if (e.target === m) m.remove(); });
+    play(); document.body.append(m);
+  }
+
+  /* --- fields with ✨ AI suggestions */
+  const ctx = () => ({ vibe: cfg.vibe, type: cfg.type, typeLabel: PRESETS[cfg.type].label, rel: cfg.rel, to: cfg.to, from: cfg.from });
+  const showTxt = (s) => fill(s, cfg).replace(/\{days\}/g, '7');
+  function suggestBox(field, apply, ctxFn) {
+    const box = h('div', { class: 'sugg hidden' }); let run = 0;
+    async function load() {
+      const me = ++run; box.classList.remove('hidden');
+      const render = (lines, status) => { if (me !== run) return; box.replaceChildren(...lines.map((l) => h('button', { class: 'sug', type: 'button', onclick: () => { apply(l); box.classList.add('hidden'); run++; } }, showTxt(l))),
+        h('div', { class: 'sugg-foot' }, h('span', { class: status === 'wait' ? 'spark' : '' }, status === 'ai' ? '✨ written by AI' : status === 'wait' ? '✨ asking the AI…' : 'quick ideas'),
+          h('span', null, h('button', { type: 'button', onclick: load }, '↻ More'), h('button', { type: 'button', onclick: () => { box.classList.add('hidden'); run++; } }, 'Close')))); };
+      const res = await AI.suggest(field, ctxFn ? ctxFn() : ctx(), (loc) => render(loc, 'wait'));
+      render(res.lines, res.ai ? 'ai' : 'local');
+    }
+    return { box, load };
+  }
+  function aiField(label, key, o) {
     o = o || {};
-    const inp = o.area ? h('textarea') : h('input', { type: o.type || 'text', maxlength: o.max || 120, placeholder: o.ph || '' });
+    const inp = o.area ? h('textarea') : h('input', { type: 'text', maxlength: o.max || 140, placeholder: o.ph || '' });
     inp.value = o.get ? o.get() : cfg[key];
-    inp.oninput = () => { if (o.set) o.set(inp.value); else cfg[key] = inp.value; change(); };
-    return h('label', { class: 'f' }, label, o.hint ? h('small', null, o.hint) : null, inp);
-  };
+    inp.oninput = () => { (o.set || ((v) => (cfg[key] = v)))(inp.value); change(); };
+    const row = h('div', { class: 'fieldrow' }, inp);
+    const wrap = h('label', { class: 'f' }, label, o.hint ? h('small', null, o.hint) : null);
+    const out = [wrap, row];
+    if (o.field !== false) {
+      const sg = suggestBox(o.field || key, (v) => { (o.set || ((x) => (cfg[key] = x)))(v); inp.value = v; change(); });
+      row.append(h('button', { class: 'ai-btn', type: 'button', onclick: sg.load }, '✨ Suggest')); out.push(sg.box);
+    }
+    return h('div', { class: 'stack' }, out);
+  }
+  const plain = (label, key, o) => aiField(label, key, Object.assign({ field: false }, o));
   const upload = async (accept, max, q) => { const f = await pickFile(accept); return f ? shrinkImage(f, max, q) : null; };
 
-  /* --- sections */
-  const secNames = h('details', { class: 'sec', open: '' }, h('summary', null, '👤 Names'),
-    h('div', { class: 'body' },
-      text('Your name', 'from', { ph: 'e.g. Sam' }), text('Their name', 'to', { ph: 'e.g. Lina' }),
-      text('Your WhatsApp number (optional)', 'contact', { type: 'tel', max: 20, ph: '96170123456', hint: 'Their answer is sent straight to you. It will be visible inside the link, so leave it empty if you prefer.' })));
-
-  const secWords = h('details', { class: 'sec' }, h('summary', null, '✏️ Words'));
-  const wordsBody = h('div', { class: 'body' });
-  function drawWords() {
-    wordsBody.replaceChildren(
-      h('p', { class: 'hint' }, 'Use {to} and {from} to insert the names.'),
-      text('Big question', 'title'), text('Line under it', 'sub'), text('Extra line (pet name, place, inside joke…)', 'caption'),
-      text('When they say yes: headline', 'yay'), text('When they say yes: message', 'yaySub'),
-      h('label', { class: 'f' }, 'Day',
-        h('select', { onchange: (e) => { cfg.dateMode = e.target.value; drawWords(); change(); } },
-          h('option', { value: 'pick', selected: cfg.dateMode === 'pick' }, 'They pick the day'), h('option', { value: 'fixed', selected: cfg.dateMode === 'fixed' }, 'I set the day'))),
-      cfg.dateMode === 'fixed' ? text('The day', 'fixedDate', { type: 'date' }) : text('Day screen: title', 'dateTitle'),
-      cfg.dateMode === 'fixed' ? null : text('Day screen: line', 'dateSub'),
-      text('Options screen: title', 'actTitle'),
-      text('Options (one per line)', 'acts', { area: true, max: 600, get: () => cfg.acts.join('\n'), set: (v) => (cfg.acts = v.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 12)) }),
-      text('Final screen: title', 'doneTitle'));
+  /* --- steps */
+  function stepNames() {
+    return [
+      h('div', { class: 'stack' }, h('b', null, 'They are…'), h('div', { class: 'row' }, REL.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.rel === id ? 'true' : 'false', onclick: (e) => { cfg.rel = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
+      plain('Your name', 'from', { ph: 'e.g. Sam' }), plain('Their name', 'to', { ph: 'e.g. Lina' }),
+      h('div', { class: 'stack' }, h('b', null, 'The vibe of your words'), h('p', { class: 'hint' }, 'The ✨ suggestions will write in this style.'),
+        h('div', { class: 'row' }, AI.VIBES.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.vibe === id ? 'true' : 'false', onclick: (e) => { cfg.vibe = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
+      plain('Your WhatsApp number (optional)', 'contact', { ph: '96170123456', max: 20, hint: 'Only used if the answer can’t be saved. It would be visible inside the link.' })
+    ];
   }
-  secWords.append(wordsBody); drawWords();
-
-  const secPic = h('details', { class: 'sec' }, h('summary', null, '🖼️ Main picture'));
-  const picBody = h('div', { class: 'body' });
-  function drawPic() {
+  function stepWords() {
+    const out = [h('p', { class: 'hint' }, 'Tap ✨ on any line and pick a suggestion, or write your own. {to} and {from} become the names.'),
+      aiField('The big question', 'title'), aiField('Line under it', 'sub'), aiField('Tiny extra line (inside joke, pet name…)', 'caption'),
+      aiField('When they say YES: headline', 'yay'), aiField('When they say YES: message', 'yaySub'),
+      h('label', { class: 'f' }, 'The day', h('select', { onchange: (e) => { cfg.dateMode = e.target.value; change(); drawBody(); } },
+        h('option', { value: 'pick', selected: cfg.dateMode === 'pick' }, 'They pick the day and time'), h('option', { value: 'fixed', selected: cfg.dateMode === 'fixed' }, 'I set the day and time')))];
+    if (cfg.dateMode === 'fixed') out.push(plain('Day', 'fixedDate', { type: 'date' }), plain('Time', 'fixedTime', { type: 'time' }));
+    else out.push(aiField('Day screen: title', 'dateTitle'), aiField('Day screen: line', 'dateSub'), aiField('Pick-up line (shows a countdown under the day)', 'pickup', { field: 'pickup', hint: 'Use {days} for the number of days left. Say where you’ll pick them up!' }));
+    const ideas = h('div', { class: 'row' });
+    const acts = aiField('Options they choose from (one per line)', 'acts', { area: true, field: false, max: 600, get: () => cfg.acts.join('\n'), set: (v) => (cfg.acts = v.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 12)) });
+    (ACT_IDEAS[cfg.type] || ACT_IDEAS.custom).forEach((a) => ideas.append(h('button', { class: 'chip', onclick: () => { if (!cfg.acts.includes(a) && cfg.acts.length < 12) { cfg.acts.push(a); change(); drawBody(); } } }, '+ ' + a)));
+    out.push(aiField('Options screen: title', 'actTitle'), acts, h('p', { class: 'hint' }, 'Tap an idea to add it:'), ideas, aiField('Final screen: title', 'doneTitle'));
+    return out;
+  }
+  function stepPic() {
     const g = h('div', { class: 'grid' });
-    STICKER_ORDER.filter((id) => id.startsWith('cat') || ['bear', 'bunny'].includes(id)).forEach((id) => {
-      const b = h('button', { class: 'tile', 'aria-pressed': !cfg.photo && cfg.photoSticker === id ? 'true' : 'false', title: STICKERS[id].name, onclick: () => { cfg.photoSticker = id; cfg.photo = null; drawPic(); change(); } });
-      b.innerHTML = STICKERS[id].svg; g.append(b);
-    });
-    picBody.replaceChildren(h('p', { class: 'hint' }, 'Shown in the frame on every screen. Pick one of mine, or upload their photo, an anime you both like, their pet or their place.'), g,
-      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 240, .75); if (d) { cfg.photo = d; drawPic(); change(); } } }, '⬆ Upload picture'),
-        cfg.photo ? h('button', { class: 'btn sm danger', onclick: () => { cfg.photo = null; drawPic(); change(); } }, 'Remove') : null));
+    STICKER_ORDER.filter((id) => id.startsWith('cat') || ['bear', 'bunny'].includes(id)).forEach((id) => { const b = h('button', { class: 'tile', 'aria-pressed': !cfg.photo && cfg.photoSticker === id ? 'true' : 'false', title: STICKERS[id].name, onclick: () => { cfg.photoSticker = id; cfg.photo = null; change(); drawBody(); } }); b.innerHTML = svgIcon(id); g.append(b); });
+    return [h('p', { class: 'hint' }, 'This sits in the middle of every screen. Pick one of mine, or upload their photo, an anime you both love, their pet or their place.'), g,
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 240, .75); if (d) { cfg.photo = d; change(); drawBody(); } } }, '⬆ Upload my own picture'), cfg.photo ? h('button', { class: 'btn sm danger', onclick: () => { cfg.photo = null; change(); drawBody(); } }, 'Remove') : null)];
   }
-  secPic.append(picBody); drawPic();
-
-  const secLook = h('details', { class: 'sec' }, h('summary', null, '🎨 Look & wallpaper'));
-  const lookBody = h('div', { class: 'body' });
-  function drawLook() {
-    lookBody.replaceChildren(
-      h('div', { class: 'row' }, THEME_ORDER.map((id) => h('button', { class: 'chip', 'aria-pressed': cfg.theme === id ? 'true' : 'false', onclick: () => { cfg.theme = id; drawLook(); change(); } }, THEMES[id].emoji + ' ' + THEMES[id].name))),
-      cfg.theme === 'custom' ? h('label', { class: 'f' }, 'Pick your colour', h('input', { type: 'color', value: cfg.color, oninput: (e) => { cfg.color = e.target.value; change(); } })) : null,
-      h('label', { class: 'row', style: 'align-items:center;gap:10px' }, h('input', { type: 'checkbox', checked: cfg.clouds, onchange: (e) => { cfg.clouds = e.target.checked; change(); } }), 'Floating clouds'),
-      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 520, .6); if (d) { cfg.wall = d; drawLook(); change(); } } }, '⬆ Upload my own wallpaper'),
-        cfg.wall ? h('button', { class: 'btn sm danger', onclick: () => { cfg.wall = null; drawLook(); change(); } }, 'Remove wallpaper') : null),
-      h('p', { class: 'hint' }, 'Uploaded images travel inside the link, so they are shrunk to keep it short.'));
+  function thumb(id) {
+    const t = THEMES[id];
+    const b = h('button', { class: 'wpt', 'aria-pressed': cfg.theme === id ? 'true' : 'false', title: t.name, onclick: () => { cfg.theme = id; change(); drawBody(); } });
+    const sk = h('div', { class: 'sk', style: `background:${t.sky || 'linear-gradient(#ffe3f4,' + cfg.color + ')'}` }), sc = h('div', { class: 'sc' });
+    sc.innerHTML = t.scene(); b.append(sk, sc, h('span', { style: `color:${t.ink}` }, t.emoji + ' ' + t.name)); return b;
   }
-  secLook.append(lookBody); drawLook();
-
-  const secNo = h('details', { class: 'sec' }, h('summary', null, '😈 The "No" button'));
-  const noBody = h('div', { class: 'body' });
-  const FX = [['shrink', 'Gets smaller'], ['dodge', 'Runs away'], ['shake', 'Shakes'], ['spin', 'Spins'], ['fade', 'Fades a bit'], ['none', 'Nothing']];
-  function drawNo() {
-    const list = h('div', { class: 'col', style: 'align-items:stretch' });
+  function stepLook() {
+    const out = [h('p', { class: 'hint' }, 'Pick a place. The colours of the page follow it.')];
+    THEME_GROUPS.forEach(([g, ids]) => out.push(h('div', { class: 'h2', style: 'margin:0' }, g === 'Lebanon' ? '🇱🇧 Lebanon' : g === 'World' ? '🌍 World' : '🎨 Vibes'), h('div', { class: 'wp' }, ids.map(thumb))));
+    if (cfg.theme === 'custom') out.push(h('label', { class: 'f' }, 'Pick your colour', h('input', { type: 'color', value: cfg.color, oninput: (e) => { cfg.color = e.target.value; change(); } })));
+    out.push(h('label', { class: 'row', style: 'gap:10px' }, h('input', { type: 'checkbox', checked: cfg.clouds, onchange: (e) => { cfg.clouds = e.target.checked; change(); } }), 'Floating clouds'),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 520, .6); if (d) { cfg.wall = d; change(); drawBody(); } } }, '⬆ Use my own picture as wallpaper'), cfg.wall ? h('button', { class: 'btn sm danger', onclick: () => { cfg.wall = null; change(); drawBody(); } }, 'Remove it') : null));
+    return out;
+  }
+  function stepNo() {
+    const list = h('div', { style: 'display:flex;flex-direction:column;gap:10px' });
     cfg.steps.forEach((s, i) => {
-      const last = i === cfg.steps.length - 1;
-      list.append(h('div', { class: 'stepbox' },
-        h('div', { class: 'n' }, last ? `Press ${i + 1} and every press after` : `Press ${i + 1}`),
-        h('div', { class: 'r' }, h('input', { type: 'text', maxlength: 90, value: s.t, placeholder: 'What it says', oninput: (e) => { s.t = e.target.value; save(); } }),
-          h('select', { onchange: (e) => { s.e = e.target.value; save(); } }, FX.map(([v, l]) => h('option', { value: v, selected: s.e === v }, l)))),
-        cfg.steps.length > 1 ? h('div', null, h('button', { class: 'btn sm danger', onclick: () => { cfg.steps.splice(i, 1); drawNo(); change(); } }, 'Delete this press')) : null));
+      const inp = h('input', { type: 'text', maxlength: 90, value: s.t, placeholder: 'What it says', oninput: (e) => { s.t = e.target.value; save(); } });
+      const sg = suggestBox('noLine', (v) => { s.t = v; inp.value = v; change(); });
+      list.append(h('div', { class: 'stepbox' }, h('div', { class: 'n' }, i === cfg.steps.length - 1 ? `Press ${i + 1} and every press after` : `Press ${i + 1}`),
+        h('div', { class: 'fieldrow' }, inp, h('button', { class: 'ai-btn', type: 'button', onclick: sg.load }, '✨')), sg.box,
+        h('div', { class: 'row' }, h('select', { style: 'flex:1', onchange: (e) => { s.e = e.target.value; save(); } }, FX.map(([v, l]) => h('option', { value: v, selected: s.e === v }, l))),
+          cfg.steps.length > 1 ? h('button', { class: 'btn sm danger', onclick: () => { cfg.steps.splice(i, 1); change(); drawBody(); } }, 'Delete') : null)));
     });
-    noBody.replaceChildren(
-      h('p', { class: 'hint' }, 'Decide what each press on "No" does. The last one repeats forever. "No" never lets them continue: only YES does.'),
-      list,
-      h('button', { class: 'btn sm', onclick: () => { cfg.steps.push({ t: '', e: 'shrink' }); drawNo(); change(); } }, '+ Add another press'),
-      h('label', { class: 'f' }, 'What happens to YES on each "No" press',
-        h('select', { onchange: (e) => { cfg.yesFx = e.target.value; change(); } }, [['grow', 'It grows bigger'], ['pulse', 'It bounces'], ['none', 'Nothing']].map(([v, l]) => h('option', { value: v, selected: cfg.yesFx === v }, l)))),
-      h('button', { class: 'btn sm', onclick: () => { mode = 'play'; syncMode(); refresh(); } }, '▶ Try it'));
+    return [h('p', { class: 'hint' }, 'Decide what each press on “No” says and does. The last one repeats forever. “No” never lets them continue: only YES does.'), list,
+      h('button', { class: 'btn sm', onclick: () => { cfg.steps.push({ t: '', e: 'shrink' }); change(); drawBody(); } }, '+ Add another press'),
+      h('label', { class: 'f' }, 'What happens to YES on each “No” press', h('select', { onchange: (e) => { cfg.yesFx = e.target.value; change(); } }, [['grow', 'It grows bigger'], ['pulse', 'It bounces'], ['none', 'Nothing']].map(([v, l]) => h('option', { value: v, selected: cfg.yesFx === v }, l)))),
+      h('button', { class: 'btn pri sm', onclick: openPreview }, '▶ Try it')];
   }
-  secNo.append(noBody); drawNo();
-
-  /* --- stickers */
-  const secSt = h('details', { class: 'sec' }, h('summary', null, '🐱 Stickers'));
-  const stBody = h('div', { class: 'body' });
-  const selBox = h('div', { class: 'stepbox' });
-  function refreshSticker() {
-    selBox.classList.toggle('hidden', sel == null || !cfg.stickers[sel]);
-    if (sel == null || !cfg.stickers[sel]) return;
+  /* stickers */
+  const selBox = h('div', { class: 'stepbox hidden' });
+  function drawSel() {
+    selBox.classList.toggle('hidden', sel == null || !cfg.stickers[sel]); if (sel == null || !cfg.stickers[sel]) return;
     const st = cfg.stickers[sel];
-    const upd = () => { placeSticker(pv.querySelectorAll('.st')[sel], st); save(); };
+    const upd = () => { stagesOf().forEach((s) => s && placeSticker(s.querySelectorAll('.st')[sel], st)); save(); };
     selBox.replaceChildren(h('div', { class: 'n' }, 'Selected sticker'),
       h('label', { class: 'f' }, 'Size', h('input', { type: 'range', min: 5, max: 70, value: st.s, oninput: (e) => { st.s = +e.target.value; upd(); } })),
       h('label', { class: 'f' }, 'Tilt', h('input', { type: 'range', min: -90, max: 90, value: st.r, oninput: (e) => { st.r = +e.target.value; upd(); } })),
-      h('div', { class: 'row' },
-        h('button', { class: 'btn sm', onclick: () => { st.f = st.f ? 0 : 1; upd(); } }, '↔ Flip'),
-        h('button', { class: 'btn sm', onclick: () => { cfg.stickers.push(cfg.stickers.splice(sel, 1)[0]); sel = cfg.stickers.length - 1; change(); refreshSticker(); } }, '⬆ Bring to front'),
-        h('button', { class: 'btn sm danger', onclick: () => removeSel() }, '🗑 Delete')));
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { st.f = st.f ? 0 : 1; upd(); } }, '↔ Flip'),
+        h('button', { class: 'btn sm', onclick: () => { cfg.stickers.push(cfg.stickers.splice(sel, 1)[0]); sel = cfg.stickers.length - 1; change(); drawSel(); } }, '⬆ Front'),
+        h('button', { class: 'btn sm danger', onclick: removeSel }, '🗑 Delete')));
   }
-  function removeSel() { if (sel == null) return; cfg.stickers.splice(sel, 1); sel = null; change(); refreshSticker(); }
-  function addSticker(k) {
-    cfg.stickers.push({ k, x: rand(30, 70), y: rand(30, 70), s: 22, r: 0, f: 0 });
-    sel = cfg.stickers.length - 1; mode = 'edit'; syncMode(); change(); refreshSticker();
+  function removeSel() { if (sel == null) return; cfg.stickers.splice(sel, 1); sel = null; change(); drawSel(); }
+  function addSticker(k) { cfg.stickers.push({ k, x: rand(30, 70), y: rand(30, 70), s: 22, r: 0, f: 0 }); sel = cfg.stickers.length - 1; mode = 'edit'; syncMode(); change(); drawSel(); }
+  function stepStickers() {
+    inline = h('div', { class: 'inline-stage' });
+    const lib = h('div', { class: 'grid' }), mineG = h('div', { class: 'grid' });
+    STICKER_ORDER.forEach((id) => { const b = h('button', { class: 'tile', title: STICKERS[id].name, onclick: () => addSticker('lib:' + id) }); b.innerHTML = svgIcon(id); lib.append(b); });
+    const drawMine = () => { const m = store.get('adate.mystickers', []); mineG.replaceChildren(...m.map((u, i) => h('button', { class: 'tile', title: 'Tap to add · long-press to remove', onclick: () => addSticker(u), oncontextmenu: (e) => { e.preventDefault(); store.set('adate.mystickers', m.filter((_, j) => j !== i)); drawMine(); } }, h('img', { src: u, alt: '' })))); };
+    drawMine(); drawSel();
+    return [h('p', { class: 'hint' }, 'Tap a sticker to add it, drag it on the phone, then resize with the sliders.'), inline, selBox,
+      h('b', null, 'Ready-made'), lib, h('b', null, 'My stickers'),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 160, .8); if (!d) return; const m = store.get('adate.mystickers', []); m.unshift(d); store.set('adate.mystickers', m.slice(0, 30)); drawMine(); addSticker(d); } }, '⬆ Upload a sticker (transparent PNG is best)')), mineG];
   }
-  const libGrid = h('div', { class: 'grid' }), myGrid = h('div', { class: 'grid' }), netGrid = h('div', { class: 'grid' });
-  STICKER_ORDER.forEach((id) => { const b = h('button', { class: 'tile', title: STICKERS[id].name, onclick: () => addSticker('lib:' + id) }); b.innerHTML = STICKERS[id].svg; libGrid.append(b); });
-  function drawMine() {
-    const mine = store.get('adate.mystickers', []);
-    myGrid.replaceChildren(...mine.map((u, i) => {
-      const b = h('button', { class: 'tile', title: 'Add (right-click / long-press to remove)', onclick: () => addSticker(u), oncontextmenu: (e) => { e.preventDefault(); store.set('adate.mystickers', mine.filter((_, j) => j !== i)); drawMine(); } }, h('img', { src: u, alt: '' }));
-      return b;
-    }));
+  /* send */
+  function stepSend() {
+    const out = h('div', { class: 'sharebox' });
+    const warn = () => (!cfg.to.trim() ? h('div', { class: 'note' }, 'You haven’t written their name yet. Go back to step 1 👈') : null);
+    async function publish(createNew) {
+      out.replaceChildren(h('p', { class: 'hint spark' }, '✨ creating your link…'));
+      try {
+        let link, priv, m = meta();
+        if (API.enabled) {
+          if (m && !createNew) { await API.update(m.id, m.token, cfg); }
+          else { m = { id: API.newId(), token: API.newToken() }; await API.create(m.id, m.token, cfg); store.set('adate.draftmeta', m); }
+          rememberInvite({ id: m.id, token: m.token, to: cfg.to || 'Someone', type: cfg.type, at: Date.now() });
+          link = inviteUrl(m.id); priv = privateUrl(m.id, m.token);
+        } else link = location.href.split('#')[0] + '#/v/' + await pack(cfg);
+        const msg = `${cfg.from ? cfg.from + ' made this for you 💌' : 'Someone made this for you 💌'}\n${link}`;
+        const pct = clamp(link.length / 20000 * 100, 4, 100);
+        out.replaceChildren(...[warn(),
+          h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your link' }),
+          API.enabled ? null : h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` })),
+          API.enabled ? null : h('p', { class: 'hint' }, `Demo mode: the whole invite lives inside the link (${link.length.toLocaleString()} characters), and her answer goes to you by WhatsApp or share.`),
+          h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: async (e) => { e.currentTarget.textContent = (await copyText(link)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy link'),
+            h('a', { class: 'btn', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+            navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text: msg }).catch(() => {}) }, 'Share…') : null),
+          priv ? h('div', { class: 'note' }, h('b', null, '🔑 Your private inbox link. '), 'Open it to see when she opens the invite and what she answers. Save it somewhere safe: it is the only key (no login needed).',
+            h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: priv }, '📬 Open my inbox'), h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(priv)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy private link'))) : null,
+          API.enabled ? h('button', { class: 'btn sm', onclick: () => publish(true) }, 'Create a brand-new link instead') : null].filter(Boolean));
+      } catch (e) { out.replaceChildren(h('div', { class: 'note' }, 'Something went wrong: ' + e.message), h('button', { class: 'btn pri', onclick: () => publish(false) }, 'Try again')); }
+    }
+    const m = meta();
+    out.append(...[warn(), h('p', { class: 'hint' }, 'Happy with it? Try the whole thing once, then create the link.'),
+      h('button', { class: 'btn block', onclick: openPreview }, '▶ Try it like they will'),
+      h('button', { class: 'btn pri block', onclick: () => publish(false) }, API.enabled && m ? 'Save changes to my link' : 'Create my link')].filter(Boolean));
+    return [out];
   }
-  drawMine();
-  const q = h('input', { type: 'text', placeholder: 'Search stickers online (cat, love, coffee…)' });
-  async function searchNet() {
-    const term = q.value.trim(); if (!term) return;
-    if (!CFG.tenorKey) { netGrid.replaceChildren(h('p', { class: 'note', style: 'grid-column:1/-1' }, 'Online search is switched off. To turn it on for free, put a Tenor API key in config.js (see README).')); return; }
-    netGrid.replaceChildren(h('p', { class: 'hint', style: 'grid-column:1/-1' }, 'Searching…'));
-    try {
-      const r = await fetch(`https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(term)}&key=${encodeURIComponent(CFG.tenorKey)}&client_key=adate&searchfilter=sticker&media_filter=tinygif_transparent,tinygif&limit=24`);
-      const j = await r.json();
-      netGrid.replaceChildren(...(j.results || []).map((x) => {
-        const u = (x.media_formats.tinygif_transparent || x.media_formats.tinygif || {}).url;
-        return u && safeImg(u) ? h('button', { class: 'tile', onclick: () => addSticker(u) }, h('img', { src: u, alt: '', loading: 'lazy' })) : null;
-      }).filter(Boolean));
-      if (!netGrid.children.length) netGrid.append(h('p', { class: 'hint' }, 'Nothing found.'));
-    } catch (e) { netGrid.replaceChildren(h('p', { class: 'note', style: 'grid-column:1/-1' }, 'Search failed. Check your connection.')); }
+  const STEPS = [['👤', 'You & them', stepNames], ['✍️', 'Words', stepWords], ['🖼️', 'Main picture', stepPic], ['🌍', 'Wallpaper', stepLook], ['😈', 'The “No” button', stepNo], ['🐱', 'Stickers', stepStickers], ['💌', 'Send it', stepSend]];
+
+  /* --- shell */
+  const dots = h('div', { class: 'steps' }), title = h('h2'), body = h('div', { class: 'body' });
+  const prev = h('button', { class: 'btn prev', onclick: () => go(step - 1) }, '←'), next = h('button', { class: 'btn pri', onclick: () => go(step + 1) }, 'Next →');
+  const pvBtn = h('button', { class: 'btn pvbtn', onclick: openPreview }, '👀 Preview');
+  function drawBody() {
+    inline = null; sel = step === 5 ? sel : sel;
+    body.replaceChildren(...STEPS[step][2]().filter(Boolean));
+    if (inline) mountStage(inline, 'edit');
   }
-  q.onkeydown = (e) => { if (e.key === 'Enter') searchNet(); };
-  stBody.append(
-    h('p', { class: 'hint' }, 'Tap a sticker to add it, then drag it on the preview. Drag to move, use the sliders to resize.'),
-    selBox, h('div', { class: 'n' , style:'font-weight:700'}, 'My stickers'),
-    h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 160, .8); if (!d) return; const mine = store.get('adate.mystickers', []); mine.unshift(d); store.set('adate.mystickers', mine.slice(0, 30)); drawMine(); addSticker(d); } }, '⬆ Upload a sticker (transparent PNG works best)')),
-    myGrid, h('div', { style: 'font-weight:700' }, 'Search online'), h('div', { class: 'row', style: 'flex-wrap:nowrap' }, q, h('button', { class: 'btn sm', onclick: searchNet }, 'Search')), netGrid,
-    h('div', { style: 'font-weight:700' }, 'Ready-made'), libGrid);
-  secSt.append(stBody); refreshSticker();
-
-  /* --- share */
-  const secShare = h('details', { class: 'sec', open: '' }, h('summary', null, '🔗 Send it'));
-  const shareBody = h('div', { class: 'body' });
-  async function makeLink() {
-    const warn = [];
-    if (!cfg.to.trim()) warn.push("You haven't written their name yet.");
-    const data = await pack(cfg);
-    const url = location.href.split('#')[0] + '#/v/' + data;
-    const pct = clamp(url.length / 20000 * 100, 4, 100);
-    const inp = h('input', { type: 'text', readonly: '', value: url, onfocus: (e) => e.target.select() });
-    const msg = `${cfg.from ? cfg.from + ' made this for you 💌' : 'Someone made this for you 💌'}\n${url}`;
-    shareBody.replaceChildren(
-      warn.length ? h('div', { class: 'note' }, warn.join(' ')) : null,
-      h('div', { class: 'sharebox' }, inp,
-        h('div', { class: 'meter' }, h('i', { style: `width:${pct}%;${pct > 60 ? 'background:#e4572e' : ''}` })),
-        h('p', { class: 'hint' }, `Link length: ${url.length.toLocaleString()} characters.` + (url.length > 9000 ? ' That is long: some chat apps may cut it. Use a smaller wallpaper/fewer uploads.' : ' Nice and short.')),
-        h('div', { class: 'row' },
-          h('button', { class: 'btn pri', onclick: async (e) => { try { await navigator.clipboard.writeText(url); e.target.textContent = 'Copied ✓'; } catch (x) { inp.select(); } } }, 'Copy link'),
-          h('a', { class: 'btn', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
-          navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text: msg }).catch(() => {}) }, 'Share…') : null,
-          h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, 'Open as them ↗'))));
+  function go(n) {
+    step = clamp(n, 0, STEPS.length - 1); store.set('adate.step', step);
+    dots.replaceChildren(...STEPS.map((s, i) => h('button', { class: 'dot' + (i < step ? ' done' : ''), 'aria-current': i === step ? 'step' : null, 'aria-label': s[1], title: s[1], onclick: () => go(i) }, s[0])));
+    title.textContent = `${step + 1}. ${STEPS[step][1]}`;
+    prev.classList.toggle('hidden', step === 0); next.classList.toggle('hidden', step === STEPS.length - 1);
+    drawBody(); window.scrollTo({ top: 0 });
   }
-  shareBody.append(h('p', { class: 'hint' }, 'When you are happy with the preview, make the link and send it.'), h('button', { class: 'btn pri', onclick: makeLink }, 'Create my link'));
-  secShare.append(shareBody);
-
-  /* --- preview toolbar */
-  const modeBtns = {
-    edit: h('button', { class: 'chip', onclick: () => { mode = 'edit'; syncMode(); refresh(); } }, '✋ Edit view'),
-    play: h('button', { class: 'chip', onclick: () => { mode = 'play'; syncMode(); refresh(); } }, '▶ Test it')
-  };
-  const screenRow = h('div', { class: 'pvtools' }, [['ask', 'Ask'], ['yay', 'Yay'], ['date', 'Day'], ['act', 'Options'], ['done', 'Final']].map(([id, l]) =>
-    h('button', { class: 'chip', 'data-s': id, 'aria-pressed': id === screen ? 'true' : 'false', onclick: () => { screen = id; screenRow.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.s === id ? 'true' : 'false')); refresh(); } }, l)));
-  function syncMode() { for (const k in modeBtns) modeBtns[k].setAttribute('aria-pressed', mode === k ? 'true' : 'false'); }
-  syncMode();
-
-  const tabs = h('div', { class: 'tabs' }, ['edit', 'preview'].map((t) => h('button', { class: 'chip', 'aria-pressed': t === tab ? 'true' : 'false', onclick: (e) => { tab = t; document.body.setAttribute('data-tab', t); tabs.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); } }, t === 'edit' ? '✏️ Edit' : '👀 Preview')));
-
-  $app.replaceChildren(h('div', { class: 'editor' },
-    h('div', { class: 'side' },
-      h('div', { class: 'top' }, h('a', { class: 'brand', href: '#/', style: 'margin:0;text-decoration:none;color:inherit' }, '🐱 A', h('b', null, 'Date')),
-        h('span', { class: 'hint' }, PRESETS[cfg.type].emoji + ' ' + PRESETS[cfg.type].label), h('button', { class: 'btn sm', onclick: () => { if (confirm('Start over? Your current invite will be cleared.')) { store.set('adate.draft', null); location.hash = '#/'; } } }, 'Start over')),
-      secNames, secWords, secPic, secLook, secNo, secSt, secShare),
-    h('div', { class: 'pv' }, h('div', { class: 'pvtools' }, modeBtns.edit, modeBtns.play), screenRow, pv)), tabs);
-  refresh();
-
+  const pv = h('div', { class: 'pvside' }, h('div', { class: 'row', style: 'justify-content:center' }, modeBtns.edit, modeBtns.play), screenRow, pvSide);
+  $app.replaceChildren(h('div', { class: 'wiz' },
+    h('div', { class: 'head' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')),
+      h('button', { class: 'btn sm', onclick: () => { if (confirm('Start over? Your current invite will be cleared.')) { store.set('adate.draft', null); store.set('adate.draftmeta', null); location.hash = '#/'; } } }, 'Start over')), dots, title),
+    h('div', { class: 'bodycol' }, body), pv),
+    h('div', { class: 'bar' }, prev, pvBtn, next));
+  syncMode(); refresh(); go(step);
   const onKey = (e) => { if ((e.key === 'Delete' || e.key === 'Backspace') && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) removeSel(); };
   document.addEventListener('keydown', onKey);
   editor.cleanup = () => document.removeEventListener('keydown', onKey);
 }
 
+/* ------------------------------------------------------------------ inbox */
+let pollTimer = null;
+function inviteCard(rec, open) {
+  const card = h('div', { class: 'inv' }), head = h('header', null, h('h3', null, `${PRESETS[rec.type] ? PRESETS[rec.type].emoji : '💌'} For ${rec.to}`), h('span', { class: 'badge' }, 'loading…'));
+  const body = h('div', { class: 'tl' }); card.append(head, body);
+  async function load() {
+    try {
+      const s = await API.status(rec.id, rec.token);
+      const answered = s.responses && s.responses.length;
+      head.lastChild.replaceWith(h('span', { class: 'badge ' + (answered ? 'ok' : s.opens ? 'warn' : '') }, answered ? '✅ Answered' : s.opens ? '👀 Opened' : '⏳ Not opened yet'));
+      const rows = [h('div', null, '📨 Created ' + ago(s.created_at)),
+        h('div', null, s.opens ? `👀 Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : '👀 Not opened yet')];
+      (s.responses || []).forEach((r) => {
+        const a = r.answer || {};
+        rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 She said YES · ' + ago(r.at)),
+          h('div', { class: 'kv' }, a.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.date) + (a.time ? ' · ' + fmtTime(a.time) : '')) : null, a.act ? h('div', null, h('b', null, (a.label || 'Plan') + ': '), a.act) : null, a.noCount ? h('div', null, h('b', null, 'Pressed “No”: '), a.noCount + ' time' + (a.noCount > 1 ? 's 😂' : '')) : null),
+          r.message ? h('div', { class: 'bubble' }, r.message) : null));
+      });
+      const cfg = s.config || {};
+      rows.push(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(inviteUrl(rec.id))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy invite link'),
+        h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(privateUrl(rec.id, rec.token))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy private link'),
+        h('button', { class: 'btn sm danger', onclick: async () => { if (confirm('Delete this invite and her answers for good?')) { try { await API.remove(rec.id, rec.token); } catch (e) { /* already gone */ } store.set('adate.mine', myInvites().filter((x) => x.id !== rec.id)); route(); } } }, 'Delete')));
+      body.replaceChildren(...rows);
+    } catch (e) { head.lastChild.replaceWith(h('span', { class: 'badge warn' }, 'Not found')); body.replaceChildren(h('p', { class: 'hint' }, 'This invite could not be loaded. It may have been deleted.')); }
+  }
+  load(); card.reload = load; return card;
+}
+function inbox(openId) {
+  document.title = 'ADate – My invites';
+  if (!API.enabled) { $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'panel' }, h('h2', null, 'Inbox is off in demo mode'), h('p', null, 'The inbox needs the free backend (see the README).'), h('a', { class: 'btn', href: '#/' }, 'Back')))); return; }
+  const list = myInvites(); const cards = list.map((r) => inviteCard(r));
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'btn sm', href: '#/' }, '+ New invite')),
+    h('div', { class: 'h2' }, '📬 My invites'), list.length ? cards : h('div', { class: 'panel' }, h('p', null, 'Nothing here yet. Create an invite and it shows up here with her answer.')),
+    h('p', { class: 'hint', style: 'margin-top:14px' }, 'This page updates by itself. Your invites are remembered on this device; use the private link to open them anywhere else.'), footer()));
+  clearInterval(pollTimer); pollTimer = setInterval(() => cards.forEach((c) => c.reload()), 15000);
+}
+function dash(arg) {
+  const [id, token] = String(arg).split('.');
+  if (!/^[a-z0-9]{6,16}$/.test(id || '') || !/^[a-z0-9]{16,40}$/.test(token || '')) return brokenLink();
+  if (!myInvites().some((x) => x.id === id)) rememberInvite({ id, token, to: 'your invite', type: 'custom', at: Date.now() });
+  API.status(id, token).then((s) => { const l = myInvites().map((x) => x.id === id ? Object.assign(x, { to: (s.config && s.config.to) || x.to, type: (s.config && s.config.type) || x.type }) : x); store.set('adate.mine', l); inbox(); }).catch(() => inbox());
+}
+
 /* ------------------------------------------------------------------ router */
 async function route() {
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
+  clearInterval(pollTimer);
+  document.querySelectorAll('.modal').forEach((m) => m.remove());
   const hash = location.hash || '#/';
-  document.body.removeAttribute('data-tab');
-  if (hash.startsWith('#/v/')) return viewer(hash.slice(4));
+  if (hash.startsWith('#/v/')) return viewer('v', hash.slice(4));
+  if (hash.startsWith('#/i/')) return API.enabled ? viewer('i', hash.slice(4)) : brokenLink();
+  if (hash.startsWith('#/d/')) return dash(hash.slice(4));
+  if (hash === '#/mine') return inbox();
   if (hash === '#/make') return editor();
   return home();
 }
