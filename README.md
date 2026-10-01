@@ -7,11 +7,11 @@ Live: https://adate.vercel.app · Source: https://github.com/moemenakari/adate
 ## What it does
 **Sender (wizard, 7 steps):** who it's for and your WhatsApp number → words (✨ suggestions on every line, 5 tones) → round main picture → wallpaper (vibes, world cities, Lebanese places) → what the sneaky "No" button says and does on each press → stickers (drag, resize, tilt, upload your own) → preview and send.
 
-**Receiver:** ask screen (YES grows, "No" shrinks/runs away/shakes, the last "No" line repeats forever and never continues) → yay → tap-only calendar → tap-only time → pick a plan → a warm reply written for them → **Send on WhatsApp** (also saved on the site).
+**Receiver:** ask screen (YES grows, "No" shrinks/runs away/shakes, the last "No" line repeats forever and never continues) → yay → tap-only calendar → tap-only time → pick a plan → a warm reply written for them → **Send on WhatsApp**: one tap opens WhatsApp with a nicely formatted message and saves the same answer in the sender's inbox. The message is built instantly (the AI may only upgrade its first lines), so it can never be empty.
 
-**Sender afterwards:** private inbox (opened? answered? her message, date, time, plan, how many times she pressed "No") that refreshes by itself. No login: each invite has a secret owner link.
+**Sender afterwards:** log in with your WhatsApp number + password and open your inbox: a big notification card shows each new answer (her message, date, time, plan, how many times she pressed "No"). The page refreshes by itself. Forgot the password? Answer the security question you picked.
 
-**Owner (site admin):** `/#/admin` with an owner key: totals, every invite with sender/receiver numbers, CSV export.
+**Owner (site admin):** `/#/admin` with an owner key: accounts (name, number, email, last login), invites, answers, CSV export, and a password reset that issues a temporary password. Passwords are stored as scrypt hashes, so nobody (not even the owner) can read them.
 
 ## How it is built
 | Part | What | Where |
