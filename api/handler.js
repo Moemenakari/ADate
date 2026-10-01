@@ -4,6 +4,8 @@ const { neon } = require('@neondatabase/serverless');
 const webpush = require('web-push');
 const crypto = require('crypto');
 const community = require('./_lib/community');
+const play = require('./_lib/play');
+const shop = require('./_lib/shop');
 
 let _sql;
 const db = () => (_sql = _sql || neon(process.env.DATABASE_URL));
@@ -106,6 +108,8 @@ module.exports = async (req, res) => {
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
     if (await community.handle(action, { sql, b, res, bad, userOf })) return;
+    if (await play.handle(action, { sql, b, res, bad, userOf })) return;
+    if (await shop.handle(action, { sql, b, res, bad, userOf })) return;
 
     /* ---------- accounts ---------- */
     if (action === 'signup') {
@@ -320,7 +324,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
-    if (action === 'admin_reports' || action === 'admin_mod') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; }
+    if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
     if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
       if (action === 'admin_invite') {
@@ -333,7 +337,7 @@ module.exports = async (req, res) => {
       }
       if (action === 'admin_settings') { const r = await sql`select key, value from settings`; return res.status(200).json(Object.fromEntries(r.map((x) => [x.key, x.value]))); }
       if (action === 'admin_set') {
-        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_link', 'whish_note'].includes(k)) throw bad('Bad setting');
+        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_link', 'whish_note', 'tod_price_2', 'tod_price_3', 'tod_price_4', 'tod_price_5'].includes(k)) throw bad('Bad setting');
         const v = String(b.value || '').trim().slice(0, 300);
         await sql`insert into settings (key, value) values (${k}, ${v}) on conflict (key) do update set value = ${v}`;
         return res.status(200).json({ ok: true });

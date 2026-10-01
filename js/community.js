@@ -162,6 +162,50 @@ window.CommunityInit = function (ui) {
       h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/mine' }, '📬 My invites'), h('button', { class: 'btn danger', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')));
   }
 
+
+  /* ---------------------------------------------------------------- Truth or Dare */
+  const LV_TXT = { 1: 'Friendly: easy and funny', 2: 'Normal: a bit more personal', 3: 'Mixed: light and sweet', 4: 'Flirty: for adults', 5: 'Spicy: for 25 and over' };
+  async function tod() {
+    page('#/tod', h('p', { class: 'hint spark' }, 'Loading…'));
+    if (!ME) await load();
+    const d = await API.todState(); ME.points = d.balance;
+    const seen = {};
+    const play = (lv) => {
+      const box = h('div', { class: 'todcard' }, h('small', null, 'Pick Truth or Dare'), h('b', { class: 'todq' }, '🎲'));
+      const ask = async (kind) => {
+        try { const q = await API.todNext(lv.level, kind, seen[lv.level] || []); (seen[lv.level] = seen[lv.level] || []).push(q.id); box.replaceChildren(h('small', null, q.kind === 'truth' ? '💬 TRUTH' : '🔥 DARE'), h('b', { class: 'todq' }, q.text)); }
+        catch (e) { box.replaceChildren(h('div', { class: 'note' }, err(e))); }
+      };
+      page('#/tod', h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: tod }, '← Levels')), h('div', { class: 'h2' }, `Level ${lv.level}: ${lv.name}`), h('p', { class: 'hint' }, 'Read it out loud to your friends and play together. Be kind and keep it fun.'), box,
+        h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: () => ask('truth') }, 'Truth'), h('button', { class: 'btn pri', onclick: () => ask('dare') }, 'Dare'), h('button', { class: 'btn', onclick: () => ask(null) }, '🎲 Random')));
+    };
+    const row = (lv) => {
+      const open = lv.price === 0 || lv.until, msg = h('div');
+      const btn = !lv.allowed ? h('span', { class: 'badge' }, `🔒 ages ${lv.min_age}+`) : open ? h('button', { class: 'btn sm pri', onclick: () => play(lv) }, 'Play') : h('button', { class: 'btn sm', onclick: async (e) => {
+        if (!confirm(`Open level ${lv.level} for today (24 hours) for ${lv.price} points? You have ${d.balance}.`)) return; e.currentTarget.disabled = true;
+        try { await API.todUnlock(lv.level); tod(); } catch (x) { toast(err(x), 'bad'); e.currentTarget.disabled = false; } } }, `Open · ⭐ ${lv.price}`);
+      return h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, ['', '😊', '🙂', '😉', '😏', '🌶️'][lv.level]), h('span', { class: 'rc-t' }, h('b', null, `Level ${lv.level}: ${lv.name}`), h('small', null, LV_TXT[lv.level] + (lv.until ? ' · open until ' + timeShort(lv.until) : lv.price ? ` · ⭐ ${lv.price} for 24 hours` : ' · free'))), btn, msg);
+    };
+    page('#/tod', h('div', { class: 'h2' }, '🎲 Truth or Dare'), h('p', { class: 'hint' }, 'Level 1 is free. The other levels open for 24 hours with your points. Some levels have an age limit.'), ...d.levels.map(row), h('a', { class: 'btn block', href: '#/points' }, 'Get more points'));
+  }
+
+
+  /* ---------------------------------------------------------------- buy points (Whish, checked by the owner) */
+  async function shopPage() {
+    page('#/points', h('p', { class: 'hint spark' }, 'Loading…'));
+    if (!ME) await load();
+    const d = await API.shop(), prod = d.products[0], msg = h('div');
+    const STATUS = { pending: '⏳ waiting for your payment', claimed: '🔎 being checked', paid: '✅ paid', rejected: '❌ not accepted' };
+    const pay = d.settings.whish_link ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: d.settings.whish_link }, '💳 Pay with Whish') : h('p', { class: 'hint' }, 'The Whish link is not set yet. Ask the owner on WhatsApp.');
+    const note = h('input', { type: 'text', maxlength: 120, placeholder: 'Whish transaction reference', 'aria-label': 'Whish reference' });
+    const start = async () => { try { const o = await API.orderCreate(prod.kind); shopPage.last = o; shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } };
+    const waiting = d.orders.find((o) => o.status === 'pending');
+    page('#/points', h('div', { class: 'h2' }, '🛒 Get more points'), h('div', { class: 'note' }, h('b', null, `${prod.label} for $${(prod.cents / 100).toFixed(2)}`), h('p', { class: 'hint' }, 'Pay with Whish, then tell us your reference. We check it and add the points, usually within a day.')),
+      waiting ? h('div', { class: 'stack' }, h('b', null, `Order AD-${waiting.id}: ${prod.label}`), h('p', { class: 'hint' }, 'Write ' + `AD-${waiting.id}` + ' in the Whish note when you pay.' + (d.settings.whish_note ? ' ' + d.settings.whish_note : '')), pay, note,
+        h('button', { class: 'btn block', onclick: async () => { try { await API.orderPaid(waiting.id, note.value); toast('Thank you. We will check it.'); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'I paid')) : h('button', { class: 'btn pri block', onclick: start }, `Buy ${prod.label} · $${(prod.cents / 100).toFixed(2)}`),
+      msg, h('div', { class: 'h2' }, 'My orders'), ...(d.orders.length ? d.orders.map((o) => h('div', { class: 'hist' }, h('span', null, `AD-${o.id} · ${STATUS[o.status] || o.status}`), h('b', null, '$' + (o.cents / 100).toFixed(2)))) : [h('p', { class: 'hint' }, 'No orders yet.')]));
+  }
+
   /* ---------------------------------------------------------------- referral landing */
   function join(code) { store.set('adate.ref', String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)); location.hash = API.session ? '#/' : '#/signup'; }
 
@@ -179,6 +223,8 @@ window.CommunityInit = function (ui) {
     if (hash.startsWith('#/dm/')) return wrap(() => dm(hash.slice(5)));
     if (hash === '#/points') return wrap(points);
     if (hash === '#/me') return wrap(me);
+    if (hash === '#/tod') return wrap(tod);
+    if (hash === '#/shop') return wrap(shopPage);
     return null;
   };
 };

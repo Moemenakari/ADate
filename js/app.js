@@ -1090,7 +1090,7 @@ async function admin() {
     const key = inp.value.trim(); if (!key) return;
     out.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
     try {
-      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { d.reports = (await API.adminReports(key)).targets; } catch (e) { d.reports = []; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
+      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { d.reports = (await API.adminReports(key)).targets; } catch (e) { d.reports = []; } try { d.tod = (await API.adminTod(key)).questions; } catch (e) { d.tod = []; } try { d.orders = await API.adminOrders(key); } catch (e) { d.orders = { orders: [], done: [] }; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
       const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:96px;text-align:center;margin:0;padding:10px' }, h('b', { style: 'font-size:1.5rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
       const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
       const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
@@ -1140,10 +1140,27 @@ async function admin() {
                 h('button', { class: 'btn sm', onclick: () => act(u, 'unmute') }, 'Unmute'), h('button', { class: 'btn sm', onclick: () => act(u, 'dismiss') }, 'Dismiss reports'),
                 h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm('Block this account?')) return; try { await API.adminMark(key, u.id, 'block', 'reported'); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, '🚫 Block')))) : [h('p', { class: 'hint' }, 'No reports in the last 7 days. 🎉')])];
         },
+        tod: () => {
+          const qs = d.tod || [], lvl = h('select', { 'aria-label': 'Level' }, [1, 2, 3, 4, 5].map((n) => h('option', { value: n }, 'Level ' + n))), kind = h('select', { 'aria-label': 'Kind' }, h('option', { value: 'truth' }, 'Truth'), h('option', { value: 'dare' }, 'Dare')), txt = h('textarea', { rows: 2, maxlength: 300, placeholder: 'Write a question or a dare', 'aria-label': 'Question' });
+          const refresh = async (o) => { try { d.tod = (await API.adminTod(key, o)).questions; draw(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
+          return [h('p', { class: 'hint' }, 'The Truth or Dare bank. Add your own; hide any you do not like. Level 3 is for 16+, level 4 for 18+, level 5 for 25+ (enforced by the server).'), note,
+            h('div', { class: 'stack' }, h('div', { class: 'fieldrow' }, lvl, kind), txt, h('button', { class: 'btn pri', onclick: () => { if (txt.value.trim().length < 5) return; refresh({ op: 'add', level: lvl.value, kind: kind.value, text: txt.value }); } }, 'Add')),
+            ...[1, 2, 3, 4, 5].map((n) => h('details', null, h('summary', null, `Level ${n} (${qs.filter((x) => x.level === n && x.active).length} active)`), ...qs.filter((x) => x.level === n).map((x) => h('div', { class: 'hist' }, h('span', { style: x.active ? '' : 'opacity:.4;text-decoration:line-through' }, (x.kind === 'dare' ? '🔥 ' : '💬 ') + x.text), h('button', { class: 'btn sm', onclick: () => refresh({ op: x.active ? 'hide' : 'show', id: x.id }) }, x.active ? 'Hide' : 'Show')))))];
+        },
+        orders: () => {
+          const o = d.orders || { orders: [], done: [] };
+          const decide = async (x, ok) => { if (!confirm(ok ? `Add the points to ${x.name || x.nick}? Check Whish first.` : 'Reject this order?')) return; try { await API.adminOrderDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
+          return [h('p', { class: 'hint' }, 'People who paid with Whish. Open Whish, check the payment and the reference, then approve to add their points.'), note,
+            ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `AD-${x.id} · $${(x.cents / 100).toFixed(2)} · 25 points`), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? '🔎 says they paid' : '⏳ not paid yet')),
+              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Person: '), (x.name || x.nick || '?') + ' · ', wa(x.phone)), h('div', null, h('b', null, 'Reference: '), x.note || '—'), h('div', { class: 'hint' }, ago(x.at))),
+              h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject')))) : [h('p', { class: 'hint' }, 'No orders waiting.')]),
+            ...(o.done.length ? [h('div', { class: 'h2' }, 'Recent'), ...o.done.map((x) => h('div', { class: 'hist' }, h('span', null, `AD-${x.id} · ${x.name || '?'} · ${x.status}`), h('b', null, '$' + (x.cents / 100).toFixed(2))))] : [])];
+        },
         settings: () => {
           const f = (label, name, ph) => { const inp = h('input', { type: 'text', value: (d.settings || {})[name] || '', placeholder: ph, 'aria-label': label }), msg = h('span', { class: 'hint' }); return h('div', { class: 'stack' }, h('b', null, label), inp, h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: async () => { try { await API.adminSet(key, name, inp.value); msg.textContent = 'Saved ✓'; (d.settings = d.settings || {})[name] = inp.value.trim(); } catch (e) { msg.textContent = e.message; } } }, 'Save'), msg)); };
           return [h('p', { class: 'hint' }, 'Numbers and links you choose to show users. Nothing here is in the code.'),
-            f('Your WhatsApp number for verification (digits with country code, e.g. 9617xxxxxxx)', 'owner_whatsapp', '9617…'), f('Your Whish payment link (optional)', 'whish_link', 'https://…'), f('Whish note shown to people who pay (optional)', 'whish_note', 'Pay with Whish, then send us the reference.')];
+            f('Your WhatsApp number for verification (digits with country code, e.g. 9617xxxxxxx)', 'owner_whatsapp', '9617…'), f('Your Whish payment link (optional)', 'whish_link', 'https://…'), f('Whish note shown to people who pay (optional)', 'whish_note', 'Pay with Whish, then send us the reference.'),
+            h('div', { class: 'h2' }, 'Truth or Dare prices (points for 24 hours)'), f('Level 2 (default 10)', 'tod_price_2', '10'), f('Level 3 (default 4)', 'tod_price_3', '4'), f('Level 4 (default 10)', 'tod_price_4', '10'), f('Level 5 (default 25)', 'tod_price_5', '25')];
         },
         contacts: () => {
           const byInvite = {}; d.answers.forEach((a) => (byInvite[a.invite_id] = byInvite[a.invite_id] || []).push(a));
@@ -1172,7 +1189,7 @@ async function admin() {
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
       };
       const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['reports', '🚩 Reports'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
+        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['reports', '🚩 Reports'], ['orders', '🛒 Orders'], ['tod', '🎲 Questions'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
       draw();
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }

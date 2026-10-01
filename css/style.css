@@ -311,3 +311,6 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .themes,.avs{display:flex;flex-wrap:wrap;gap:8px}
 .themebtn{width:46px;height:46px;border-radius:14px;border:3px solid transparent;font-size:1.3rem;cursor:pointer}.themebtn.on{border-color:var(--accent)}
 .avbtn{width:48px;height:48px;border-radius:50%;border:3px solid transparent;background:var(--accent-soft);padding:4px;cursor:pointer}.avbtn.on{border-color:var(--accent)}.avbtn svg{width:100%;height:100%}
+
+.todcard{display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center;padding:26px 18px;margin:12px 0;border-radius:24px;background:var(--surface);border:2px solid var(--accent);box-shadow:var(--shadow);min-height:180px;justify-content:center}
+.todcard small{color:var(--muted);font-weight:700;letter-spacing:.08em}.todq{font-size:1.45rem;line-height:1.3;color:var(--ink)}

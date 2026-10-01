@@ -1,6 +1,6 @@
 // Optional settings.
 window.ADATE_CONFIG = {
-  build: '2026-10-02-3',   // bump together with version.json on every release
+  build: '2026-10-02-4',   // bump together with version.json on every release
   githubUrl: 'https://github.com/moemenakari/adate',
   // Text-suggestion endpoint (free, no key). Set to '' to use only the built-in local suggestions.
   aiUrl: 'https://text.pollinations.ai/'
