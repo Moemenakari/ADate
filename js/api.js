@@ -12,19 +12,35 @@
   }
   async function ping() {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
-    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
+    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
   }
+  const KEY = 'adate.session';
+  const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
+  const write = (v) => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } };
+  const tok = () => (read() || {}).token;
+  const keep = (r) => { write({ token: r.session, phone: r.user.phone, name: r.user.name || '' }); return r; };
   const API = {
     enabled: false,
+    questions: [],
+    get session() { return read(); },
+    clear: () => write(null),
     newId: () => rnd(8, 'abcdefghjkmnpqrstuvwxyz23456789'),
     newToken: () => rnd(28, 'abcdefghjkmnpqrstuvwxyz23456789'),
-    create: (id, token, config, consent) => call('create', { id, token, config, consent }),
-    update: (id, token, config) => call('update', { id, token, config }),
+    signup: (b) => call('signup', b).then(keep),
+    login: (phone, password) => call('login', { phone, password }).then(keep),
+    recoverQuestion: (phone) => call('recover_question', { phone }),
+    recover: (phone, answer, password) => call('recover', { phone, answer, password }).then(keep),
+    logout: () => call('logout', { session: tok() }).catch(() => {}).then(() => write(null)),
+    me: () => call('me', { session: tok() }),
+    inbox: (id) => call('inbox', { id, session: tok() }),
+    create: (id, token, config, consent) => call('create', { id, token, config, consent, session: tok() }),
+    update: (id, token, config) => call('update', { id, token, config, session: tok() }),
     open: (id) => call('open', { id }),
     respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }, true),
     status: (id, token) => call('status', { id, token }),
-    remove: (id, token) => call('remove', { id, token }),
-    admin: (key) => call('admin', { key })
+    remove: (id, token) => call('remove', { id, token, session: tok() }),
+    admin: (key) => call('admin', { key }),
+    adminReset: (key, phone) => call('admin_reset', { key, phone })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
   window.API = API;

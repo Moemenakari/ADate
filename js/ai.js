@@ -16,7 +16,7 @@
     actTitle:  { what: 'the title above a list of date ideas to choose from', max: 7 },
     doneTitle: { what: 'the final screen title after everything is booked', max: 6 },
     noLine:    { what: 'what the sad or cheeky "No" button caption says after being pressed', max: 9 },
-    reply:     { what: 'a short warm text message from the person who said yes to the one who asked, confirming the date details', max: 45 }
+    opening:   { what: 'the first two sentences of a warm, flirty text from the person who just said YES to a date invite', max: 40 }
   };
 
   const L = {
@@ -73,20 +73,7 @@
       sweet: ['Are you sure? 🥺', 'Please think again…', 'That hurt a little 💔'], flirty: ['Bold of you 😏', 'Try again, gorgeous', 'Not buying it 😌'], funny: ['Wrong button, buddy!', 'Error 404: No not found', 'The button ran away 🏃'],
       poetic: ['Every no echoes in my heart…', 'The stars disagree', 'Even the moon says yes'], shy: ['oh… okay? 🥺', 'really?? 😢', 'I’ll just sit here quietly']
     },
-    reply: {
-      sweet: ['Yes {from}, I accept this date 💖 {date}{time}, {act}. I’ll be so happy to go out with you, and I hope what we have stays this beautiful. Thank you for this sweet invite 🥹',
-        'You made me smile so much. Yes! {date}{time} — {act}. I can’t wait, and I hope we keep going like this. Thank you for thinking of me 💛',
-        'Of course yes 🥰 {date}{time}, {act}. I’ll be very happy to spend it with you. Thanks for the cutest invite, {from}.'],
-      flirty: ['Yes {from}… you had me at the first button 😏 {date}{time}, {act}. I’ll be very happy to go out with you, and I hope we stay just like this. Thanks for this cute invite 💕',
-        'Alright, you win 😌 {date}{time} — {act}. I’m already looking forward to it, and I hope this is only the beginning. Thank you for the sweetest invite 🔥',
-        'Yes. I’m saying yes, {from} 😉 {date}{time}, {act}. Pick me up on time, I’ll be smiling. I hope we last, and thanks for this lovely surprise 💋'],
-      funny: ['YES! Calendar updated: {date}{time}, {act} 😂 I’ll bring the good mood, you bring the snacks. Thanks for the invite, {from}!',
-        'Fine, fine, you convinced me 😂 {date}{time} — {act}. Can’t wait! Thanks for the funniest invite ever.'],
-      poetic: ['With a full heart: yes, {from} ✨ {date}{time}, {act}. I hope what we have keeps growing like this. Thank you for this beautiful invitation 🌙',
-        'I’ll meet you there: {date}{time} — {act}. The stars can wait for us. Thank you, {from} 💫'],
-      shy: ['y-yes 🙈 {date}{time}, {act}. I’ll be really happy to go with you, and I hope we stay like this. Thank you for the cute invite 🥹',
-        'okay yes!! {date}{time}, {act}. I’m already nervous (the good kind). Thanks for asking, {from} 🫣']
-    }
+    reply: {}
   };
   const TYPE_TITLE = {
     friends: ['{to}, wanna hang out?', '{to}, squad needs you. Are you in?', '{to}, let’s make plans!', 'Ayo {to}, free this week?'],
@@ -113,10 +100,10 @@
       ctx.extra ? 'Details: ' + ctx.extra : ''
     ].join('\n');
   }
-  async function remote(field, ctx) {
+  async function remote(field, ctx, timeout) {
     const url = CFG.aiUrl === undefined ? 'https://text.pollinations.ai/' : CFG.aiUrl;
     if (!url) return [];
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 9000);
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout || 6000);
     try {
       const r = await fetch(url + encodeURIComponent(prompt(field, ctx)) + '?model=openai&seed=' + ((Math.random() * 1e6) | 0), { signal: ctl.signal });
       if (!r.ok) return [];
@@ -131,11 +118,44 @@
     const r = await remote(field, ctx);
     return r.length ? { lines: r.concat(loc.slice(0, 1)), ai: true } : { lines: loc, ai: false };
   }
-  async function reply(ctx) { // ctx: vibe, variant, date, time, act, from
-    const fill = (t) => t.replace(/\{date\}/g, ctx.date || 'soon').replace(/\{time\}/g, ctx.time ? ' at ' + ctx.time : '').replace(/\{act\}/g, ctx.act || 'our plan').replace(/\{from\}/g, ctx.from || 'you');
-    const bank = L.reply[ctx.vibe || 'sweet'] || L.reply.sweet;
-    const r = await remote('reply', Object.assign({}, ctx, { extra: `Date: ${ctx.date || 'to be decided'}${ctx.time ? ' at ' + ctx.time : ''}. Plan: ${ctx.act || 'surprise'}. Say yes warmly, say you will be very happy to go, hope the relationship stays like this, and thank them for the cute invite website. Flirty and sweet.` }));
-    return r.length ? { text: r[0], ai: true } : { text: fill(bank[(ctx.variant || 0) % bank.length]), ai: false };
+  /* ---- her answer: opening (AI can replace it) + the facts + a closing. Built instantly, never blocks. */
+  const OPEN = {
+    flirty: ['Yes, {from}… you had me at the first button 😏 I’ve been smiling at my screen like an idiot since I opened this. I’m all yours for this one.',
+      'I read your invite twice and my heart did something dangerous 🙈 So yes. A thousand times yes.',
+      'Okay, you win 😌 I don’t say yes to just anyone… but you made it impossible to say no. The button literally ran away.'],
+    sweet: ['Yes {from}, with my whole heart 💖 You made my day, my week, honestly my month. Thank you for thinking of me like this.',
+      'This is the sweetest thing anyone has done for me 🥹 Of course yes. I’m so happy right now.',
+      'I can’t stop smiling 💛 Yes, {from}. I would love to go out with you.'],
+    funny: ['YES! 🎉 I screamed a little, my cat is judging me, but YES. You’re officially the funniest person I know.',
+      'Fine, fine, you convinced me 😂 Honestly I was going to say yes anyway, but the button was a nice touch.',
+      'LET’S GOOO 🥳 Clear my calendar, wake the neighbours: it’s happening.'],
+    poetic: ['With a full heart: yes, {from} ✨ Some invitations feel like the start of a story, and this is one of them.',
+      'The stars just aligned a little for us 🌙 Yes. I’ll meet you there.',
+      'Yes 💫 You have a way of making an ordinary day feel like something worth remembering.'],
+    shy: ['y-yes 🙈 I read it three times to be sure it was real. It is. Yes!',
+      'okay I’m blushing at my phone 🫣 Yes, {from}. I’d really like that.',
+      'I was nervous to answer… but my heart already did 🥹 Yes.']
+  };
+  const CLOSE = {
+    flirty: ['Be on time, I’ll be ready 🥰 Thank you for this beautiful surprise, and I really hope we stay just like this for a very long time. 💕',
+      'Don’t be late, and wear something that makes me forget my words 😉 Thanks for the sweetest invite, I hope this is only the beginning. 💋'],
+    sweet: ['I can’t wait. Thank you for this lovely surprise and for being you. I hope we keep growing like this 💞',
+      'See you then 💛 Thank you for making me feel this special. I hope what we have stays this beautiful.'],
+    funny: ['Don’t be late and don’t forget the snacks 😂 Thanks for the best invite ever!', 'Bring your good mood, I’m bringing the chaos 😄 Thank you for the cutest invite!'],
+    poetic: ['Until then, I’ll count the hours ✨ Thank you for this beautiful invitation 🌙', 'Save me a seat under the stars 🌌 Thank you, truly.'],
+    shy: ['okay I’m nervous already 🙈 thank you for asking me, it really means a lot 💗', 'see you soon 🫣 thank you for being so sweet 💞']
+  };
+  function compose(ctx) {
+    const v = OPEN[ctx.vibe] ? ctx.vibe : 'sweet', n = ctx.variant || 0;
+    const sub = (t) => t.replace(/\{from\}/g, ctx.from || 'you');
+    const opening = ctx.opening || sub(OPEN[v][n % OPEN[v].length]);
+    const facts = [ctx.date && '📅 ' + ctx.date, ctx.time && '⏰ ' + ctx.time, ctx.act && '✨ ' + (ctx.label || 'Plan') + ': ' + ctx.act, ctx.pickup && '🚗 ' + ctx.pickup].filter(Boolean);
+    const closing = sub(CLOSE[v][n % CLOSE[v].length]);
+    return [opening, facts.join('\n'), closing + (ctx.to ? '\n— ' + ctx.to : '')].filter(Boolean).join('\n\n');
   }
-  window.AI = { VIBES, FIELDS: F, local, suggest, reply };
+  async function opening(ctx) { // optional upgrade of the first paragraph; resolves null fast if the AI is slow
+    const r = await remote('opening', Object.assign({}, ctx, { extra: 'Say YES warmly and a little flirty to the invite. Two short sentences, personal, not generic.' }), 3500);
+    return r.length ? r[0] : null;
+  }
+  window.AI = { VIBES, FIELDS: F, local, suggest, compose, opening };
 })();

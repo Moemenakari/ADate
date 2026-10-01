@@ -16,3 +16,22 @@ create table if not exists responses (
 );
 create index if not exists responses_invite_idx on responses(invite_id);
 create index if not exists invites_created_idx on invites(created_at desc);
+
+-- Accounts: phone number + password (scrypt hash, never stored in clear) and a security question for resets.
+create table if not exists users (
+  id bigint generated always as identity primary key,
+  phone text unique not null, name text, email text,
+  pass_salt text not null, pass_hash text not null,
+  question text, answer_salt text, answer_hash text,
+  fails int not null default 0, locked_until timestamptz,
+  created_at timestamptz not null default now(), last_login_at timestamptz
+);
+create table if not exists sessions (
+  token_hash text primary key,
+  user_id bigint not null references users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists sessions_user_idx on sessions(user_id);
+alter table invites add column if not exists user_id bigint references users(id) on delete set null;
+create index if not exists invites_user_idx on invites(user_id);
+alter table responses add column if not exists seen_at timestamptz;

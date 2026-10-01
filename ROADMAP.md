@@ -1,6 +1,8 @@
 # Roadmap (ideas, not promises)
 
 ## Next
+- Real phone notifications (Web Push, works when the site is added to the home screen) when someone answers.
+- WhatsApp Business API (paid) to auto-send her answer to the sender without her tapping send.
 - Per-invite link previews (`/i/<id>` served by the API) so WhatsApp shows a custom card.
 - Share cards: export an invite or an answer as an image for Snapchat / Instagram stories.
 - Rate limiting and an owner key per admin.
