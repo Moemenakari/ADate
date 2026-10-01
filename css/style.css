@@ -258,3 +258,17 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .pwbox .eye{position:absolute;right:.4em;top:50%;transform:translateY(-50%);width:2.4em;height:2.4em;border:0;border-radius:50%;background:transparent;font-size:1.15rem;line-height:1;cursor:pointer}
 .tabs2{display:flex;gap:8px}.tabs2 .chip{flex:1;text-align:center}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.85rem}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* form fields inside the invite page: white box, dark text, clear border, so they read on any wallpaper */
+.stage input[type=tel],.stage input[type=text],.stage select{background:#fff;color:#3a2433;border:.7cqw solid var(--accent);border-radius:4cqw;font-size:1.05em;font-weight:600;min-height:12cqw;padding:.45em .7em}
+.stage input::placeholder{color:#8c7283;font-weight:500}
+.stage .stack>b{display:block;font-size:1.05em;color:var(--ink);text-shadow:0 .08em 0 rgba(255,255,255,.55)}
+.stage .stack .hint,.stage .stack .caption{color:var(--ink);opacity:1;font-size:.82em;font-weight:600;text-shadow:0 .08em 0 rgba(255,255,255,.6)}
+.stage .stack .chip{background:#fff;color:#3a2433;border:.6cqw solid var(--accent)}
+.stage .cbox{background:rgba(255,255,255,.94);border:.6cqw solid var(--accent);border-radius:5cqw;padding:3cqw;box-shadow:0 1cqw 0 rgba(0,0,0,.12)}
+.stage .cbox b,.stage .cbox .hint,.stage .cbox .caption{color:#3a2433;text-shadow:none}
+.stage .cbox b{font-size:1em}
+
+.pwlabel{display:block;margin:0 0 4px;font-weight:600;color:var(--ink)}
+.pwwrap{display:block;width:100%}
+.pwbox input{color:var(--ink);background:var(--surface);font-size:1.05rem}

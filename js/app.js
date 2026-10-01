@@ -63,7 +63,7 @@ function waPicker(cc0, onChange) {
   const sel = h('select', { style: 'flex:0 0 46%', 'aria-label': 'Country' }, COUNTRIES.map(([c, l]) => h('option', { value: c, selected: c === st.cc }, l)));
   const tel = h('input', { type: 'tel', inputmode: 'numeric', maxlength: 16, 'aria-label': 'WhatsApp number' });
   const row = h('div', { class: 'fieldrow' }, sel, tel);
-  const igIn = h('input', { type: 'text', maxlength: 80, placeholder: 'Instagram (optional): @username', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
+  const igIn = h('input', { type: 'text', maxlength: 80, placeholder: '@username (optional)', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
   const paint = () => { status.textContent = st.contact ? '✓ +' + st.contact + (st.src === 'contact' ? ' · from your contacts' : '') : (canPick ? 'Tap the button and choose your own contact card.' : st.phone ? '✗ That number doesn’t look right yet.' : 'Your number without the country code.'); status.style.color = !st.contact && st.phone ? '#c0392b' : ''; onChange(out()); };
   tel.oninput = () => { st.phone = digits(tel.value); st.contact = normalizePhone(st.cc, st.phone); st.src = st.contact ? 'typed' : ''; paint(); };
   sel.onchange = () => { st.cc = sel.value; tel.oninput(); };
@@ -76,7 +76,7 @@ function waPicker(cc0, onChange) {
       if (!st.contact) status.textContent = '✗ That contact has no usable number. Pick another.';
     } catch (e) { /* cancelled */ }
   } }, '📇 Choose my number from contacts') : null;
-  const box = h('div', { class: 'stack' }, pickBtn, canPick ? null : row, status, igIn);
+  const box = h('div', { class: 'stack' }, pickBtn, canPick ? null : row, status, h('b', null, 'Instagram (optional)'), igIn);
   paint();
   return box;
 }
@@ -88,7 +88,7 @@ function contactPicker(init, onChange) {
   const sel = h('select', { style: 'flex:0 0 46%', 'aria-label': 'Country' }, COUNTRIES.map(([c, l]) => h('option', { value: c, selected: c === st.cc }, l)));
   const tel = h('input', { type: 'tel', inputmode: 'numeric', maxlength: 16, value: st.phone, 'aria-label': 'WhatsApp number' });
   const row = h('div', { class: 'fieldrow' }, sel, tel);
-  const igIn = h('input', { type: 'text', maxlength: 80, value: st.ig, placeholder: '@username or instagram.com/username', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
+  const igLabel = h('b', null, 'Instagram (optional)'), igIn = h('input', { type: 'text', maxlength: 80, value: st.ig, placeholder: '@username or instagram.com/username', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
   const chips = h('div', { class: 'row' });
   const paint = () => {
     const o = out(); row.style.display = st.kind === 'wa' ? '' : 'none'; igIn.style.display = st.kind === 'ig' ? '' : 'none';
@@ -406,7 +406,7 @@ function buildStage(cfg, opts) {
     const needContact = !!(opts.inviteId && window.API && API.enabled);   // the preview in the editor does not ask
     let me = { contact: '', ig: '', src: '' }, sendBtn = null;
     const mine = waPicker(cfg.cc, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; });
-    const contactBox = h('div', { class: 'stack', style: 'margin-top:1cqw' }, h('b', { style: 'font-size:.75em' }, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, needContact ? `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.` : '👀 Preview: she must add her own WhatsApp number here before she can send.'), mine);
+    const contactBox = h('div', { class: 'stack cbox', style: 'margin-top:7cqw' }, h('b', null, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, needContact ? `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.` : '👀 Preview: she must add her own WhatsApp number here before she can send.'), mine);
     const waOn = !!(cfg.contact && cfg.waReply);
     const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with ADate · ${location.host}_`;
     const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(waText(m))}`;
@@ -799,16 +799,16 @@ function googleButton(onError) {
   return host;
 }
 /** Password box: dark readable text and an eye to show/hide what you typed. */
-function pwField(placeholder, autocomplete) {
+function pwField(placeholder, autocomplete, label) {
   const inp = h('input', { type: 'password', autocomplete, placeholder, 'aria-label': placeholder });
   const eye = h('button', { type: 'button', class: 'eye', 'aria-label': 'Show password', onclick: () => { const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; eye.textContent = show ? '🙈' : '👁️'; eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); } }, '👁️');
-  const box = h('div', { class: 'pwbox' }, inp, eye); box.input = inp; return box;
+  const box = h('div', { class: 'pwwrap' }, h('b', { class: 'pwlabel' }, label || placeholder), h('div', { class: 'pwbox' }, inp, eye)); box.input = inp; return box;
 }
 function login(mode) {
   mode = mode === 'signup' ? 'signup' : 'login';
   document.title = 'ADate – ' + (mode === 'signup' ? 'Sign up' : 'Log in');
-  const ph = phoneInputs('961'), msg = h('div'), pw = pwField(mode === 'signup' ? 'Create a password (6+ characters)' : 'Password', mode === 'signup' ? 'new-password' : 'current-password');
-  const pw2 = pwField('Type the password again', 'new-password');
+  const ph = phoneInputs('961'), msg = h('div'), pw = pwField(mode === 'signup' ? 'Create a password (6+ characters)' : 'Password', mode === 'signup' ? 'new-password' : 'current-password', mode === 'signup' ? 'Create a password (6+ characters)' : 'Your password');
+  const pw2 = pwField('Type the password again', 'new-password', 'Type the password again');
   const Q = (API.questions && API.questions.length) ? API.questions : ['What is your pet’s name?'], qa = { q: Q[0], a: h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }) };
   const submit = async () => {
     if (!ph.value) return msg.replaceChildren(h('div', { class: 'note' }, 'Check your number first.'));
@@ -827,7 +827,7 @@ function login(mode) {
   pw.input.onkeydown = (e) => { if (e.key === 'Enter' && mode === 'login') submit(); };
   const tabs = h('div', { class: 'tabs2' }, [['login', 'Log in'], ['signup', 'Sign up']].map(([m, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': m === mode ? 'true' : 'false', onclick: () => login(m) }, l)));
   const form = h('div', { class: 'stack' }, h('p', { class: 'hint' }, mode === 'signup' ? 'Your number is your login. Lebanon: just the 8 digits.' : 'Your WhatsApp number and your password.'), phoneRow(ph.sel, ph.inp), pw,
-    mode === 'signup' ? [pw2, h('label', { class: 'f' }, 'If you forget your password:', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), qa.a] : null,
+    mode === 'signup' ? [pw2, h('label', { class: 'f' }, 'If you forget your password, we ask:', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), h('b', { class: 'pwlabel' }, 'Your answer'), qa.a] : null,
     h('button', { class: 'btn pri block', onclick: submit }, mode === 'signup' ? 'Create my account' : 'Log in'), mode === 'login' ? h('a', { href: '#/recover' }, 'Forgot your password?') : null);
   authShell(mode === 'signup' ? '✨ Create your account' : '📬 Welcome back', tabs,
     API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, msg, h('a', { href: '#/' }, '← Back'));
@@ -853,7 +853,7 @@ function profile() {
       try { await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, birthdate: bd, interests: [...st.interests] }); store.set('adate.after', store.get('adate.after', null) || '#/make'); goAfterAuth(); }
       catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
     };
-    const lp = h('input', { type: 'tel', inputmode: 'numeric', placeholder: 'Old number', 'aria-label': 'Old phone number' }), lwb = pwField('Old password', 'current-password'), lw = lwb.input, lmsg = h('div');
+    const lp = h('input', { type: 'tel', inputmode: 'numeric', placeholder: 'Old number', 'aria-label': 'Old phone number' }), lwb = pwField('Old password', 'current-password', 'Your old password'), lw = lwb.input, lmsg = h('div');
     const link = h('details', null, h('summary', { class: 'hint' }, 'Link my old account (number + password)'), h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'Brings the invites and answers of your older account into this one.'), lp, lwb,
       h('button', { class: 'btn sm', onclick: async () => { try { await API.linkLegacy(digits(lp.value), lw.value); lmsg.replaceChildren(h('div', { class: 'note' }, '✅ Linked. Your old invites are here now.')); } catch (e) { lmsg.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Link it'), lmsg));
     host.replaceChildren(
@@ -883,7 +883,7 @@ function recover() {
     if (!ph.value) return box.replaceChildren(h('div', { class: 'note' }, 'Check your number first.'));
     try {
       const { question } = await API.recoverQuestion(ph.value);
-      const ans = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Answer' }), pwb = pwField('New password (6+ characters)', 'new-password'), pw = pwb.input, msg = h('div');
+      const ans = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Answer' }), pwb = pwField('New password (6+ characters)', 'new-password', 'Your new password'), pw = pwb.input, msg = h('div');
       box.replaceChildren(h('b', null, question), ans, pwb, h('button', { class: 'btn pri block', onclick: async () => {
         try { await API.recover(ph.value, ans.value, pw.value); location.hash = '#/mine'; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
       } }, 'Set new password'), msg);
