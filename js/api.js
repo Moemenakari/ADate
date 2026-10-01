@@ -4,8 +4,8 @@
   const CFG = window.ADATE_CONFIG || {};
   const base = (CFG.apiBase || '') + '/api';
   const rnd = (n, al) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, (b) => al[b % al.length]).join(''); };
-  async function call(action, body) {
-    const r = await fetch(`${base}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  async function call(action, body, keep) { // keep: lets the request finish even if the browser jumps to WhatsApp
+    const r = await fetch(`${base}/${action}`, { method: 'POST', keepalive: !!keep, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch (e) { /* not json */ }
     if (!r.ok) throw new Error((j && j.message) || 'Request failed (' + r.status + ')');
     return j;
@@ -21,7 +21,7 @@
     create: (id, token, config, consent) => call('create', { id, token, config, consent }),
     update: (id, token, config) => call('update', { id, token, config }),
     open: (id) => call('open', { id }),
-    respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }),
+    respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }, true),
     status: (id, token) => call('status', { id, token }),
     remove: (id, token) => call('remove', { id, token }),
     admin: (key) => call('admin', { key })
