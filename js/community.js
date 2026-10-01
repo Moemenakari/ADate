@@ -195,7 +195,7 @@ window.CommunityInit = function (ui) {
 
 
   /* ---------------------------------------------------------------- Truth or Dare */
-  const LV_TXT = { 1: 'Friendly: easy and funny', 2: 'Normal: a bit more personal', 3: 'Mixed: light and sweet', 4: 'Flirty: for adults', 5: 'Spicy: for 25 and over' };
+  const LV_TXT = { 1: 'Friendly: easy and funny', 2: 'Normal: a bit more personal', 3: 'Mixed: light and sweet', 4: 'Flirty: for teens and up', 5: 'Spicy: the boldest level' };
   async function tod() {
     page('#/tod', h('p', { class: 'hint spark' }, 'Loading…'));
     if (!ME) await load();
