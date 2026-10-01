@@ -3,6 +3,7 @@
 const { neon } = require('@neondatabase/serverless');
 const webpush = require('web-push');
 const crypto = require('crypto');
+const community = require('./_lib/community');
 
 let _sql;
 const db = () => (_sql = _sql || neon(process.env.DATABASE_URL));
@@ -27,7 +28,7 @@ const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID || '53008505841-vo4k1nv7rtvqp9t58
 const igOk = (v) => (/^[A-Za-z0-9._]{1,30}$/.test(v) && !/^\.+$/.test(v) ? v : '');
 const contactOf = (v) => { const t = String(v || '').trim(); return t[0] === '@' ? (igOk(t.slice(1)) ? '@' + igOk(t.slice(1)) : '') : digits(t).slice(0, 16); };
 const cols = (c) => ({ name: String(c.from || '').slice(0, 60), phone: digits(c.contact).slice(0, 16), to: String(c.to || '').slice(0, 60), type: String(c.type || '').slice(0, 20), toc: contactOf(c.toContact) || null });
-const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email, first_name: u.first_name || '', last_name: u.last_name || '', birthdate: u.birthdate ? String(u.birthdate).slice(0, 10) : '', interests: u.interests || [], profile_done: !!u.profile_done, google: !!u.google_sub, has_password: !!u.pass_hash, has_recovery: !!(u.answer_hash && u.answer2_hash), verified: !!u.verified, verify_code: u.verify_code || '' });
+const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email, first_name: u.first_name || '', last_name: u.last_name || '', birthdate: u.birthdate ? community.dateStr(u.birthdate) : '', interests: u.interests || [], profile_done: !!u.profile_done, google: !!u.google_sub, has_password: !!u.pass_hash, has_recovery: !!(u.answer_hash && u.answer2_hash), verified: !!u.verified, verify_code: u.verify_code || '' });
 const ageOn = (iso) => { const d = new Date(iso + 'T00:00:00Z'), n = new Date(); let a = n.getUTCFullYear() - d.getUTCFullYear(); if (n.getUTCMonth() < d.getUTCMonth() || (n.getUTCMonth() === d.getUTCMonth() && n.getUTCDate() < d.getUTCDate())) a--; return a; };
 async function verifyGoogle(cred) { // the Google sign-in button gives the browser a signed token; Google itself tells us whether it is real and for our app
   const cid = GOOGLE_ID;
@@ -101,9 +102,10 @@ module.exports = async (req, res) => {
   const action = String((req.query && req.query.action) || '');
   try {
     if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, q2: Q2, vapid: process.env.VAPID_PUBLIC_KEY || null, google: GOOGLE_ID || null });
-    if (req.method !== 'POST') throw bad('POST only', 405);
+    if (req.method !== 'POST' && action !== 'cleanup') throw bad('POST only', 405);
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
+    if (await community.handle(action, { sql, b, res, bad, userOf })) return;
 
     /* ---------- accounts ---------- */
     if (action === 'signup') {
@@ -161,6 +163,9 @@ module.exports = async (req, res) => {
       const r = await sql`update users set first_name = ${first}, last_name = ${last}, name = ${first}, phone = ${phone}, email = ${email}, birthdate = ${b.birthdate}::date, interests = ${interests}, profile_done = true, verify_code = ${code} where id = ${u.id} returning *`;
       if (pw) await sql`update users set pass_salt = ${pw}, pass_hash = ${kdf(b.password, pw)} where id = ${u.id}`;
       if (rec) await sql`update users set question = ${b.question}, answer_salt = ${rec[0]}, answer_hash = ${kdf(norm(b.answer), rec[0])}, question2 = ${Q2}, answer2_salt = ${rec[1]}, answer2_hash = ${kdf(norm(b.answer2), rec[1])} where id = ${u.id}`;
+      const refc = u.ref_code || crypto.randomBytes(5).toString('hex').slice(0, 8).toUpperCase();
+      await sql`update users set ref_code = ${refc}, country = coalesce(country, ${community.countryOf(phone)}) where id = ${u.id}`;
+      if (!(await sql`select 1 from points_ledger where user_id = ${u.id} and reason = 'profile'`).length) await sql`insert into points_ledger (user_id, delta, reason) values (${u.id}, 15, 'profile')`; // completing the profile earns 15 points, once
       const fresh = await sql`select * from users where id = ${u.id}`; r[0] = fresh[0];
       return res.status(200).json({ user: publicUser(r[0]) });
     }
@@ -315,6 +320,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
+    if (action === 'admin_reports' || action === 'admin_mod') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; }
     if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
       if (action === 'admin_invite') {
@@ -335,10 +341,11 @@ module.exports = async (req, res) => {
       if (action === 'admin_mark') { // block / unblock / mark as verified, per account
         const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
         const op = String(b.op || '');
-        if (!['block', 'unblock', 'verify', 'unverify'].includes(op)) throw bad('Bad action');
+        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin'].includes(op)) throw bad('Bad action');
         const note = String(b.note || '').slice(0, 200) || null;
         const r = op === 'block' ? await sql`update users set blocked = true, blocked_note = ${note} where id = ${id} returning id`
           : op === 'unblock' ? await sql`update users set blocked = false, blocked_note = null where id = ${id} returning id`
+          : op === 'admin' || op === 'unadmin' ? await sql`update users set is_admin = ${op === 'admin'} where id = ${id} returning id`
           : await sql`update users set verified = ${op === 'verify'} where id = ${id} returning id`;
         if (!r.length) throw bad('No such account', 404);
         if (op === 'block') { await sql`delete from sessions where user_id = ${id}`; await sql`delete from push_subs where user_id = ${id}`; }
@@ -352,7 +359,7 @@ module.exports = async (req, res) => {
         await sql`delete from sessions where user_id = ${r[0].id}`;
         return res.status(200).json({ phone, temp });
       }
-      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, u.verify_code, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
+      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, u.verify_code, u.is_admin, u.muted_until, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
           (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
       const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
           i.first_opened_at, i.last_opened_at, i.config->>'toIg' as to_ig, (select u.email from users u where u.id = i.user_id) as account_email, (select u.id from users u where u.id = i.user_id) as account_id, (select e.data->>'phone' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'phone', '') <> '' order by e.created_at desc limit 1) as typed_phone, (select e.data->>'ig' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'ig', '') <> '' order by e.created_at desc limit 1) as typed_ig, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,

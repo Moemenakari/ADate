@@ -800,6 +800,7 @@ const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['�
   ['👗', 'Fashion'], ['🌿', 'Nature & hiking'], ['🍥', 'Anime'], ['☕', 'Coffee spots'], ['🎤', 'Singing'], ['💃', 'Dancing'], ['🧠', 'Psychology'], ['🚗', 'Cars'], ['🏖️', 'Beach'], ['🎲', 'Board games'], ['✍️', 'Writing'], ['🗣️', 'Languages']];
 function goAfterAuth() {
   const s = API.session, to = store.get('adate.after', null);
+  const ref = store.get('adate.ref', null); if (ref && s) { API.refJoin(ref).catch(() => {}); store.set('adate.ref', null); }
   if (to === '#/make' && s && !s.profile_done) { location.hash = '#/profile'; return; }
   store.set('adate.after', null); location.hash = to || (s && !s.profile_done ? '#/profile' : '#/');
 }
@@ -873,7 +874,7 @@ function profile() {
       const bad = !st.first.trim() ? 'Add your first name.' : badEmail ? 'Write your email correctly.' : needPw && pwP.input.value.length < 6 ? 'Password needs at least 6 characters.' : needPw && pwP.input.value !== pwP2.input.value ? 'The two passwords are not the same.' : needRec && (ansA.value.trim().length < 2 || ansB.value.trim().length < 2) ? 'Answer both security questions.' : !st.last.trim() ? 'Add your last name.' : !ph.value ? 'Check your WhatsApp number.' : !bd || isNaN(new Date(bd)) ? 'Pick your birthday.' : age < 13 ? 'ADate is for ages 13 and up.' : !st.interests.size ? 'Pick at least one interest.' : '';
       if (bad) return msg.replaceChildren(h('div', { class: 'note' }, bad));
       msg.replaceChildren(h('p', { class: 'hint spark' }, 'Saving…'));
-      try { const r = await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, email: em, birthdate: bd, interests: [...st.interests], password: pwP.input.value, password2: pwP2.input.value, question: st.q, answer: ansA.value, answer2: ansB.value }); store.set('adate.after', store.get('adate.after', null) || '#/make'); let cfgS = {}; try { cfgS = await API.publicSettings(); } catch (e) { /* optional */ } if (cfgS.owner_whatsapp && !(r.user && r.user.verified)) { location.hash = '#/verify'; return; } goAfterAuth(); }
+      try { const r = await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, email: em, birthdate: bd, interests: [...st.interests], password: pwP.input.value, password2: pwP2.input.value, question: st.q, answer: ansA.value, answer2: ansB.value }); let cfgS = {}; try { cfgS = await API.publicSettings(); } catch (e) { /* optional */ } if (cfgS.owner_whatsapp && !(r.user && r.user.verified)) { location.hash = '#/verify'; return; } goAfterAuth(); }
       catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
     };
     const lp = h('input', { type: 'tel', inputmode: 'numeric', placeholder: 'Old number', 'aria-label': 'Old phone number' }), lwb = pwField('Old password', 'current-password', 'Your old password'), lw = lwb.input, lmsg = h('div');
@@ -1076,6 +1077,7 @@ function privacy() {
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
       h('p', null, 'ADate is a free service. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
       h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The number or Instagram typed on the last page is saved as soon as it is typed, even if the answer is never sent. The site owner can block accounts that look fake. The invite page says so.'),
+      h('p', null, 'In the community, chat messages are text only and are deleted after 3 days (or when a room passes 1000 messages). Reports are kept 7 days so they can be reviewed. Points are kept. You can block anyone and report any message.'),
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
       h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
 }
@@ -1088,7 +1090,7 @@ async function admin() {
     const key = inp.value.trim(); if (!key) return;
     out.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
     try {
-      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
+      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { d.reports = (await API.adminReports(key)).targets; } catch (e) { d.reports = []; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
       const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:96px;text-align:center;margin:0;padding:10px' }, h('b', { style: 'font-size:1.5rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
       const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
       const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
@@ -1126,7 +1128,17 @@ async function admin() {
                 h('td', null, x.kind === 'sender' ? (x.u.blocked ? '🚫 blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : '⏳ unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
                 h('td', { class: 'acts' }, x.phone ? h('a', { class: 'btn sm', href: 'https://wa.me/' + x.phone + '?text=' + encodeURIComponent(hello(x)), target: '_blank', rel: 'noopener' }, '💬') : null,
                   x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, '🚫 Block'),
-                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : '✓ Real') : null] : null))))))];
+                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : '✓ Real') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? '★ admin' : '☆ admin') : null] : null))))))];
+        },
+        reports: () => {
+          const t = d.reports || [];
+          const act = async (u, op) => { try { await API.adminMod(key, u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
+          return [h('p', { class: 'hint' }, 'Three different people reporting the same member in 24 hours mutes them for 24 hours and sends you a notification. Review here: unmute, dismiss, or block the account.'), note,
+            ...(t.length ? t.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🚩 ' + (u.nick || u.name || 'Member')), h('span', { class: 'badge ' + (u.muted_until && new Date(u.muted_until) > new Date() ? 'warn' : '') }, u.muted_until && new Date(u.muted_until) > new Date() ? '🔇 muted' : u.today + ' in 24h')),
+              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Reports: '), u.today + ' people in 24h · ' + u.week + ' this week'), ...(u.bodies || []).map((x) => h('div', { class: 'bubble' }, x))),
+              h('div', { class: 'row' }, h('a', { class: 'btn sm', href: 'https://wa.me/' + u.phone + '?text=' + encodeURIComponent('Hi, this is the ADate team. Several people reported your messages. Can we talk?'), target: '_blank', rel: 'noopener' }, '💬 WhatsApp'),
+                h('button', { class: 'btn sm', onclick: () => act(u, 'unmute') }, 'Unmute'), h('button', { class: 'btn sm', onclick: () => act(u, 'dismiss') }, 'Dismiss reports'),
+                h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm('Block this account?')) return; try { await API.adminMark(key, u.id, 'block', 'reported'); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, '🚫 Block')))) : [h('p', { class: 'hint' }, 'No reports in the last 7 days. 🎉')])];
         },
         settings: () => {
           const f = (label, name, ph) => { const inp = h('input', { type: 'text', value: (d.settings || {})[name] || '', placeholder: ph, 'aria-label': label }), msg = h('span', { class: 'hint' }); return h('div', { class: 'stack' }, h('b', null, label), inp, h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: async () => { try { await API.adminSet(key, name, inp.value); msg.textContent = 'Saved ✓'; (d.settings = d.settings || {})[name] = inp.value.trim(); } catch (e) { msg.textContent = e.message; } } }, 'Save'), msg)); };
@@ -1160,7 +1172,7 @@ async function admin() {
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
       };
       const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
+        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['reports', '🚩 Reports'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
       draw();
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
@@ -1178,6 +1190,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 }
 async function route() {
   await API.ready;
+  document.body.style.background = '';
   setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|recover-phone|verify|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
@@ -1186,6 +1199,8 @@ async function route() {
   if (hash.startsWith('#/v/')) return viewer('v', hash.slice(4));
   if (hash.startsWith('#/i/')) return API.enabled ? viewer('i', hash.slice(4)) : brokenLink();
   if (hash.startsWith('#/d/')) return dash(hash.slice(4));
+  if (window.CommunityRoute) { const f = window.CommunityRoute(hash === '#' ? '' : hash); if (f) return f(); }
+  if (hash === '#/date') return home();
   if (hash === '#/mine') return inbox();
   if (hash === '#/login') return login('login');
   if (hash === '#/signup') return login('signup');
@@ -1201,6 +1216,8 @@ async function route() {
   }
   return home();
 }
+window.ADATE_UI = { h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
+window.CommunityRoute = window.CommunityInit ? window.CommunityInit(window.ADATE_UI) : null;
 window.addEventListener('hashchange', route);
 // A tab left open for hours keeps old code. When it comes back to the front, reload if a newer build is live.
 document.addEventListener('visibilitychange', async () => {
