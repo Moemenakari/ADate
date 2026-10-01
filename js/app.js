@@ -320,7 +320,7 @@ function buildStage(cfg, opts) {
     const label = cfg.type === 'birthday' ? 'Bringing' : cfg.type === 'coffee' ? 'Order' : 'Plan';
     const when = state.date ? fmtDate(state.date) + (state.time ? ' · ' + fmtTime(state.time) : '') : '';
     if (state.sent) {
-      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(state.msg || '')}` }, `💬 Also text ${cfg.from || 'them'} on WhatsApp`) : null;
+      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(state.msg || '')}` }, `💬 Open WhatsApp again`) : null;
       return [frameContent(cfg), h('h1', { class: 'title' }, 'Sent! 💌'), h('p', { class: 'sub2' }, cfg.from ? `${cfg.from} will see your answer very soon.` : 'Your answer is on its way.'), wa,
         h('a', { class: 'gbtn no', style: 'text-decoration:none;display:inline-block;margin-top:3cqw;font-size:.8em', href: location.pathname + '#/' }, '✨ Make your own invite')];
     }
@@ -339,23 +339,28 @@ function buildStage(cfg, opts) {
     const again = h('button', { class: 'gbtn no', style: 'font-size:.75em', onclick: writeMsg }, '↻ Another version');
     const phoneIn = h('input', { type: 'tel', class: 'msg', style: 'min-height:0;display:none;margin-top:1cqw', placeholder: 'Your WhatsApp number (optional)', maxlength: '20', 'aria-label': 'Your number' });
     const addPhone = h('button', { class: 'gbtn no', style: 'font-size:.7em', onclick: () => { addPhone.style.display = 'none'; phoneIn.style.display = 'block'; phoneIn.focus(); } }, '＋ Add my number so they can reach me');
-    const send = h('button', { class: 'gbtn' }, 'Send to ' + (cfg.from || 'them') + ' 💌');
-    const note = h('p', { class: 'nocap' }, ' ');
-    send.onclick = async () => {
+    const waOn = !!(cfg.contact && cfg.waReply);
+    const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(m)}`;
+    const send = h('button', { class: 'gbtn' }, waOn ? '💬 Send on WhatsApp' : 'Send to ' + (cfg.from || 'them') + ' 💌');
+    const siteOnly = waOn && opts.inviteId && window.API && API.enabled ? h('button', { class: 'gbtn no', style: 'font-size:.7em', onclick: () => deliver(false) }, 'Send on the website only') : null;
+    const note = h('p', { class: 'nocap' }, '\u00a0');
+    async function deliver(openWa) {
       const answer = { yes: true, date: state.date, time: state.time, act: state.act, noCount: state.noCount, label };
       const msg = state.msg || ta.value; state.msg = msg;
       const myNum = normalizePhone(cfg.cc, phoneIn.value) || digits(phoneIn.value);
       send.disabled = true;
+      if (openWa && waOn) window.open(waUrl(msg), '_blank', 'noopener'); // must happen inside the tap
       if (opts.inviteId && window.API && API.enabled) {
         try { await API.respond(opts.inviteId, answer, msg, myNum); state.sent = true; go('done'); opts.onSent && opts.onSent(); return; }
-        catch (e) { note.textContent = 'Could not send. Try again, or share it below.'; send.disabled = false; }
+        catch (e) { note.textContent = 'Could not save it on the website. Try again.'; send.disabled = false; return; }
       }
-      if (cfg.contact) return window.open(`https://wa.me/${cfg.contact}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+      if (openWa && waOn) { state.sent = true; go('done'); return; }
       try { if (navigator.share) return await navigator.share({ text: msg }); } catch (e) { return; }
       note.textContent = (await copyText(msg)) ? 'Copied. Paste it to them 💌' : 'Screenshot this page 📸'; send.disabled = false;
-    };
+    }
+    send.onclick = () => deliver(true);
     setTimeout(writeMsg, 50);
-    return [h('h1', { class: 'title', style: 'font-size:1.4em;margin-bottom:.1em' }, F(cfg.doneTitle)), (when || state.act) ? t : null, ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw' }, send, again), addPhone, phoneIn, note];
+    return [h('h1', { class: 'title', style: 'font-size:1.4em;margin-bottom:.1em' }, F(cfg.doneTitle)), (when || state.act) ? t : null, ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw;flex-wrap:wrap' }, send, again), addPhone, phoneIn, siteOnly, note];
   }
   const screens = { ask: screenAsk, yay: screenYay, date: screenDate, time: screenTime, act: screenAct, done: screenDone };
   function go(name) {
@@ -625,7 +630,8 @@ function editor() {
             h('a', { class: 'btn', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
             navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text: msg }).catch(() => {}) }, 'Share…') : null),
           priv ? h('div', { class: 'note' }, h('b', null, '🔑 Your private inbox link. '), 'Open it to see when she opens the invite and what she answers. Save it somewhere safe: it is the only key (no login needed).',
-            h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: priv }, '📬 Open my inbox'), h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(priv)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy private link'))) : null,
+            h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: priv }, '📬 Open my inbox'), h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(priv)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy private link'),
+              cfg.contact ? h('a', { class: 'btn sm', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + cfg.contact + '?text=' + encodeURIComponent('My ADate inbox (keep this): ' + priv) }, '📲 Save it on my WhatsApp') : null)) : null,
           API.enabled ? h('button', { class: 'btn sm', onclick: () => publish(true) }, 'Create a brand-new link instead') : null].filter(Boolean));
       } catch (e) { out.replaceChildren(h('div', { class: 'note' }, 'Something went wrong: ' + e.message), h('button', { class: 'btn pri', onclick: () => publish(false) }, 'Try again')); }
     }
