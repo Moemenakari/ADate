@@ -1,8 +1,12 @@
-# ADate
+# ADate 🐱💌
 
-A free, phone-first site for making a cute **private invite** (romantic ask, hang out, coffee, birthday…) and sending the link. The person says yes, picks a day, a time and a plan, and the answer comes back to you on WhatsApp and in your private inbox.
+> A personal project by **the author**: a small, smart idea with a lot of room to grow.
 
-Live: https://adate.vercel.app · Source: https://github.com/moemenakari/adate
+ADate turns "will you go out with me?" into a little experience. Pick a vibe, add a name and a few stickers, and send a link. The other person says yes, picks a day, a time and a plan, and the answer comes back to you on WhatsApp and in your own inbox. The "No" button, of course, never wins.
+
+**Try it:** https://adate.vercel.app
+
+The idea is simple, but it can grow in many directions (games, communities, stories, new occasions). Where it goes next is open: see `ROADMAP.md`.
 
 ## What it does
 **Sender (wizard, 7 steps):** who it's for and your WhatsApp number → words (✨ suggestions on every line, 5 tones) → round main picture → wallpaper (vibes, world cities, Lebanese places) → what the sneaky "No" button says and does on each press → stickers (drag, resize, tilt, upload your own) → preview and send.
@@ -11,12 +15,10 @@ Live: https://adate.vercel.app · Source: https://github.com/moemenakari/adate
 
 **Sender afterwards:** log in with your WhatsApp number + password and open your inbox: a big notification card shows each new answer (her message, date, time, plan, how many times she pressed "No"). The page refreshes by itself. Forgot the password? Answer the security question you picked.
 
-**Owner (site admin):** `/#/admin` with an owner key: accounts (name, number, email, last login), invites, answers, CSV export, and a password reset that issues a temporary password. Passwords are stored as scrypt hashes, so nobody (not even the owner) can read them.
-
 ## How it is built
 | Part | What | Where |
 |---|---|---|
-| Frontend | Plain HTML/CSS/JS, no build step, hash routes (`#/make`, `#/i/<id>`, `#/mine`, `#/admin`) | `index.html`, `css/`, `js/` |
+| Frontend | Plain HTML/CSS/JS, no build step, hash routes (`#/make`, `#/i/<id>`, `#/mine`) | `index.html`, `css/`, `js/` |
 | Stage | One 9:16 "phone" drawn with CSS container units, so it looks the same on every screen | `js/app.js` (`buildStage`) |
 | Art | Cats/stickers and 26 wallpapers are hand-written inline SVG (no image files) | `js/stickers.js`, `js/themes.js`, `js/scenes.js` |
 | Words | Tries a free text-AI endpoint, falls back instantly to built-in lines per tone | `js/ai.js` |
@@ -24,7 +26,7 @@ Live: https://adate.vercel.app · Source: https://github.com/moemenakari/adate
 | Database | Neon Postgres, two tables | `db/schema.sql` |
 | Hosting | Vercel (static files + `/api`) | `vercel.json` |
 
-Environment variables on Vercel: `DATABASE_URL` (Neon) and `ADMIN_KEY` (owner dashboard).
+Secrets (such as the database URL) live in Vercel environment variables, never in this repo.
 
 **Demo mode:** if `/api` isn't reachable (plain file server, GitHub Pages) the whole invite is packed into the link (`#/v/...`) and the answer goes out by WhatsApp/share. Handy for local work.
 
