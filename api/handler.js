@@ -21,13 +21,15 @@ function checkConfig(c) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) throw bad('Bad invite');
   if (JSON.stringify(c).length > 900000) throw bad('Invite is too large');
 }
+// The Google client ID is public (it is in every sign-in page); it only says which app the token was made for. There is no secret in this code.
+const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID || '53008505841-vo4k1nv7rtvqp9t58tkdgncc18ee4duf.apps.googleusercontent.com';
 const igOk = (v) => (/^[A-Za-z0-9._]{1,30}$/.test(v) && !/^\.+$/.test(v) ? v : '');
 const contactOf = (v) => { const t = String(v || '').trim(); return t[0] === '@' ? (igOk(t.slice(1)) ? '@' + igOk(t.slice(1)) : '') : digits(t).slice(0, 16); };
 const cols = (c) => ({ name: String(c.from || '').slice(0, 60), phone: digits(c.contact).slice(0, 16), to: String(c.to || '').slice(0, 60), type: String(c.type || '').slice(0, 20), toc: contactOf(c.toContact) || null });
 const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email, first_name: u.first_name || '', last_name: u.last_name || '', birthdate: u.birthdate ? String(u.birthdate).slice(0, 10) : '', interests: u.interests || [], profile_done: !!u.profile_done, google: !!u.google_sub });
 const ageOn = (iso) => { const d = new Date(iso + 'T00:00:00Z'), n = new Date(); let a = n.getUTCFullYear() - d.getUTCFullYear(); if (n.getUTCMonth() < d.getUTCMonth() || (n.getUTCMonth() === d.getUTCMonth() && n.getUTCDate() < d.getUTCDate())) a--; return a; };
 async function verifyGoogle(cred) { // the Google sign-in button gives the browser a signed token; Google itself tells us whether it is real and for our app
-  const cid = process.env.GOOGLE_CLIENT_ID;
+  const cid = GOOGLE_ID;
   if (!cid) throw bad('Google sign-in is not set up yet', 503);
   if (typeof cred !== 'string' || cred.length < 50 || cred.length > 4000) throw bad('Bad sign-in', 401);
   const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(cred));
@@ -97,7 +99,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const action = String((req.query && req.query.action) || '');
   try {
-    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, vapid: process.env.VAPID_PUBLIC_KEY || null, google: process.env.GOOGLE_CLIENT_ID || null });
+    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, vapid: process.env.VAPID_PUBLIC_KEY || null, google: GOOGLE_ID || null });
     if (req.method !== 'POST') throw bad('POST only', 405);
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
