@@ -8,6 +8,7 @@ let _sql;
 const db = () => (_sql = _sql || neon(process.env.DATABASE_URL));
 const ID = /^[a-z0-9]{6,16}$/, TOK = /^[a-z0-9]{16,40}$/, SES = /^[a-f0-9]{48}$/;
 const QUESTIONS = ['What is your pet’s name?', 'What year were you born?', 'What is your favourite food?', 'What was your childhood nickname?', 'What was your first school called?'];
+const Q2 = 'Which phone do you use now? (brand and model)';
 const hash = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 const digits = (s) => String(s || '').replace(/\D/g, '');
 const bad = (message, status) => Object.assign(new Error(message), { status: status || 400 });
@@ -26,7 +27,7 @@ const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID || '53008505841-vo4k1nv7rtvqp9t58
 const igOk = (v) => (/^[A-Za-z0-9._]{1,30}$/.test(v) && !/^\.+$/.test(v) ? v : '');
 const contactOf = (v) => { const t = String(v || '').trim(); return t[0] === '@' ? (igOk(t.slice(1)) ? '@' + igOk(t.slice(1)) : '') : digits(t).slice(0, 16); };
 const cols = (c) => ({ name: String(c.from || '').slice(0, 60), phone: digits(c.contact).slice(0, 16), to: String(c.to || '').slice(0, 60), type: String(c.type || '').slice(0, 20), toc: contactOf(c.toContact) || null });
-const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email, first_name: u.first_name || '', last_name: u.last_name || '', birthdate: u.birthdate ? String(u.birthdate).slice(0, 10) : '', interests: u.interests || [], profile_done: !!u.profile_done, google: !!u.google_sub });
+const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email, first_name: u.first_name || '', last_name: u.last_name || '', birthdate: u.birthdate ? String(u.birthdate).slice(0, 10) : '', interests: u.interests || [], profile_done: !!u.profile_done, google: !!u.google_sub, has_password: !!u.pass_hash, has_recovery: !!(u.answer_hash && u.answer2_hash), verified: !!u.verified, verify_code: u.verify_code || '' });
 const ageOn = (iso) => { const d = new Date(iso + 'T00:00:00Z'), n = new Date(); let a = n.getUTCFullYear() - d.getUTCFullYear(); if (n.getUTCMonth() < d.getUTCMonth() || (n.getUTCMonth() === d.getUTCMonth() && n.getUTCDate() < d.getUTCDate())) a--; return a; };
 async function verifyGoogle(cred) { // the Google sign-in button gives the browser a signed token; Google itself tells us whether it is real and for our app
   const cid = GOOGLE_ID;
@@ -99,7 +100,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const action = String((req.query && req.query.action) || '');
   try {
-    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, vapid: process.env.VAPID_PUBLIC_KEY || null, google: GOOGLE_ID || null });
+    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, q2: Q2, vapid: process.env.VAPID_PUBLIC_KEY || null, google: GOOGLE_ID || null });
     if (req.method !== 'POST') throw bad('POST only', 405);
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
@@ -110,13 +111,14 @@ module.exports = async (req, res) => {
       if (phone.length < 8 || phone.length > 16) throw bad('That number does not look right');
       checkPassword(b.password);
       if (!QUESTIONS.includes(b.question) || norm(b.answer).length < 2) throw bad('Pick a security question and answer it');
-      const email = String(b.email || '').trim().slice(0, 120);
-      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw bad('That email does not look right');
-      const ps = salt(), as = salt();
+      const email = String(b.email || '').trim().toLowerCase().slice(0, 120);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw bad('Write your email correctly. It is how you get your account back.');
+      if (norm(b.answer2).length < 2) throw bad('Answer the second question too');
+      const ps = salt(), as = salt(), as2 = salt();
       let u;
       try {
-        const r = await sql`insert into users (phone, name, email, pass_salt, pass_hash, question, answer_salt, answer_hash)
-          values (${phone}, ${String(b.name || '').slice(0, 60)}, ${email || null}, ${ps}, ${kdf(b.password, ps)}, ${b.question}, ${as}, ${kdf(norm(b.answer), as)}) returning *`;
+        const r = await sql`insert into users (phone, name, email, pass_salt, pass_hash, question, answer_salt, answer_hash, question2, answer2_salt, answer2_hash)
+          values (${phone}, ${String(b.name || '').slice(0, 60)}, ${email}, ${ps}, ${kdf(b.password, ps)}, ${b.question}, ${as}, ${kdf(norm(b.answer), as)}, ${Q2}, ${as2}, ${kdf(norm(b.answer2), as2)}) returning *`;
         u = r[0];
       } catch (e) { if (e.code === '23505') throw bad('This number already has an account. Please log in.', 409); throw e; }
       return res.status(200).json({ session: await newSession(sql, u.id), user: publicUser(u) });
@@ -147,9 +149,19 @@ module.exports = async (req, res) => {
       const age = ageOn(b.birthdate); if (age < 13) throw bad('ADate is for ages 13 and up'); if (age > 100) throw bad('That birthday does not look right');
       const interests = Array.isArray(b.interests) ? [...new Set(b.interests.map((x) => String(x).trim().slice(0, 30)).filter(Boolean))].slice(0, 10) : [];
       if (interests.length < 1) throw bad('Pick at least one interest');
+      const email = String(b.email || u.email || '').trim().toLowerCase().slice(0, 120);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw bad('Write your email correctly');
+      let pw = null;
+      if (!u.pass_hash) { checkPassword(b.password); if (b.password !== b.password2) throw bad('The two passwords are not the same'); pw = salt(); }
+      let rec = null;
+      if (!(u.answer_hash && u.answer2_hash)) { if (!QUESTIONS.includes(b.question) || norm(b.answer).length < 2 || norm(b.answer2).length < 2) throw bad('Answer both security questions'); rec = [salt(), salt()]; }
       const clash = await sql`select id from users where phone = ${phone} and id <> ${u.id}`;
       if (clash.length) throw bad('This number is already used by another account. If it is your older ADate account, use “Link my old account”.', 409);
-      const r = await sql`update users set first_name = ${first}, last_name = ${last}, name = ${first}, phone = ${phone}, birthdate = ${b.birthdate}::date, interests = ${interests}, profile_done = true where id = ${u.id} returning *`;
+      const code = u.verify_code || crypto.randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
+      const r = await sql`update users set first_name = ${first}, last_name = ${last}, name = ${first}, phone = ${phone}, email = ${email}, birthdate = ${b.birthdate}::date, interests = ${interests}, profile_done = true, verify_code = ${code} where id = ${u.id} returning *`;
+      if (pw) await sql`update users set pass_salt = ${pw}, pass_hash = ${kdf(b.password, pw)} where id = ${u.id}`;
+      if (rec) await sql`update users set question = ${b.question}, answer_salt = ${rec[0]}, answer_hash = ${kdf(norm(b.answer), rec[0])}, question2 = ${Q2}, answer2_salt = ${rec[1]}, answer2_hash = ${kdf(norm(b.answer2), rec[1])} where id = ${u.id}`;
+      const fresh = await sql`select * from users where id = ${u.id}`; r[0] = fresh[0];
       return res.status(200).json({ user: publicUser(r[0]) });
     }
     if (action === 'link_legacy') { // bring the invites of an older phone+password account into this one
@@ -164,6 +176,27 @@ module.exports = async (req, res) => {
       if (!u.phone) await sql`update users set phone = ${old.phone} where id = ${u.id}`;
       const n = await sql`select * from users where id = ${u.id}`;
       return res.status(200).json({ user: publicUser(n[0]) });
+    }
+    if (action === 'recover_email_start') {
+      const r = await sql`select question, question2 from users where lower(email) = ${String(b.email || '').trim().toLowerCase()} and answer_hash is not null and answer2_hash is not null and not blocked`;
+      if (!r.length) throw bad('No account with this email and security answers', 404);
+      return res.status(200).json({ q1: r[0].question, q2: r[0].question2 });
+    }
+    if (action === 'recover_email') {
+      const r = await sql`select * from users where lower(email) = ${String(b.email || '').trim().toLowerCase()} and answer_hash is not null and answer2_hash is not null`;
+      if (!r.length) throw bad('No account with this email', 404);
+      const u = r[0]; if (u.blocked) throw bad('This account is blocked', 403); await checkLock(sql, u); checkPassword(b.password);
+      if (b.password !== b.password2) throw bad('The two passwords are not the same');
+      if (!eq(kdf(norm(b.answer), u.answer_salt), u.answer_hash) || !eq(kdf(norm(b.answer2), u.answer2_salt), u.answer2_hash)) { await fail(sql, u); throw bad('Those answers are not right', 401); }
+      const ps = salt();
+      await sql`update users set pass_salt = ${ps}, pass_hash = ${kdf(b.password, ps)}, fails = 0 where id = ${u.id}`;
+      await sql`delete from sessions where user_id = ${u.id}`;
+      const f = await sql`select * from users where id = ${u.id}`;
+      return res.status(200).json({ session: await newSession(sql, u.id), user: publicUser(f[0]) });
+    }
+    if (action === 'public_settings') { // numbers the owner chose to show (WhatsApp for verification, Whish for payments)
+      const r = await sql`select key, value from settings where key in ('owner_whatsapp', 'whish_link', 'whish_note')`;
+      return res.status(200).json(Object.fromEntries(r.map((x) => [x.key, x.value])));
     }
     if (action === 'recover_question') {
       const r = await sql`select question from users where phone = ${digits(b.phone)}`;
@@ -282,7 +315,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
-    if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark') {
+    if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
       if (action === 'admin_invite') {
         if (!ID.test(b.id || '')) throw bad('Bad id');
@@ -291,6 +324,13 @@ module.exports = async (req, res) => {
         const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
         const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
         return res.status(200).json({ created_at: i[0].created_at, opens: i[0].opens, first_opened_at: i[0].first_opened_at, last_opened_at: i[0].last_opened_at, config: i[0].config, responses: rs, events });
+      }
+      if (action === 'admin_settings') { const r = await sql`select key, value from settings`; return res.status(200).json(Object.fromEntries(r.map((x) => [x.key, x.value]))); }
+      if (action === 'admin_set') {
+        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_link', 'whish_note'].includes(k)) throw bad('Bad setting');
+        const v = String(b.value || '').trim().slice(0, 300);
+        await sql`insert into settings (key, value) values (${k}, ${v}) on conflict (key) do update set value = ${v}`;
+        return res.status(200).json({ ok: true });
       }
       if (action === 'admin_mark') { // block / unblock / mark as verified, per account
         const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
@@ -312,7 +352,7 @@ module.exports = async (req, res) => {
         await sql`delete from sessions where user_id = ${r[0].id}`;
         return res.status(200).json({ phone, temp });
       }
-      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
+      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, u.verify_code, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
           (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
       const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
           i.first_opened_at, i.last_opened_at, i.config->>'toIg' as to_ig, (select u.email from users u where u.id = i.user_id) as account_email, (select u.id from users u where u.id = i.user_id) as account_id, (select e.data->>'phone' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'phone', '') <> '' order by e.created_at desc limit 1) as typed_phone, (select e.data->>'ig' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'ig', '') <> '' order by e.created_at desc limit 1) as typed_ig, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,

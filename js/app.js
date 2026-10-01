@@ -830,17 +830,18 @@ function login(mode) {
   document.title = 'ADate – ' + (mode === 'signup' ? 'Sign up' : 'Log in');
   const ph = phoneInputs('961'), msg = h('div'), pw = pwField(mode === 'signup' ? 'Create a password (6+ characters)' : 'Password', mode === 'signup' ? 'new-password' : 'current-password', mode === 'signup' ? 'Create a password (6+ characters)' : 'Your password');
   const pw2 = pwField('Type the password again', 'new-password', 'Type the password again');
-  const Q = (API.questions && API.questions.length) ? API.questions : ['What is your pet’s name?'], qa = { q: Q[0], a: h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }) };
+  const Q = (API.questions && API.questions.length) ? API.questions : ['What is your pet’s name?'], qa = { q: Q[0], a: h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }), a2: h('input', { type: 'text', placeholder: 'Brand and model, e.g. iPhone 15', 'aria-label': 'Second answer' }), email: h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@gmail.com', 'aria-label': 'Email' }) };
   const submit = async () => {
     if (!ph.value) return msg.replaceChildren(h('div', { class: 'note' }, 'Check your number first.'));
     if (mode === 'signup') {
       if (pw.input.value.length < 6) return msg.replaceChildren(h('div', { class: 'note' }, 'Password needs at least 6 characters.'));
       if (pw.input.value !== pw2.input.value) return msg.replaceChildren(h('div', { class: 'note' }, 'The two passwords are not the same.'));
-      if (qa.a.value.trim().length < 2) return msg.replaceChildren(h('div', { class: 'note' }, 'Answer the security question, it helps you get back in.'));
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(qa.email.value.trim())) return msg.replaceChildren(h('div', { class: 'note' }, 'Write your email correctly. It is how you get your account back.'));
+      if (qa.a.value.trim().length < 2 || qa.a2.value.trim().length < 2) return msg.replaceChildren(h('div', { class: 'note' }, 'Answer both security questions, they help you get back in.'));
     }
     msg.replaceChildren(h('p', { class: 'hint spark' }, mode === 'signup' ? 'Creating your account…' : 'Logging in…'));
     try {
-      if (mode === 'signup') await API.signup({ phone: ph.value, name: '', password: pw.input.value, question: qa.q, answer: qa.a.value });
+      if (mode === 'signup') await API.signup({ phone: ph.value, name: '', email: qa.email.value.trim(), password: pw.input.value, question: qa.q, answer: qa.a.value, answer2: qa.a2.value });
       else await API.login(ph.value, pw.input.value);
       goAfterAuth();
     } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message), /already has an account/i.test(e.message) ? h('button', { class: 'btn sm', onclick: () => login('login') }, 'Log in instead') : null); }
@@ -848,7 +849,7 @@ function login(mode) {
   pw.input.onkeydown = (e) => { if (e.key === 'Enter' && mode === 'login') submit(); };
   const tabs = h('div', { class: 'tabs2' }, [['login', 'Log in'], ['signup', 'Sign up']].map(([m, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': m === mode ? 'true' : 'false', onclick: () => login(m) }, l)));
   const form = h('div', { class: 'stack' }, h('p', { class: 'hint' }, mode === 'signup' ? 'Your number is your login. Lebanon: just the 8 digits.' : 'Your WhatsApp number and your password.'), phoneRow(ph.sel, ph.inp), pw,
-    mode === 'signup' ? [pw2, h('label', { class: 'f' }, 'If you forget your password, we ask:', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), h('b', { class: 'pwlabel' }, 'Your answer'), qa.a] : null,
+    mode === 'signup' ? [pw2, h('b', { class: 'pwlabel' }, 'Your email (to get your account back)'), qa.email, h('p', { class: 'hint' }, 'If you forget your password we ask you two questions. Only you should know the answers.'), h('label', { class: 'f' }, 'Question 1', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), qa.a, h('b', { class: 'pwlabel' }, 'Question 2: ' + API.q2), qa.a2] : null,
     h('button', { class: 'btn pri block', onclick: submit }, mode === 'signup' ? 'Create my account' : 'Log in'), mode === 'login' ? h('a', { href: '#/recover' }, 'Forgot your password?') : null);
   authShell(mode === 'signup' ? '✨ Create your account' : '📬 Welcome back', tabs,
     API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, msg, h('a', { href: '#/' }, '← Back'));
@@ -857,7 +858,7 @@ function login(mode) {
 function profile() {
   document.title = 'ADate – Your profile';
   if (!API.session) { location.hash = '#/login'; return; }
-  const st = { first: '', last: '', d: '', m: '', y: '', interests: new Set() }, ph = phoneInputs('961'), msg = h('div'), host = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
+  const st = { first: '', last: '', d: '', m: '', y: '', interests: new Set(), email: '', q: (API.questions || [])[0] || 'What is your pet’s name?' }, U = {}, ph = phoneInputs('961'), pwP = pwField('Create a password (6+ characters)', 'new-password', 'Create a password (6+ characters)'), pwP2 = pwField('Type the password again', 'new-password', 'Type the password again'), ansA = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }), ansB = h('input', { type: 'text', placeholder: 'Brand and model, e.g. iPhone 15', 'aria-label': 'Second answer' }), msg = h('div'), host = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
   const draw = () => {
     const chips = h('div', { class: 'row' }, INTERESTS.map(([e, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': st.interests.has(l) ? 'true' : 'false', onclick: (ev) => {
       if (st.interests.has(l)) st.interests.delete(l); else if (st.interests.size < 10) st.interests.add(l); else { msg.replaceChildren(h('div', { class: 'note' }, 'Up to 10 interests.')); return; }
@@ -868,10 +869,11 @@ function profile() {
     const save = async () => {
       const bd = st.y && st.m && st.d ? `${st.y}-${String(st.m).padStart(2, '0')}-${String(st.d).padStart(2, '0')}` : '';
       const age = bd ? Math.floor((Date.now() - new Date(bd + 'T00:00:00Z')) / 31557600000) : 0;
-      const bad = !st.first.trim() ? 'Add your first name.' : !st.last.trim() ? 'Add your last name.' : !ph.value ? 'Check your WhatsApp number.' : !bd || isNaN(new Date(bd)) ? 'Pick your birthday.' : age < 13 ? 'ADate is for ages 13 and up.' : !st.interests.size ? 'Pick at least one interest.' : '';
+      const em = st.email.trim(), badEmail = !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em), needPw = !U.has_password, needRec = !U.has_recovery;
+      const bad = !st.first.trim() ? 'Add your first name.' : badEmail ? 'Write your email correctly.' : needPw && pwP.input.value.length < 6 ? 'Password needs at least 6 characters.' : needPw && pwP.input.value !== pwP2.input.value ? 'The two passwords are not the same.' : needRec && (ansA.value.trim().length < 2 || ansB.value.trim().length < 2) ? 'Answer both security questions.' : !st.last.trim() ? 'Add your last name.' : !ph.value ? 'Check your WhatsApp number.' : !bd || isNaN(new Date(bd)) ? 'Pick your birthday.' : age < 13 ? 'ADate is for ages 13 and up.' : !st.interests.size ? 'Pick at least one interest.' : '';
       if (bad) return msg.replaceChildren(h('div', { class: 'note' }, bad));
       msg.replaceChildren(h('p', { class: 'hint spark' }, 'Saving…'));
-      try { await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, birthdate: bd, interests: [...st.interests] }); store.set('adate.after', store.get('adate.after', null) || '#/make'); goAfterAuth(); }
+      try { const r = await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, email: em, birthdate: bd, interests: [...st.interests], password: pwP.input.value, password2: pwP2.input.value, question: st.q, answer: ansA.value, answer2: ansB.value }); store.set('adate.after', store.get('adate.after', null) || '#/make'); let cfgS = {}; try { cfgS = await API.publicSettings(); } catch (e) { /* optional */ } if (cfgS.owner_whatsapp && !(r.user && r.user.verified)) { location.hash = '#/verify'; return; } goAfterAuth(); }
       catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
     };
     const lp = h('input', { type: 'tel', inputmode: 'numeric', placeholder: 'Old number', 'aria-label': 'Old phone number' }), lwb = pwField('Old password', 'current-password', 'Your old password'), lw = lwb.input, lmsg = h('div');
@@ -880,13 +882,16 @@ function profile() {
     host.replaceChildren(
       h('div', { class: 'fieldrow' }, h('input', { type: 'text', placeholder: 'First name', value: st.first, autocomplete: 'given-name', 'aria-label': 'First name', oninput: (e) => { st.first = e.target.value; } }), h('input', { type: 'text', placeholder: 'Last name', value: st.last, autocomplete: 'family-name', 'aria-label': 'Last name', oninput: (e) => { st.last = e.target.value; } })),
       h('b', null, 'Your WhatsApp number *'), phoneRow(ph.sel, ph.inp),
+      h('b', null, 'Your email *'), h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', value: st.email, readonly: U.google ? '' : null, 'aria-label': 'Email', oninput: (e) => { st.email = e.target.value; } }), U.google ? h('p', { class: 'hint' }, 'From your Google account.') : null,
       h('b', null, 'Your birthday *'), h('div', { class: 'fieldrow' }, sel('d', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]), 'Day'), sel('m', MONTHS.map((n, i) => [i + 1, n]), 'Month'), sel('y', Array.from({ length: 88 }, (_, i) => [yr - 13 - i, String(yr - 13 - i)]), 'Year')),
       h('div', { class: 'row', style: 'justify-content:space-between' }, h('b', null, 'Your interests * (pick up to 10)'), count), chips,
+      !U.has_password ? h('div', { class: 'stack' }, h('b', null, 'Choose a password *'), h('p', { class: 'hint' }, 'So you can also sign in with your number.'), pwP, pwP2) : null,
+      !U.has_recovery ? h('div', { class: 'stack' }, h('b', null, 'If you forget your password *'), h('p', { class: 'hint' }, 'We ask you two questions. Only you should know the answers.'), h('label', { class: 'f' }, 'Question 1', h('select', { onchange: (e) => { st.q = e.target.value; } }, ((API.questions && API.questions.length) ? API.questions : [st.q]).map((q) => h('option', { value: q, selected: q === st.q }, q)))), ansA, h('b', null, 'Question 2: ' + API.q2), ansB) : null,
       h('button', { class: 'btn pri block', onclick: save }, 'Save and continue'), msg, link);
   };
   (async () => {
     try {
-      const u = (await API.me()).user || {};
+      const u = (await API.me()).user || {}; Object.assign(U, u); st.email = u.email || '';
       st.first = u.first_name || u.name || ''; st.last = u.last_name || '';
       if (u.birthdate) { const [y, m, d] = u.birthdate.split('-').map(Number); st.y = y; st.m = m; st.d = d; }
       (u.interests || []).forEach((i) => st.interests.add(i));
@@ -897,7 +902,39 @@ function profile() {
   })();
   authShell('👤 Tell us about you', h('p', { class: 'hint' }, 'Once, before your first invite. Your number is only used so people can answer you on WhatsApp. Nobody else sees your birthday.'), host);
 }
+/** Get your account back: your email + the answers to your two questions. */
 function recover() {
+  document.title = 'ADate – Get your account back';
+  const em = h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@gmail.com', 'aria-label': 'Email' }), box = h('div', { class: 'stack' });
+  async function start() {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em.value.trim())) return box.replaceChildren(h('div', { class: 'note' }, 'Write your email correctly.'));
+    try {
+      const { q1, q2 } = await API.recoverEmailStart(em.value.trim());
+      const a1 = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Answer 1' }), a2 = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Answer 2' }), p1 = pwField('New password (6+ characters)', 'new-password', 'Your new password'), p2 = pwField('Type the new password again', 'new-password', 'Type it again'), msg = h('div');
+      box.replaceChildren(h('b', null, q1), a1, h('b', null, q2), a2, p1, p2, h('button', { class: 'btn pri block', onclick: async () => {
+        if (p1.input.value !== p2.input.value) return msg.replaceChildren(h('div', { class: 'note' }, 'The two passwords are not the same.'));
+        try { await API.recoverEmail({ email: em.value.trim(), answer: a1.value, answer2: a2.value, password: p1.input.value, password2: p2.input.value }); location.hash = '#/mine'; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
+      } }, 'Set my new password'), msg);
+    } catch (e) { box.replaceChildren(h('div', { class: 'note' }, e.message)); }
+  }
+  authShell('🔑 Get your account back', h('p', { class: 'hint' }, 'Write the email of your account exactly. Then answer the two questions you chose and pick a new password.'), em, h('button', { class: 'btn block', onclick: start }, 'Continue'), box,
+    h('a', { href: '#/recover-phone' }, 'Older account without an email? Use my number'), h('a', { href: '#/login' }, '← Back'));
+}
+/** After the profile: send a code on WhatsApp so the owner can check the number is real. */
+async function verifyPage() {
+  document.title = 'ADate – Verify your number';
+  if (!API.session) { location.hash = '#/login'; return; }
+  const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
+  authShell('✅ Verify your number', box);
+  let u = {}, st = {};
+  try { u = (await API.me()).user || {}; st = await API.publicSettings(); } catch (e) { /* show what we can */ }
+  const code = u.verify_code || '';
+  box.replaceChildren(h('p', null, 'To prove this number is yours, send this code to us on WhatsApp. The owner checks it personally within a few days. You can use ADate while you wait.'),
+    h('div', { class: 'note', style: 'font-size:1.5rem;text-align:center;letter-spacing:.25em;font-weight:700' }, code || '…'),
+    st.owner_whatsapp && code ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + st.owner_whatsapp + '?text=' + encodeURIComponent('ADate verify ' + code) }, '💬 Send the code on WhatsApp') : null,
+    h('button', { class: 'btn block', onclick: () => goAfterAuth() }, 'Continue'));
+}
+function recoverPhone() {
   document.title = 'ADate – Reset password';
   const ph = phoneInputs('961'), box = h('div', { class: 'stack' });
   async function askQuestion() {
@@ -1051,7 +1088,7 @@ async function admin() {
     const key = inp.value.trim(); if (!key) return;
     out.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
     try {
-      const d = await API.admin(key); try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
+      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
       const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:96px;text-align:center;margin:0;padding:10px' }, h('b', { style: 'font-size:1.5rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
       const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
       const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
@@ -1086,10 +1123,15 @@ async function admin() {
                 h('td', null, x.kind === 'sender' ? '👤 Account' : '💌 Receiver'), h('td', null, x.name),
                 h('td', null, x.phone ? h('a', { href: 'https://wa.me/' + x.phone, target: '_blank', rel: 'noopener' }, '+' + x.phone) : '—'),
                 h('td', null, x.email || '—'), h('td', null, x.ig ? contactLink('@' + x.ig) : '—'),
-                h('td', null, x.kind === 'sender' ? (x.u.blocked ? '🚫 blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : '⏳ unchecked') : h('span', { class: 'hint' }, x.note)),
+                h('td', null, x.kind === 'sender' ? (x.u.blocked ? '🚫 blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : '⏳ unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
                 h('td', { class: 'acts' }, x.phone ? h('a', { class: 'btn sm', href: 'https://wa.me/' + x.phone + '?text=' + encodeURIComponent(hello(x)), target: '_blank', rel: 'noopener' }, '💬') : null,
                   x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, '🚫 Block'),
                     !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : '✓ Real') : null] : null))))))];
+        },
+        settings: () => {
+          const f = (label, name, ph) => { const inp = h('input', { type: 'text', value: (d.settings || {})[name] || '', placeholder: ph, 'aria-label': label }), msg = h('span', { class: 'hint' }); return h('div', { class: 'stack' }, h('b', null, label), inp, h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: async () => { try { await API.adminSet(key, name, inp.value); msg.textContent = 'Saved ✓'; (d.settings = d.settings || {})[name] = inp.value.trim(); } catch (e) { msg.textContent = e.message; } } }, 'Save'), msg)); };
+          return [h('p', { class: 'hint' }, 'Numbers and links you choose to show users. Nothing here is in the code.'),
+            f('Your WhatsApp number for verification (digits with country code, e.g. 9617xxxxxxx)', 'owner_whatsapp', '9617…'), f('Your Whish payment link (optional)', 'whish_link', 'https://…'), f('Whish note shown to people who pay (optional)', 'whish_note', 'Pay with Whish, then send us the reference.')];
         },
         contacts: () => {
           const byInvite = {}; d.answers.forEach((a) => (byInvite[a.invite_id] = byInvite[a.invite_id] || []).push(a));
@@ -1118,7 +1160,7 @@ async function admin() {
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
       };
       const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['invites', '💌 Invites'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
+        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
       draw();
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
@@ -1136,7 +1178,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 }
 async function route() {
   await API.ready;
-  setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|profile)/.test(location.hash || ''));
+  setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|recover-phone|verify|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
   document.querySelectorAll('.modal').forEach((m) => m.remove());
@@ -1148,6 +1190,8 @@ async function route() {
   if (hash === '#/login') return login('login');
   if (hash === '#/signup') return login('signup');
   if (hash === '#/recover') return recover();
+  if (hash === '#/recover-phone') return recoverPhone();
+  if (hash === '#/verify') return verifyPage();
   if (hash === '#/privacy') return privacy();
   if (hash === '#/admin') return admin();
   if (hash === '#/profile') return profile();

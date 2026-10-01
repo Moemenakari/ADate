@@ -12,7 +12,7 @@
   }
   async function ping() {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
-    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; if (j && j.vapid) API.vapid = j.vapid; if (j && j.google) API.google = j.google; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
+    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; if (j && j.vapid) API.vapid = j.vapid; if (j && j.google) API.google = j.google; if (j && j.q2) API.q2 = j.q2; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
   }
   const visitor = () => { try { let v = localStorage.getItem('adate.visitor'); if (!v) { v = rnd(12, 'abcdefghjkmnpqrstuvwxyz23456789'); localStorage.setItem('adate.visitor', v); } return v; } catch (e) { return 'anon'; } };
   const KEY = 'adate.session';
@@ -26,12 +26,18 @@
     questions: [],
     vapid: null,
     google: null,
+    q2: 'Which phone do you use now? (brand and model)',
     get session() { return read(); },
     clear: () => write(null),
     newId: () => rnd(8, 'abcdefghjkmnpqrstuvwxyz23456789'),
     newToken: () => rnd(28, 'abcdefghjkmnpqrstuvwxyz23456789'),
     signup: (b) => call('signup', b).then(keep),
     login: (phone, password) => call('login', { phone, password }).then(keep),
+    recoverEmailStart: (email) => call('recover_email_start', { email }),
+    recoverEmail: (b) => call('recover_email', b).then(keep),
+    publicSettings: () => call('public_settings', {}),
+    adminSettings: (key) => call('admin_settings', { key }),
+    adminSet: (key, name, value) => call('admin_set', { key, name, value }),
     recoverQuestion: (phone) => call('recover_question', { phone }),
     recover: (phone, answer, password) => call('recover', { phone, answer, password }).then(keep),
     logout: () => call('logout', { session: tok() }).catch(() => {}).then(() => write(null)),

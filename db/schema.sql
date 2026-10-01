@@ -74,3 +74,10 @@ alter table users add column if not exists profile_done boolean not null default
 alter table users add column if not exists blocked boolean not null default false;
 alter table users add column if not exists blocked_note text;
 alter table users add column if not exists verified boolean not null default false;
+
+-- Owner settings (his WhatsApp for number verification, Whish payment link), second recovery question, verification code.
+create table if not exists settings (key text primary key, value text);
+alter table users add column if not exists question2 text;
+alter table users add column if not exists answer2_salt text;
+alter table users add column if not exists answer2_hash text;
+alter table users add column if not exists verify_code text;
