@@ -1128,7 +1128,7 @@ async function admin() {
                 h('td', null, x.kind === 'sender' ? (x.u.blocked ? '🚫 blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : '⏳ unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
                 h('td', { class: 'acts' }, x.phone ? h('a', { class: 'btn sm', href: 'https://wa.me/' + x.phone + '?text=' + encodeURIComponent(hello(x)), target: '_blank', rel: 'noopener' }, '💬') : null,
                   x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, '🚫 Block'),
-                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : '✓ Real') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? '★ admin' : '☆ admin') : null] : null))))))];
+                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : '✓ Real') : null, x.u.has_photo ? h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'photo_off', 'Remove the real photo of ' + x.name + '?') }, '🖼 remove photo') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? '★ admin' : '☆ admin') : null] : null))))))];
         },
         reports: () => {
           const t = d.reports || [];
@@ -1151,7 +1151,7 @@ async function admin() {
           const o = d.orders || { orders: [], done: [] };
           const decide = async (x, ok) => { if (!confirm(ok ? `Add the points to ${x.name || x.nick}? Check Whish first.` : 'Reject this order?')) return; try { await API.adminOrderDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
           return [h('p', { class: 'hint' }, 'People who paid with Whish. Open Whish, check the payment and the reference, then approve to add their points.'), note,
-            ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `AD-${x.id} · $${(x.cents / 100).toFixed(2)} · 25 points`), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? '🔎 says they paid' : '⏳ not paid yet')),
+            ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `AD-${x.id} · $${(x.cents / 100).toFixed(2)} · ${x.kind === 'points5' ? 5 : 25} points`), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? '🔎 says they paid' : '⏳ not paid yet')),
               h('div', { class: 'kv' }, h('div', null, h('b', null, 'Person: '), (x.name || x.nick || '?') + ' · ', wa(x.phone)), h('div', null, h('b', null, 'Reference: '), x.note || '—'), h('div', { class: 'hint' }, ago(x.at))),
               h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject')))) : [h('p', { class: 'hint' }, 'No orders waiting.')]),
             ...(o.done.length ? [h('div', { class: 'h2' }, 'Recent'), ...o.done.map((x) => h('div', { class: 'hist' }, h('span', null, `AD-${x.id} · ${x.name || '?'} · ${x.status}`), h('b', null, '$' + (x.cents / 100).toFixed(2))))] : [])];
@@ -1233,7 +1233,7 @@ async function route() {
   }
   return home();
 }
-window.ADATE_UI = { h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
+window.ADATE_UI = { shrinkImage, h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
 window.CommunityRoute = window.CommunityInit ? window.CommunityInit(window.ADATE_UI) : null;
 window.addEventListener('hashchange', route);
 // A tab left open for hours keeps old code. When it comes back to the front, reload if a newer build is live.

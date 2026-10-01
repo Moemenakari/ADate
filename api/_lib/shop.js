@@ -1,6 +1,7 @@
 // Buying points. The person pays with Whish (a link the owner shares), tells us the reference, and the owner approves it.
 // Nothing here touches a card or a bank: we only record a claim and, once the owner confirms the payment, add the points.
-const PRODUCTS = { points25: { cents: 200, points: 25, label: '25 points' } };
+// 5 points = $1, 25 points = $5
+const PRODUCTS = { points5: { cents: 100, points: 5, label: '5 points' }, points25: { cents: 500, points: 25, label: '25 points' } };
 
 async function handle(action, ctx) {
   const { sql, b, res, bad, userOf } = ctx, out = (j) => { res.status(200).json(j); return true; };

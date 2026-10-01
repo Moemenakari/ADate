@@ -287,3 +287,9 @@ insert into tod_questions (level, kind, text) select v.level, v.kind, v.text fro
 -- ===== Buying points with Whish: the owner approves each claim =====
 create table if not exists orders (id bigserial primary key, user_id bigint not null references users(id) on delete cascade, kind text not null, cents int not null, status text not null default 'pending', note text, created_at timestamptz not null default now(), decided_at timestamptz);
 create index if not exists orders_status_idx on orders (status, id);
+
+-- ===== Real photo (25 points), seasonal frames (5 points) =====
+alter table users add column if not exists photo text;
+alter table users add column if not exists photo_ok boolean not null default false;
+alter table users add column if not exists frames text[];
+alter table users add column if not exists frame text;
