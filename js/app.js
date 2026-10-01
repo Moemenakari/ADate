@@ -752,8 +752,14 @@ async function admin() {
 }
 
 /* ------------------------------------------------------------------ router */
+function setRobots(index) { // invites, inboxes and the owner page must never show up in search results
+  let m = document.querySelector('meta[name=robots]');
+  if (!m) { m = document.createElement('meta'); m.name = 'robots'; document.head.append(m); }
+  m.content = index ? 'index,follow,max-image-preview:large' : 'noindex,nofollow';
+}
 async function route() {
   await API.ready;
+  setRobots(!/^#\/(i|v|d|mine|admin|make)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
   document.querySelectorAll('.modal').forEach((m) => m.remove());
