@@ -247,3 +247,7 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .bc-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .bc-yes{margin:0;font-size:1.5rem}
 .bubble.big{font-size:1.02rem;line-height:1.5;background:var(--surface)}
+
+.fine{font-size:.62em;opacity:.7;margin:2.5cqw 0 0}
+.journey summary{font-weight:700;cursor:pointer}
+.journey .badge{font-size:.72rem}

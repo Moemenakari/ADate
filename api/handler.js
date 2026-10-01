@@ -121,8 +121,9 @@ module.exports = async (req, res) => {
     if (action === 'inbox') { // one invite with all its answers; reading it marks them as seen
       const i = await owned(sql, b);
       const rs = await sql`select created_at as at, answer, message, receiver_phone as phone from responses where invite_id = ${b.id} order by created_at desc`;
+      const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
       await sql`update responses set seen_at = now() where invite_id = ${b.id} and seen_at is null`;
-      return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs });
+      return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
     }
 
     /* ---------- invites ---------- */
@@ -148,6 +149,16 @@ module.exports = async (req, res) => {
       if (!rows.length) throw bad('Not found', 404);
       return res.status(200).json(rows[0].config);
     }
+    if (action === 'track') { // which screen they reached / how many times they pressed No. Fire-and-forget from the invite page.
+      if (!ID.test(b.id || '') || !['step', 'no'].includes(b.kind)) throw bad('Bad event');
+      const data = JSON.stringify(b.data || {});
+      if (data.length > 600) throw bad('Too large');
+      const have = await sql`select (select count(*) from events where invite_id = ${b.id})::int as n from invites where id = ${b.id}`;
+      if (!have.length) throw bad('Not found', 404);
+      if (have[0].n >= 400) return res.status(200).json({ ok: true });
+      await sql`insert into events (invite_id, kind, data, visitor) values (${b.id}, ${b.kind}, ${data}::jsonb, ${String(b.visitor || '').slice(0, 24) || null})`;
+      return res.status(200).json({ ok: true });
+    }
     if (action === 'respond') {
       if (!ID.test(b.id || '')) throw bad('Not found', 404);
       const msg = String(b.message || '').trim();
@@ -163,7 +174,8 @@ module.exports = async (req, res) => {
     if (action === 'status') { // legacy private-link access
       const i = await owned(sql, b);
       const rs = await sql`select created_at as at, answer, message, receiver_phone as phone from responses where invite_id = ${b.id} order by created_at desc`;
-      return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs });
+      const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
+      return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
     }
     if (action === 'remove') {
       await owned(sql, b);
