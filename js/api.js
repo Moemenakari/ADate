@@ -12,7 +12,7 @@
   }
   async function ping() {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
-    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
+    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; if (j && j.vapid) API.vapid = j.vapid; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
   }
   const visitor = () => { try { let v = localStorage.getItem('adate.visitor'); if (!v) { v = rnd(12, 'abcdefghjkmnpqrstuvwxyz23456789'); localStorage.setItem('adate.visitor', v); } return v; } catch (e) { return 'anon'; } };
   const KEY = 'adate.session';
@@ -23,6 +23,7 @@
   const API = {
     enabled: false,
     questions: [],
+    vapid: null,
     get session() { return read(); },
     clear: () => write(null),
     newId: () => rnd(8, 'abcdefghjkmnpqrstuvwxyz23456789'),
@@ -36,13 +37,16 @@
     inbox: (id) => call('inbox', { id, session: tok() }),
     create: (id, token, config, consent) => call('create', { id, token, config, consent, session: tok() }),
     update: (id, token, config) => call('update', { id, token, config, session: tok() }),
-    open: (id) => call('open', { id }),
+    open: (id) => call('open', { id, visitor: visitor() }),
+    pushSubscribe: (sub) => call('push_subscribe', { session: tok(), sub }),
+    pushUnsubscribe: (endpoint) => call('push_unsubscribe', { session: tok(), endpoint }),
     track: (id, kind, data) => call('track', { id, kind, data, visitor: visitor() }, true).catch(() => {}),
     respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }, true),
     status: (id, token) => call('status', { id, token }),
     remove: (id, token) => call('remove', { id, token, session: tok() }),
     admin: (key) => call('admin', { key }),
-    adminReset: (key, phone) => call('admin_reset', { key, phone })
+    adminReset: (key, phone) => call('admin_reset', { key, phone }),
+    adminInvite: (key, id) => call('admin_invite', { key, id })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
   window.API = API;

@@ -1,6 +1,7 @@
 // One serverless function for the whole backend. Env: DATABASE_URL (Neon), ADMIN_KEY (owner dashboard).
 // Accounts are phone number + password (hashed with scrypt, never stored in clear).
 const { neon } = require('@neondatabase/serverless');
+const webpush = require('web-push');
 const crypto = require('crypto');
 
 let _sql;
@@ -55,13 +56,34 @@ async function fail(sql, u) {
   if (n >= 5) await sql`update users set fails = 0, locked_until = now() + interval '10 minutes' where id = ${u.id}`;
   else await sql`update users set fails = ${n} where id = ${u.id}`;
 }
+// Phone notification to the invite's owner. throttleSec avoids spamming on repeated opens.
+let _vapid = false;
+async function notify(sql, inviteId, kind, title, body, throttleSec) {
+  const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
+  if (!pub || !priv) return;
+  try {
+    const inv = await sql`select user_id, last_notified_at from invites where id = ${inviteId}`;
+    if (!inv.length || !inv[0].user_id) return;
+    if (throttleSec && inv[0].last_notified_at && Date.now() - new Date(inv[0].last_notified_at).getTime() < throttleSec * 1000) return;
+    const subs = await sql`select endpoint, p256dh, auth from push_subs where user_id = ${inv[0].user_id}`;
+    if (!subs.length) return;
+    await sql`update invites set last_notified_at = now() where id = ${inviteId}`;
+    if (!_vapid) { webpush.setVapidDetails('https://adate.vercel.app', pub, priv); _vapid = true; }
+    const payload = JSON.stringify({ title, body, url: '/#/mine', tag: kind + inviteId });
+    await Promise.allSettled(subs.map(async (x) => {
+      try { await webpush.sendNotification({ endpoint: x.endpoint, keys: { p256dh: x.p256dh, auth: x.auth } }, payload, { TTL: 3600, timeout: 4000 }); }
+      catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await sql`delete from push_subs where endpoint = ${x.endpoint}`; }
+    }));
+  } catch (e) { console.error('notify failed', e && e.message); }
+}
+const nameOf = async (sql, id) => { const r = await sql`select to_name from invites where id = ${id}`; return (r[0] && r[0].to_name) || 'Someone'; };
 function checkPassword(p) { if (typeof p !== 'string' || p.length < 6 || p.length > 100) throw bad('Password needs at least 6 characters'); }
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const action = String((req.query && req.query.action) || '');
   try {
-    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS });
+    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, vapid: process.env.VAPID_PUBLIC_KEY || null });
     if (req.method !== 'POST') throw bad('POST only', 405);
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
@@ -126,6 +148,20 @@ module.exports = async (req, res) => {
       return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
     }
 
+    if (action === 'push_subscribe') {
+      const u = await userOf(sql, b.session);
+      const sub = b.sub || {};
+      if (typeof sub.endpoint !== 'string' || !/^https:\/\//.test(sub.endpoint) || sub.endpoint.length > 600 || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) throw bad('Bad subscription');
+      await sql`insert into push_subs (user_id, endpoint, p256dh, auth) values (${u.id}, ${sub.endpoint}, ${String(sub.keys.p256dh).slice(0, 200)}, ${String(sub.keys.auth).slice(0, 100)})
+                on conflict (endpoint) do update set user_id = ${u.id}, p256dh = ${String(sub.keys.p256dh).slice(0, 200)}, auth = ${String(sub.keys.auth).slice(0, 100)}`;
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'push_unsubscribe') {
+      const u = await userOf(sql, b.session);
+      if (typeof b.endpoint === 'string') await sql`delete from push_subs where endpoint = ${b.endpoint} and user_id = ${u.id}`;
+      return res.status(200).json({ ok: true });
+    }
+
     /* ---------- invites ---------- */
     if (action === 'create') {
       if (!ID.test(b.id || '') || !TOK.test(b.token || '')) throw bad('Bad id');
@@ -147,16 +183,19 @@ module.exports = async (req, res) => {
       if (!ID.test(b.id || '')) throw bad('Not found', 404);
       const rows = await sql`update invites set opens = opens + 1, first_opened_at = coalesce(first_opened_at, now()), last_opened_at = now() where id = ${b.id} returning config`;
       if (!rows.length) throw bad('Not found', 404);
+      await sql`insert into events (invite_id, kind, data, visitor) values (${b.id}, 'open', '{}'::jsonb, ${String(b.visitor || '').slice(0, 24) || null})`;
+      await notify(sql, b.id, 'open', '👀 ' + (rows[0].config.to || 'Someone') + ' opened your invite', 'Tap to follow what they do.', 120);
       return res.status(200).json(rows[0].config);
     }
     if (action === 'track') { // which screen they reached / how many times they pressed No. Fire-and-forget from the invite page.
-      if (!ID.test(b.id || '') || !['step', 'no'].includes(b.kind)) throw bad('Bad event');
+      if (!ID.test(b.id || '') || !['step', 'no', 'leave'].includes(b.kind)) throw bad('Bad event');
       const data = JSON.stringify(b.data || {});
       if (data.length > 600) throw bad('Too large');
       const have = await sql`select (select count(*) from events where invite_id = ${b.id})::int as n from invites where id = ${b.id}`;
       if (!have.length) throw bad('Not found', 404);
       if (have[0].n >= 400) return res.status(200).json({ ok: true });
       await sql`insert into events (invite_id, kind, data, visitor) values (${b.id}, ${b.kind}, ${data}::jsonb, ${String(b.visitor || '').slice(0, 24) || null})`;
+      if (b.kind === 'step' && b.data && b.data.s === 'yay') await notify(sql, b.id, 'yes', '💖 ' + (await nameOf(sql, b.id)) + ' pressed YES!', 'They are picking a day now.', 0);
       return res.status(200).json({ ok: true });
     }
     if (action === 'respond') {
@@ -169,6 +208,8 @@ module.exports = async (req, res) => {
       if (have[0].n >= 20) throw bad('Too many answers');
       await sql`insert into responses (invite_id, answer, message, receiver_phone)
                 values (${b.id}, ${JSON.stringify(b.answer || {})}::jsonb, ${msg.slice(0, 1500)}, ${digits(b.phone).slice(0, 16) || null})`;
+      const later = b.answer && b.answer.yes === false, who = await nameOf(sql, b.id);
+      await notify(sql, b.id, 'answer', later ? '🙂 ' + who + ' replied: not right now' : '💌 ' + who + ' answered your invite!', msg.slice(0, 90), 0);
       return res.status(200).json({ ok: true });
     }
     if (action === 'status') { // legacy private-link access
@@ -184,8 +225,16 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
-    if (action === 'admin' || action === 'admin_reset') {
+    if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
+      if (action === 'admin_invite') {
+        if (!ID.test(b.id || '')) throw bad('Bad id');
+        const i = await sql`select id, created_at, opens, first_opened_at, last_opened_at, config from invites where id = ${b.id}`;
+        if (!i.length) throw bad('Not found', 404);
+        const rs = await sql`select created_at as at, answer, message, receiver_phone as phone from responses where invite_id = ${b.id} order by created_at desc`;
+        const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
+        return res.status(200).json({ created_at: i[0].created_at, opens: i[0].opens, first_opened_at: i[0].first_opened_at, last_opened_at: i[0].last_opened_at, config: i[0].config, responses: rs, events });
+      }
       if (action === 'admin_reset') { // owner sets a temporary password; passwords themselves are never readable
         const phone = digits(b.phone);
         const temp = crypto.randomBytes(5).toString('hex'), ps = salt();

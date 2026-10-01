@@ -44,3 +44,13 @@ create table if not exists events (
   created_at timestamptz not null default now()
 );
 create index if not exists events_invite_idx on events(invite_id, created_at);
+
+-- Phone notifications (Web Push): one row per subscribed phone/browser.
+create table if not exists push_subs (
+  id bigint generated always as identity primary key,
+  user_id bigint not null references users(id) on delete cascade,
+  endpoint text unique not null, p256dh text not null, auth text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subs_user_idx on push_subs(user_id);
+alter table invites add column if not exists last_notified_at timestamptz;
