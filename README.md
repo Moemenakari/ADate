@@ -1,27 +1,53 @@
 # ADate
 
-Make a cute invite page (romantic ask, hang out, coffee, birthday…) and send the link. Phone-first, free, no sign-up.
-Static site: plain HTML + CSS + JS, no build step.
+A free, phone-first site for making a cute **private invite** (romantic ask, hang out, coffee, birthday…) and sending the link. The person says yes, picks a day, a time and a plan, and the answer comes back to you on WhatsApp and in your private inbox.
+
+Live: https://adate.vercel.app · Source: https://github.com/moemenakari/adate
 
 ## What it does
-- **Wizard for the sender:** names & vibe → words (✨ AI suggestions on every line) → main picture → wallpaper (vibes, world cities, Lebanese places) → the sneaky "No" button → stickers → send.
-- **Receiver flow:** ask → yay → day + time (with a pick-up countdown) → options → final message written by AI → send answer.
-- **Inbox for the sender:** no login. Each invite has a secret owner key; open your private link to see when it was opened and what she answered.
+**Sender (wizard, 7 steps):** who it's for and your WhatsApp number → words (✨ suggestions on every line, 5 tones) → round main picture → wallpaper (vibes, world cities, Lebanese places) → what the sneaky "No" button says and does on each press → stickers (drag, resize, tilt, upload your own) → preview and send.
 
-## Backend (free): Vercel + Neon
-- `api/handler.js` is the whole API (one Vercel function). Data lives in Neon Postgres (`db/schema.sql`).
-- Env vars on Vercel: `DATABASE_URL` (Neon connection string) and `ADMIN_KEY` (opens `#/admin`, the owner dashboard with every number, CSV export).
-- No user accounts: each invite has a secret owner token; the private link `#/d/<id>.<token>` opens its inbox.
-- If `/api` isn't there (GitHub Pages or a plain file server) the site falls back to **demo mode**: the invite lives inside the link and the answer goes out by WhatsApp/share.
-- Vercel's free Hobby plan is for non-commercial use. Before charging money, move `api/handler.js` to a plan or host that allows it (for example Cloudflare Workers).
+**Receiver:** ask screen (YES grows, "No" shrinks/runs away/shakes, the last "No" line repeats forever and never continues) → yay → tap-only calendar → tap-only time → pick a plan → a warm reply written for them → **Send on WhatsApp** (also saved on the site).
 
-## AI suggestions
-`js/ai.js` first asks a free text endpoint (Pollinations, no key; see `aiUrl` in `config.js`) and falls back to built-in lines when it is slow or down. Set `aiUrl: ''` to use only the built-in lines.
+**Sender afterwards:** private inbox (opened? answered? her message, date, time, plan, how many times she pressed "No") that refreshes by itself. No login: each invite has a secret owner link.
+
+**Owner (site admin):** `/#/admin` with an owner key: totals, every invite with sender/receiver numbers, CSV export.
+
+## How it is built
+| Part | What | Where |
+|---|---|---|
+| Frontend | Plain HTML/CSS/JS, no build step, hash routes (`#/make`, `#/i/<id>`, `#/mine`, `#/admin`) | `index.html`, `css/`, `js/` |
+| Stage | One 9:16 "phone" drawn with CSS container units, so it looks the same on every screen | `js/app.js` (`buildStage`) |
+| Art | Cats/stickers and 26 wallpapers are hand-written inline SVG (no image files) | `js/stickers.js`, `js/themes.js`, `js/scenes.js` |
+| Words | Tries a free text-AI endpoint, falls back instantly to built-in lines per tone | `js/ai.js` |
+| API | One Vercel serverless function | `api/handler.js` |
+| Database | Neon Postgres, two tables | `db/schema.sql` |
+| Hosting | Vercel (static files + `/api`) | `vercel.json` |
+
+Environment variables on Vercel: `DATABASE_URL` (Neon) and `ADMIN_KEY` (owner dashboard).
+
+**Demo mode:** if `/api` isn't reachable (plain file server, GitHub Pages) the whole invite is packed into the link (`#/v/...`) and the answer goes out by WhatsApp/share. Handy for local work.
+
+## Design decisions
+- Soft, calm colours and big touch targets; follows the phone's dark mode.
+- Dates and times are **tap-only** (month names, hour/minute buttons): typing dates on phones kept breaking.
+- The main picture is cropped to a circle on upload so edges never look bad.
+- Phone numbers: Lebanon needs only the 8 digits; other countries pick a country code.
+
+## Privacy
+We store names, the WhatsApp numbers entered, the invite (including uploaded pictures) and the answers. Invites are reachable only by link; only the sender (private link) and the site owner can read answers. Invites can be deleted from "My invites". See `#/privacy`.
+
+## Rough edges (honest list)
+- The AI endpoint is a free third-party service; when it is slow the built-in lines are used. Not verified in every region.
+- Link previews are the same for every invite (the invite id is after `#`). Per-invite previews need path URLs (`/i/<id>`) served by the API.
+- Uploaded pictures travel inside the invite (shrunk). Big uploads make demo-mode links long.
+- No rate limiting yet beyond size/count caps; one shared owner key.
+- Automated tests don't exist; the flow was checked by driving the site in a browser against a mocked API and the SQL against the real database.
+- Vercel's Hobby plan is for non-commercial use. Move the API before charging money.
+- Some wallpapers (for example Beirut's rocks) are simplified illustrations.
 
 ## Run locally
-    python3 -m http.server 8000   # http://localhost:8000
+    python3 -m http.server 8000     # demo mode, http://localhost:8000
 
-## Hosting
-The whole repo deploys to Vercel as-is (static files + `/api`). No build step.
-
-Programming by [the author](https://github.com/moemenakari).
+## Credits
+Idea, product and direction: **the author**. Implemented with AI assistance (Claude Code). See `ROADMAP.md` for what comes next.
