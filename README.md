@@ -8,17 +8,12 @@ Static site: plain HTML + CSS + JS, no build step.
 - **Receiver flow:** ask → yay → day + time (with a pick-up countdown) → options → final message written by AI → send answer.
 - **Inbox for the sender:** no login. Each invite has a secret owner key; open your private link to see when it was opened and what she answered.
 
-## Two modes
-| | Demo mode (default) | With the free Supabase backend |
-|---|---|---|
-| Invite link | long, contains the whole invite | short `#/i/abc123` |
-| Her answer | WhatsApp / share / copy | saved, shown in your inbox |
-| Setup | none | one SQL file + 2 keys |
-
-### Turn on the backend (free)
-1. Create a free Supabase project.
-2. Run `supabase/schema.sql` in the SQL editor. Tables are locked; the site only uses the listed functions.
-3. Put the Project URL and the **anon** key in `config.js` (`supabaseUrl`, `supabaseKey`). The anon key is meant to be public.
+## Backend (free): Vercel + Neon
+- `api/handler.js` is the whole API (one Vercel function). Data lives in Neon Postgres (`db/schema.sql`).
+- Env vars on Vercel: `DATABASE_URL` (Neon connection string) and `ADMIN_KEY` (opens `#/admin`, the owner dashboard with every number, CSV export).
+- No user accounts: each invite has a secret owner token; the private link `#/d/<id>.<token>` opens its inbox.
+- If `/api` isn't there (GitHub Pages or a plain file server) the site falls back to **demo mode**: the invite lives inside the link and the answer goes out by WhatsApp/share.
+- Vercel's free Hobby plan is for non-commercial use. Before charging money, move `api/handler.js` to a plan or host that allows it (for example Cloudflare Workers).
 
 ## AI suggestions
 `js/ai.js` first asks a free text endpoint (Pollinations, no key; see `aiUrl` in `config.js`) and falls back to built-in lines when it is slow or down. Set `aiUrl: ''` to use only the built-in lines.
@@ -26,7 +21,7 @@ Static site: plain HTML + CSS + JS, no build step.
 ## Run locally
     python3 -m http.server 8000   # http://localhost:8000
 
-## Free hosting (GitHub Pages)
-Repo Settings → Pages → Source: **GitHub Actions**. `.github/workflows/pages.yml` publishes on every push to `main`.
+## Hosting
+The whole repo deploys to Vercel as-is (static files + `/api`). No build step.
 
 Programming by [Moemen Akari](https://github.com/moemenakari).

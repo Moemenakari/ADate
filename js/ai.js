@@ -16,7 +16,7 @@
     actTitle:  { what: 'the title above a list of date ideas to choose from', max: 7 },
     doneTitle: { what: 'the final screen title after everything is booked', max: 6 },
     noLine:    { what: 'what the sad or cheeky "No" button caption says after being pressed', max: 9 },
-    reply:     { what: 'a short warm text message from the person who said yes to the one who asked, confirming the date details', max: 40 }
+    reply:     { what: 'a short warm text message from the person who said yes to the one who asked, confirming the date details', max: 45 }
   };
 
   const L = {
@@ -74,11 +74,18 @@
       poetic: ['Every no echoes in my heart…', 'The stars disagree', 'Even the moon says yes'], shy: ['oh… okay? 🥺', 'really?? 😢', 'I’ll just sit here quietly']
     },
     reply: {
-      sweet: ['Yes! I’d love to. See you {date}{time} for {act}. Can’t wait 💖', 'You made me smile. {date}{time}, {act}. I’ll be ready 💛'],
-      flirty: ['Well… you earned it 😏 {date}{time}, {act}. Don’t be late.', 'Yes. {date}{time}. {act}. Make it good 🔥'],
-      funny: ['YES! Calendar updated: {date}{time}, {act}. Bring snacks 😂', 'Fine, you win! {date}{time} — {act}. I expect a pick-up honk 🚗'],
-      poetic: ['With a full heart: yes. {date}{time}, {act}. Until then ✨', 'I’ll meet you there, {date}{time} — {act}. The stars can wait 🌙'],
-      shy: ['y-yes 🙈 {date}{time}, {act}. I’m already nervous', 'okay yes!! {date}{time}, {act}. see you 🥹']
+      sweet: ['Yes {from}, I accept this date 💖 {date}{time}, {act}. I’ll be so happy to go out with you, and I hope what we have stays this beautiful. Thank you for this sweet invite 🥹',
+        'You made me smile so much. Yes! {date}{time} — {act}. I can’t wait, and I hope we keep going like this. Thank you for thinking of me 💛',
+        'Of course yes 🥰 {date}{time}, {act}. I’ll be very happy to spend it with you. Thanks for the cutest invite, {from}.'],
+      flirty: ['Yes {from}… you had me at the first button 😏 {date}{time}, {act}. I’ll be very happy to go out with you, and I hope we stay just like this. Thanks for this cute invite 💕',
+        'Alright, you win 😌 {date}{time} — {act}. I’m already looking forward to it, and I hope this is only the beginning. Thank you for the sweetest invite 🔥',
+        'Yes. I’m saying yes, {from} 😉 {date}{time}, {act}. Pick me up on time, I’ll be smiling. I hope we last, and thanks for this lovely surprise 💋'],
+      funny: ['YES! Calendar updated: {date}{time}, {act} 😂 I’ll bring the good mood, you bring the snacks. Thanks for the invite, {from}!',
+        'Fine, fine, you convinced me 😂 {date}{time} — {act}. Can’t wait! Thanks for the funniest invite ever.'],
+      poetic: ['With a full heart: yes, {from} ✨ {date}{time}, {act}. I hope what we have keeps growing like this. Thank you for this beautiful invitation 🌙',
+        'I’ll meet you there: {date}{time} — {act}. The stars can wait for us. Thank you, {from} 💫'],
+      shy: ['y-yes 🙈 {date}{time}, {act}. I’ll be really happy to go with you, and I hope we stay like this. Thank you for the cute invite 🥹',
+        'okay yes!! {date}{time}, {act}. I’m already nervous (the good kind). Thanks for asking, {from} 🫣']
     }
   };
   const TYPE_TITLE = {
@@ -124,10 +131,11 @@
     const r = await remote(field, ctx);
     return r.length ? { lines: r.concat(loc.slice(0, 1)), ai: true } : { lines: loc, ai: false };
   }
-  async function reply(ctx) { // ctx: vibe, date, time, act
-    const fill = (s) => s.replace('{date}', ctx.date || 'soon').replace('{time}', ctx.time ? ' at ' + ctx.time : '').replace('{act}', ctx.act || 'our plan');
-    const r = await remote('reply', Object.assign({}, ctx, { extra: `Date: ${ctx.date || 'to be decided'}${ctx.time ? ' at ' + ctx.time : ''}. Plan: ${ctx.act || 'surprise'}.` }));
-    return r.length ? { text: r[0], ai: true } : { text: fill(pick(L.reply[ctx.vibe || 'sweet'] || L.reply.sweet, 1)[0]), ai: false };
+  async function reply(ctx) { // ctx: vibe, variant, date, time, act, from
+    const fill = (t) => t.replace(/\{date\}/g, ctx.date || 'soon').replace(/\{time\}/g, ctx.time ? ' at ' + ctx.time : '').replace(/\{act\}/g, ctx.act || 'our plan').replace(/\{from\}/g, ctx.from || 'you');
+    const bank = L.reply[ctx.vibe || 'sweet'] || L.reply.sweet;
+    const r = await remote('reply', Object.assign({}, ctx, { extra: `Date: ${ctx.date || 'to be decided'}${ctx.time ? ' at ' + ctx.time : ''}. Plan: ${ctx.act || 'surprise'}. Say yes warmly, say you will be very happy to go, hope the relationship stays like this, and thank them for the cute invite website. Flirty and sweet.` }));
+    return r.length ? { text: r[0], ai: true } : { text: fill(bank[(ctx.variant || 0) % bank.length]), ai: false };
   }
   window.AI = { VIBES, FIELDS: F, local, suggest, reply };
 })();

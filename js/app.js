@@ -45,18 +45,79 @@ function pickupText(tpl, iso) {
 }
 const ago = (iso) => { const s = (Date.now() - new Date(iso)) / 1000; if (s < 90) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; };
 
+const COUNTRIES = [['961', '🇱🇧 Lebanon +961'], ['966', '🇸🇦 Saudi Arabia +966'], ['971', '🇦🇪 UAE +971'], ['974', '🇶🇦 Qatar +974'], ['965', '🇰🇼 Kuwait +965'], ['973', '🇧🇭 Bahrain +973'], ['968', '🇴🇲 Oman +968'], ['962', '🇯🇴 Jordan +962'], ['963', '🇸🇾 Syria +963'], ['964', '🇮🇶 Iraq +964'], ['20', '🇪🇬 Egypt +20'], ['90', '🇹🇷 Turkey +90'], ['357', '🇨🇾 Cyprus +357'], ['33', '🇫🇷 France +33'], ['49', '🇩🇪 Germany +49'], ['44', '🇬🇧 UK +44'], ['1', '🇺🇸 USA / Canada +1'], ['55', '🇧🇷 Brazil +55'], ['61', '🇦🇺 Australia +61'], ['46', '🇸🇪 Sweden +46'], ['39', '🇮🇹 Italy +39'], ['34', '🇪🇸 Spain +34']];
+// Lebanese numbers: just the 8 digits (03 123 456 or 70 123 456). Others: country code + number.
+function normalizePhone(cc, raw) {
+  let d = digits(raw).replace(/^00/, '');
+  if (!d) return '';
+  if (cc === '961') { d = d.replace(/^961/, '').replace(/^0+/, ''); return d.length === 7 || d.length === 8 ? '961' + d : ''; }
+  d = d.replace(/^0+/, ''); if (d.startsWith(cc) && d.length > cc.length + 6) d = d.slice(cc.length);
+  return d.length >= 6 && d.length <= 13 ? cc + d : '';
+}
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const pad2 = (n) => String(n).padStart(2, '0');
+const isoOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseIso = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+const todayIso = () => isoOf(new Date());
+
+/** Tap-only calendar: month names, no typing. */
+function calendar(value, min, onPick) {
+  const minD = parseIso(min), sel = parseIso(value);
+  let view = sel || minD || new Date(); view = new Date(view.getFullYear(), view.getMonth(), 1);
+  const box = h('div', { class: 'pk' });
+  function draw() {
+    const y = view.getFullYear(), m = view.getMonth(), lead = (new Date(y, m, 1).getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+    const prevOk = !minD || new Date(y, m, 0) >= minD;
+    const grid = h('div', { class: 'pk-grid' }, ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => h('span', { class: 'pk-dow' }, d)));
+    for (let i = 0; i < lead; i++) grid.append(h('span'));
+    for (let d = 1; d <= days; d++) {
+      const dt = new Date(y, m, d), iso = isoOf(dt);
+      grid.append(h('button', { type: 'button', class: 'pk-cell' + (iso === todayIso() ? ' today' : ''), 'aria-pressed': iso === value ? 'true' : 'false', disabled: !!(minD && dt < minD),
+        onclick: () => { value = iso; onPick(iso); draw(); } }, d));
+    }
+    box.replaceChildren(
+      h('div', { class: 'pk-head' }, h('button', { type: 'button', class: 'pk-nav', 'aria-label': 'Previous month', disabled: !prevOk, onclick: () => { view = new Date(y, m - 1, 1); draw(); } }, '‹'),
+        h('b', null, `${MONTHS[m]} ${y}`), h('button', { type: 'button', class: 'pk-nav', 'aria-label': 'Next month', onclick: () => { view = new Date(y, m + 1, 1); draw(); } }, '›')), grid);
+  }
+  draw(); return box;
+}
+/** Tap-only time picker: hour, minutes (5-min steps), AM/PM. */
+function timePicker(value, onPick) {
+  const m0 = /^(\d{2}):(\d{2})$/.exec(value || '');
+  const st = m0 ? { h: ((+m0[1] + 11) % 12) + 1, m: +m0[2], ap: +m0[1] < 12 ? 'AM' : 'PM' } : { h: null, m: null, ap: 'PM' };
+  const box = h('div', { class: 'pk' }), sum = h('div', { class: 'pk-sum' });
+  const out = () => { if (st.h && st.m != null) { onPick(`${pad2((st.h % 12) + (st.ap === 'PM' ? 12 : 0))}:${pad2(st.m)}`); } };
+  function group(label, items, cur, set, cls) {
+    return h('div', null, h('div', { class: 'pk-lab' }, label), h('div', { class: 'pk-times ' + (cls || '') }, items.map(([v, l]) =>
+      h('button', { type: 'button', class: 'pk-cell sq', 'aria-pressed': v === cur ? 'true' : 'false', onclick: () => { set(v); draw(); out(); } }, l))));
+  }
+  function draw() {
+    sum.textContent = st.h && st.m != null ? `${st.h}:${pad2(st.m)} ${st.ap}` : 'Pick an hour and minutes';
+    box.replaceChildren(group('Hour', Array.from({ length: 12 }, (_, i) => [i + 1, String(i + 1)]), st.h, (v) => (st.h = v)),
+      group('Minutes', Array.from({ length: 12 }, (_, i) => [i * 5, pad2(i * 5)]), st.m, (v) => (st.m = v)),
+      group('', [['AM', 'AM ☀️'], ['PM', 'PM 🌙']], st.ap, (v) => (st.ap = v), 'two'), sum);
+  }
+  draw(); return box;
+}
+
 const toB64u = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const fromB64u = (t) => { t = t.replace(/-/g, '+').replace(/_/g, '/'); while (t.length % 4) t += '='; const s = atob(t); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; };
 async function pipe(bytes, stream) { const w = stream.writable.getWriter(); w.write(bytes); w.close(); return new Uint8Array(await new Response(stream.readable).arrayBuffer()); }
 async function pack(cfg) { const raw = new TextEncoder().encode(JSON.stringify(cfg)); return window.CompressionStream ? 'z' + toB64u(await pipe(raw, new CompressionStream('deflate-raw'))) : 'j' + toB64u(raw); }
 async function unpack(s) { const bytes = fromB64u(s.slice(1)); const raw = s[0] === 'z' ? await pipe(bytes, new DecompressionStream('deflate-raw')) : bytes; return JSON.parse(new TextDecoder().decode(raw)); }
 
-async function shrinkImage(file, max, q) {
+async function shrinkImage(file, max, q, square) {
   const bmp = await createImageBitmap(file);
-  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  if (square) { // centre-crop to a square so a round frame never shows edges
+    const side = Math.min(bmp.width, bmp.height), size = Math.min(max, side);
+    c.width = c.height = size;
+    c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+  } else {
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  }
   let out = c.toDataURL('image/webp', q);
   if (!out.startsWith('data:image/webp')) out = c.toDataURL('image/png');
   return out;
@@ -74,14 +135,14 @@ const DEFAULT_PICKUP = '{days} days until I pick you up from your doorstep 🚗'
 function newConfig(type, rel) {
   const p = PRESETS[type];
   return {
-    v: 2, type, rel: rel || '', vibe: DEFAULT_VIBE[type] || 'sweet', from: '', to: '', contact: '',
+    v: 3, type, rel: rel || '', vibe: DEFAULT_VIBE[type] || 'sweet', from: '', to: '', cc: '961', phone: '', contact: '', waReply: true,
     title: p.title, sub: p.sub, caption: '', yay: p.yay, yaySub: p.yaySub,
     dateTitle: p.dateTitle, dateSub: p.dateSub, pickup: type === 'birthday' ? '' : DEFAULT_PICKUP, dateMode: p.dateMode, fixedDate: '', fixedTime: '',
     actTitle: p.actTitle, acts: p.acts.slice(), doneTitle: p.doneTitle,
     theme: p.theme, color: '#ff7ab8', clouds: true, wall: null, photo: null, photoSticker: 'cat-white',
     steps: deepCopy(p.steps), yesFx: p.yesFx,
     stickers: [
-      { k: 'lib:cat-orange', x: 86, y: 12, s: 20, r: 8, f: 1 },
+      { k: 'lib:cat-orange', x: 87, y: 8, s: 16, r: 8, f: 1 },
       { k: 'lib:heart', x: 13, y: 15, s: 13, r: -12, f: 0 },
       { k: 'lib:sparkle', x: 88, y: 46, s: 9, r: 0, f: 0 },
       { k: 'lib:cat-white', x: 17, y: 82, s: 25, r: -5, f: 0 },
@@ -95,7 +156,10 @@ function sanitize(c) { // anything from a link or the server is untrusted
   const o = Object.assign(base, c || {});
   ['from', 'to', 'title', 'sub', 'caption', 'yay', 'yaySub', 'dateTitle', 'dateSub', 'pickup', 'actTitle', 'doneTitle', 'rel'].forEach((k) => (o[k] = t(o[k])));
   o.vibe = AI.VIBES.some((v) => v[0] === o.vibe) ? o.vibe : 'sweet';
-  o.contact = digits(o.contact).slice(0, 16);
+  o.cc = COUNTRIES.some((c) => c[0] === o.cc) ? o.cc : '961';
+  o.phone = digits(o.phone).slice(0, 15);
+  o.contact = normalizePhone(o.cc, o.phone) || digits(o.contact).slice(0, 16);
+  o.waReply = o.waReply !== false;
   o.fixedDate = /^\d{4}-\d{2}-\d{2}$/.test(o.fixedDate) ? o.fixedDate : '';
   o.fixedTime = /^\d{2}:\d{2}$/.test(o.fixedTime) ? o.fixedTime : '';
   o.theme = THEMES[o.theme] ? o.theme : 'pink';
@@ -129,7 +193,7 @@ function placeSticker(d, st) {
 }
 function frameContent(cfg) {
   const f = h('div', { class: 'frame' });
-  if (cfg.photo) f.append(h('img', { src: cfg.photo, alt: '' })); else f.innerHTML = svgIcon(cfg.photoSticker);
+  if (cfg.photo) f.append(h('img', { class: 'ph', src: cfg.photo, alt: '' })); else f.innerHTML = svgIcon(cfg.photoSticker);
   return f;
 }
 function confetti(stage) {
@@ -149,7 +213,7 @@ function confetti(stage) {
 function buildStage(cfg, opts) {
   opts = opts || {};
   const th = THEMES[cfg.theme];
-  const el = h('div', { class: 'stage' + (opts.edit ? ' editing' : ''), 'data-theme': cfg.theme });
+  const el = h('div', { class: 'stage' + (opts.edit ? ' editing' : ''), 'data-theme': cfg.theme, 'data-dark': th.dark ? '1' : null });
   const col = safeHex(cfg.color) || '#ff7ab8';
   const vars = cfg.theme === 'custom'
     ? { '--sky': `linear-gradient(color-mix(in srgb,${col} 30%,#fff),${col})`, '--accent': col, '--accent2': `color-mix(in srgb,${col} 65%,#000)`, '--ink': `color-mix(in srgb,${col} 30%,#000)` }
@@ -226,15 +290,19 @@ function buildStage(cfg, opts) {
     setTimeout(() => confetti(el), 60);
     return [frameContent(cfg), T('title', 'h1', cfg.yay), T('sub2', 'p', cfg.yaySub), h('button', { class: 'gbtn', onclick: () => go(cfg.dateMode === 'fixed' ? 'act' : 'date') }, 'Continue →')];
   }
-  function screenDate() {
-    const inp = h('input', { type: 'date', min: new Date().toISOString().slice(0, 10), value: state.date, 'aria-label': 'Day' });
-    const tm = h('input', { type: 'time', value: state.time, 'aria-label': 'Time' });
+  function screenDate() { // step 1 of 2: the day (calendar, month names, no typing)
     const pk = h('p', { class: 'caption' });
-    const next = h('button', { class: 'gbtn', disabled: !(state.date && state.time), onclick: () => go('act') }, 'Next →');
-    const upd = () => { state.date = inp.value; state.time = tm.value; next.disabled = !(state.date && state.time); pk.textContent = cfg.pickup && state.date ? pickupText(F(cfg.pickup), state.date) : ''; };
-    inp.oninput = upd; tm.oninput = upd; upd();
-    const fr = h('div', { class: 'frame', style: 'width:24cqw;margin-bottom:3cqw' }); fr.innerHTML = STICKERS['cat-happy'].svg;
-    return [fr, T('title', 'h1', cfg.dateTitle), cfg.dateSub ? T('sub2', 'p', cfg.dateSub) : null, h('div', { class: 'datebox col' }, inp, tm), h('div', { style: 'height:3cqw' }), pk, next];
+    const next = h('button', { class: 'gbtn', disabled: !state.date, onclick: () => go('time') }, 'Next →');
+    const show = () => { pk.textContent = cfg.pickup && state.date ? pickupText(F(cfg.pickup), state.date) : ''; next.disabled = !state.date; };
+    const cal = calendar(state.date, todayIso(), (iso) => { state.date = iso; show(); });
+    show();
+    return [T('title', 'h1', cfg.dateTitle), cfg.dateSub ? T('sub2', 'p', cfg.dateSub) : null, cal, h('div', { style: 'height:3cqw' }), pk, next];
+  }
+  function screenTime() { // step 2 of 2: the time
+    const next = h('button', { class: 'gbtn', disabled: !state.time, onclick: () => go('act') }, 'Next →');
+    const tp = timePicker(state.time, (t) => { state.time = t; next.disabled = false; });
+    const when = state.date ? h('p', { class: 'caption' }, '📅 ' + fmtDate(state.date)) : null;
+    return [h('h1', { class: 'title' }, 'What time?'), when, tp, h('div', { style: 'height:3cqw' }), next];
   }
   function screenAct() {
     if (!cfg.acts.length) return screenDone();
@@ -250,46 +318,55 @@ function buildStage(cfg, opts) {
   function screenDone() {
     if (!state.sent) setTimeout(() => confetti(el), 60);
     const label = cfg.type === 'birthday' ? 'Bringing' : cfg.type === 'coffee' ? 'Order' : 'Plan';
-    if (state.sent) return [frameContent(cfg), h('h1', { class: 'title' }, 'Sent! 💌'), h('p', { class: 'sub2' }, cfg.from ? `${cfg.from} will see your answer very soon.` : 'Your answer is on its way.'), h('p', { class: 'caption' }, 'You can close this page now 🥰')];
+    const when = state.date ? fmtDate(state.date) + (state.time ? ' · ' + fmtTime(state.time) : '') : '';
+    if (state.sent) {
+      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(state.msg || '')}` }, `💬 Also text ${cfg.from || 'them'} on WhatsApp`) : null;
+      return [frameContent(cfg), h('h1', { class: 'title' }, 'Sent! 💌'), h('p', { class: 'sub2' }, cfg.from ? `${cfg.from} will see your answer very soon.` : 'Your answer is on its way.'), wa,
+        h('a', { class: 'gbtn no', style: 'text-decoration:none;display:inline-block;margin-top:3cqw;font-size:.8em', href: location.pathname + '#/' }, '✨ Make your own invite')];
+    }
     const t = h('div', { class: 'ticket' });
-    if (state.date) t.append(h('div', null, h('b', null, 'DATE: '), fmtDate(state.date) + (state.time ? ' · ' + fmtTime(state.time) : '')));
+    if (when) t.append(h('div', null, h('b', null, 'DATE: '), when));
     if (state.act) t.append(h('div', null, h('b', null, label.toUpperCase() + ': '), state.act));
-    const ta = h('textarea', { class: 'msg', rows: '4', maxlength: '500', 'aria-label': 'Your message' });
+    const ta = h('textarea', { class: 'msg', rows: '5', maxlength: '500', 'aria-label': 'Your message' });
     ta.oninput = () => { state.msg = ta.value; };
-    const tag = h('p', { class: 'caption' }, '✨ writing your message…');
+    const tag = h('p', { class: 'caption', style: 'margin:0' }, '✨ writing your message…');
+    let n = 0;
     async function writeMsg() {
       tag.textContent = '✨ writing your message…'; ta.disabled = true;
-      const r = await AI.reply({ vibe: cfg.vibe, type: cfg.type, to: cfg.to, from: cfg.from, rel: cfg.rel, date: fmtDate(state.date), time: fmtTime(state.time), act: state.act });
+      const r = await AI.reply({ vibe: cfg.type === 'romantic' ? 'flirty' : cfg.vibe, variant: n++, type: cfg.type, to: cfg.to, from: cfg.from, rel: cfg.rel, date: fmtDate(state.date), time: fmtTime(state.time), act: state.act });
       state.msg = r.text; ta.value = r.text; ta.disabled = false; tag.textContent = r.ai ? '✨ written by AI · edit it if you like' : '✨ a suggested message · edit it if you like';
     }
     const again = h('button', { class: 'gbtn no', style: 'font-size:.75em', onclick: writeMsg }, '↻ Another version');
+    const phoneIn = h('input', { type: 'tel', class: 'msg', style: 'min-height:0;display:none;margin-top:1cqw', placeholder: 'Your WhatsApp number (optional)', maxlength: '20', 'aria-label': 'Your number' });
+    const addPhone = h('button', { class: 'gbtn no', style: 'font-size:.7em', onclick: () => { addPhone.style.display = 'none'; phoneIn.style.display = 'block'; phoneIn.focus(); } }, '＋ Add my number so they can reach me');
     const send = h('button', { class: 'gbtn' }, 'Send to ' + (cfg.from || 'them') + ' 💌');
     const note = h('p', { class: 'nocap' }, ' ');
     send.onclick = async () => {
       const answer = { yes: true, date: state.date, time: state.time, act: state.act, noCount: state.noCount, label };
-      const msg = state.msg || ta.value;
+      const msg = state.msg || ta.value; state.msg = msg;
+      const myNum = normalizePhone(cfg.cc, phoneIn.value) || digits(phoneIn.value);
       send.disabled = true;
       if (opts.inviteId && window.API && API.enabled) {
-        try { await API.respond(opts.inviteId, answer, msg); state.sent = true; go('done'); opts.onSent && opts.onSent(); return; }
+        try { await API.respond(opts.inviteId, answer, msg, myNum); state.sent = true; go('done'); opts.onSent && opts.onSent(); return; }
         catch (e) { note.textContent = 'Could not send. Try again, or share it below.'; send.disabled = false; }
       }
-      const phone = digits(cfg.contact), text = `${msg}`;
-      if (phone) return window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-      try { if (navigator.share) return await navigator.share({ text }); } catch (e) { return; }
-      note.textContent = (await copyText(text)) ? 'Copied. Paste it to them 💌' : 'Screenshot this page 📸'; send.disabled = false;
+      if (cfg.contact) return window.open(`https://wa.me/${cfg.contact}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+      try { if (navigator.share) return await navigator.share({ text: msg }); } catch (e) { return; }
+      note.textContent = (await copyText(msg)) ? 'Copied. Paste it to them 💌' : 'Screenshot this page 📸'; send.disabled = false;
     };
     setTimeout(writeMsg, 50);
-    return [h('h1', { class: 'title', style: 'font-size:1.45em;margin-bottom:.15em' }, F(cfg.doneTitle)), (state.date || state.act) ? t : null, ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw' }, send, again), note];
+    return [h('h1', { class: 'title', style: 'font-size:1.4em;margin-bottom:.1em' }, F(cfg.doneTitle)), (when || state.act) ? t : null, ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw' }, send, again), addPhone, phoneIn, note];
   }
-  const screens = { ask: screenAsk, yay: screenYay, date: screenDate, act: screenAct, done: screenDone };
+  const screens = { ask: screenAsk, yay: screenYay, date: screenDate, time: screenTime, act: screenAct, done: screenDone };
   function go(name) {
     content.replaceChildren(...screens[name]().filter(Boolean));
     content.style.animation = 'none'; void content.offsetWidth; content.style.animation = '';
   }
   if (opts.edit) {
     const s = opts.screen || 'ask';
-    if (s === 'done' || s === 'act') { state.date = state.date || new Date(Date.now() + 864e5 * 5).toISOString().slice(0, 10); state.time = state.time || '19:30'; state.act = cfg.acts[0] || ''; }
-    if (s === 'date') { state.date = new Date(Date.now() + 864e5 * 5).toISOString().slice(0, 10); state.time = '19:30'; }
+    const soon = isoOf(new Date(Date.now() + 864e5 * 5));
+    if (['done', 'act', 'time'].includes(s)) { state.date = state.date || soon; }
+    if (s === 'done' || s === 'act') { state.time = state.time || '19:30'; state.act = cfg.acts[0] || ''; }
     go(s);
   } else go('ask');
   return { el, go };
@@ -300,7 +377,7 @@ function footer() {
   return h('footer', { class: 'foot' },
     h('div', { class: 'star' }, '⭐ Like this free demo? Star it on GitHub and play it with your partner 💕'),
     h('a', { class: 'btn pri', href: GITHUB, target: '_blank', rel: 'noopener' }, '⭐ Star on GitHub'),
-    h('div', { class: 'by' }, 'Programming by ', h('a', { href: GITHUB, target: '_blank', rel: 'noopener' }, 'Moemen Akari')));
+    h('div', { class: 'by' }, 'Programming by ', h('a', { href: GITHUB, target: '_blank', rel: 'noopener' }, 'Moemen Akari'), ' · ', h('a', { href: '#/privacy' }, 'Privacy')));
 }
 const myInvites = () => store.get('adate.mine', []);
 function rememberInvite(rec) { const l = myInvites().filter((x) => x.id !== rec.id); l.unshift(rec); store.set('adate.mine', l.slice(0, 30)); }
@@ -334,9 +411,10 @@ function home() {
   });
   const stk = (id, st) => { const d = h('div', { class: 'stk', style: st }); d.innerHTML = svgIcon(id); return d; };
   $app.replaceChildren(h('div', { class: 'wrap' },
+    h('a', { class: 'promo', href: GITHUB, target: '_blank', rel: 'noopener' }, '⭐ Free demo · Star it on GitHub and play it with your partner'),
     h('div', { class: 'topbar' }, h('div', { class: 'brand' }, '🐱 A', h('b', null, 'Date')), h('span', { class: 'pill' }, 'Free demo')),
     h('div', { class: 'hero' }, h('div', { class: 'stks' }, stk('cat-orange', 'animation-delay:-1s'), stk('cat-love', 'width:72px'), stk('cat-white', 'animation-delay:-2s')),
-      h('h1', null, 'Ask them out the cute way'), h('p', null, 'Pick a vibe, add their name, and send a link with a sneaky “No” button.')),
+      h('h1', null, 'Create your private invite'), h('p', null, 'For your girlfriend, your boyfriend, a friend or your birthday. Add their name, pick a vibe, and send a link with a sneaky “No” button.')),
     (draft || (API.enabled && mine.length)) ? h('div', { class: 'row', style: 'justify-content:center;margin-bottom:6px' },
       draft ? h('button', { class: 'btn pri sm', onclick: () => (location.hash = '#/make') }, '✏️ Continue my invite') : null,
       API.enabled && mine.length ? h('button', { class: 'btn sm', onclick: () => (location.hash = '#/mine') }, `📬 My invites (${mine.length})`) : null) : null,
@@ -366,7 +444,7 @@ function editor() {
 
   /* --- live previews (desktop side pane, inline stage on the sticker step) */
   const pvSide = h('div', { class: 'stagewrap' }); let inline = null;
-  const screenRow = h('div', { class: 'row', style: 'justify-content:center' }, [['ask', 'Ask'], ['yay', 'Yay'], ['date', 'Day'], ['act', 'Options'], ['done', 'Final']].map(([id, l]) =>
+  const screenRow = h('div', { class: 'row', style: 'justify-content:center' }, [['ask', 'Ask'], ['yay', 'Yay'], ['date', 'Day'], ['time', 'Time'], ['act', 'Options'], ['done', 'Final']].map(([id, l]) =>
     h('button', { class: 'chip', 'data-s': id, 'aria-pressed': id === screen ? 'true' : 'false', onclick: () => { screen = id; screenRow.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.s === id ? 'true' : 'false')); mode = 'edit'; syncMode(); refresh(); } }, l)));
   const modeBtns = { edit: h('button', { class: 'chip', onclick: () => { mode = 'edit'; syncMode(); refresh(); } }, '✋ Edit view'), play: h('button', { class: 'chip', onclick: () => { mode = 'play'; syncMode(); refresh(); } }, '▶ Test it') };
   function syncMode() { for (const k in modeBtns) modeBtns[k].setAttribute('aria-pressed', mode === k ? 'true' : 'false'); screenRow.classList.toggle('hidden', mode !== 'edit'); }
@@ -419,13 +497,27 @@ function editor() {
   const upload = async (accept, max, q) => { const f = await pickFile(accept); return f ? shrinkImage(f, max, q) : null; };
 
   /* --- steps */
+  function phoneField() {
+    const status = h('p', { class: 'hint' });
+    const inp = h('input', { type: 'tel', inputmode: 'numeric', maxlength: 16, placeholder: cfg.cc === '961' ? '70 123 456' : 'your number', value: cfg.phone, 'aria-label': 'WhatsApp number' });
+    const sel = h('select', { style: 'flex:0 0 46%', 'aria-label': 'Country' }, COUNTRIES.map(([c, l]) => h('option', { value: c, selected: c === cfg.cc }, l)));
+    const check = () => {
+      cfg.phone = digits(inp.value); cfg.cc = sel.value; cfg.contact = normalizePhone(cfg.cc, cfg.phone); save();
+      inp.placeholder = cfg.cc === '961' ? '70 123 456' : 'your number';
+      status.textContent = !cfg.phone ? (cfg.cc === '961' ? 'Lebanon: just the 8 digits, no 961 and no 0 needed.' : 'Your number without the country code.') : cfg.contact ? '✓ Looks good: +' + cfg.contact : '✗ That number doesn’t look right yet.';
+      status.style.color = cfg.phone && !cfg.contact ? '#c0392b' : '';
+    };
+    inp.oninput = check; sel.onchange = check; check();
+    return h('div', { class: 'stack' }, h('b', null, 'Your WhatsApp number *'), h('div', { class: 'fieldrow' }, sel, inp), status,
+      h('label', { class: 'row', style: 'gap:10px' }, h('input', { type: 'checkbox', checked: cfg.waReply, onchange: (e) => { cfg.waReply = e.target.checked; save(); } }), 'Let them also reply to me on WhatsApp'));
+  }
   function stepNames() {
     return [
       h('div', { class: 'stack' }, h('b', null, 'They are…'), h('div', { class: 'row' }, REL.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.rel === id ? 'true' : 'false', onclick: (e) => { cfg.rel = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
       plain('Your name', 'from', { ph: 'e.g. Sam' }), plain('Their name', 'to', { ph: 'e.g. Lina' }),
       h('div', { class: 'stack' }, h('b', null, 'The vibe of your words'), h('p', { class: 'hint' }, 'The ✨ suggestions will write in this style.'),
         h('div', { class: 'row' }, AI.VIBES.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.vibe === id ? 'true' : 'false', onclick: (e) => { cfg.vibe = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
-      plain('Your WhatsApp number (optional)', 'contact', { ph: '96170123456', max: 20, hint: 'Only used if the answer can’t be saved. It would be visible inside the link.' })
+      phoneField()
     ];
   }
   function stepWords() {
@@ -434,19 +526,23 @@ function editor() {
       aiField('When they say YES: headline', 'yay'), aiField('When they say YES: message', 'yaySub'),
       h('label', { class: 'f' }, 'The day', h('select', { onchange: (e) => { cfg.dateMode = e.target.value; change(); drawBody(); } },
         h('option', { value: 'pick', selected: cfg.dateMode === 'pick' }, 'They pick the day and time'), h('option', { value: 'fixed', selected: cfg.dateMode === 'fixed' }, 'I set the day and time')))];
-    if (cfg.dateMode === 'fixed') out.push(plain('Day', 'fixedDate', { type: 'date' }), plain('Time', 'fixedTime', { type: 'time' }));
+    if (cfg.dateMode === 'fixed') out.push(h('b', null, 'Pick the day'), calendar(cfg.fixedDate, todayIso(), (iso) => { cfg.fixedDate = iso; change(); }), h('b', null, 'Pick the time'), timePicker(cfg.fixedTime, (t) => { cfg.fixedTime = t; change(); }));
     else out.push(aiField('Day screen: title', 'dateTitle'), aiField('Day screen: line', 'dateSub'), aiField('Pick-up line (shows a countdown under the day)', 'pickup', { field: 'pickup', hint: 'Use {days} for the number of days left. Say where you’ll pick them up!' }));
+    const chips = h('div', { class: 'row' }, cfg.acts.map((a, i) => h('span', { class: 'chip', style: 'display:inline-flex;gap:.4em;align-items:center' }, a, h('button', { type: 'button', 'aria-label': 'Remove ' + a, style: 'border:0;background:none;font-weight:700;color:inherit;padding:0 .2em', onclick: () => { cfg.acts.splice(i, 1); change(); drawBody(); } }, '×'))));
+    const add = h('input', { type: 'text', maxlength: 40, placeholder: 'Write your own idea…', 'aria-label': 'New option' });
+    const addIt = () => { const v = add.value.trim(); if (v && !cfg.acts.includes(v) && cfg.acts.length < 12) { cfg.acts.push(v); change(); drawBody(); } };
+    add.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addIt(); } };
     const ideas = h('div', { class: 'row' });
-    const acts = aiField('Options they choose from (one per line)', 'acts', { area: true, field: false, max: 600, get: () => cfg.acts.join('\n'), set: (v) => (cfg.acts = v.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 12)) });
-    (ACT_IDEAS[cfg.type] || ACT_IDEAS.custom).forEach((a) => ideas.append(h('button', { class: 'chip', onclick: () => { if (!cfg.acts.includes(a) && cfg.acts.length < 12) { cfg.acts.push(a); change(); drawBody(); } } }, '+ ' + a)));
-    out.push(aiField('Options screen: title', 'actTitle'), acts, h('p', { class: 'hint' }, 'Tap an idea to add it:'), ideas, aiField('Final screen: title', 'doneTitle'));
+    (ACT_IDEAS[cfg.type] || ACT_IDEAS.custom).filter((a) => !cfg.acts.includes(a)).forEach((a) => ideas.append(h('button', { class: 'chip', onclick: () => { if (cfg.acts.length < 12) { cfg.acts.push(a); change(); drawBody(); } } }, '+ ' + a)));
+    const acts = h('div', { class: 'stack' }, h('b', null, 'Options they choose from'), chips, h('div', { class: 'fieldrow' }, add, h('button', { class: 'btn pri', type: 'button', style: 'flex:none;min-height:48px', 'aria-label': 'Add option', onclick: addIt }, '＋')), h('p', { class: 'hint' }, 'Write your own, or tap an idea:'), ideas);
+    out.push(aiField('Options screen: title', 'actTitle'), acts, aiField('Final screen: title', 'doneTitle'));
     return out;
   }
   function stepPic() {
     const g = h('div', { class: 'grid' });
     STICKER_ORDER.filter((id) => id.startsWith('cat') || ['bear', 'bunny'].includes(id)).forEach((id) => { const b = h('button', { class: 'tile', 'aria-pressed': !cfg.photo && cfg.photoSticker === id ? 'true' : 'false', title: STICKERS[id].name, onclick: () => { cfg.photoSticker = id; cfg.photo = null; change(); drawBody(); } }); b.innerHTML = svgIcon(id); g.append(b); });
-    return [h('p', { class: 'hint' }, 'This sits in the middle of every screen. Pick one of mine, or upload their photo, an anime you both love, their pet or their place.'), g,
-      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 240, .75); if (d) { cfg.photo = d; change(); drawBody(); } } }, '⬆ Upload my own picture'), cfg.photo ? h('button', { class: 'btn sm danger', onclick: () => { cfg.photo = null; change(); drawBody(); } }, 'Remove') : null)];
+    return [h('p', { class: 'hint' }, 'It shows in a round frame in the middle of every screen (we crop it to a circle for you). Pick one of mine, or upload their photo, an anime you both love, their pet or their place.'), g,
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const f = await pickFile('image/*'); if (f) { cfg.photo = await shrinkImage(f, 320, .78, true); change(); drawBody(); } } }, '⬆ Upload my own picture'), cfg.photo ? h('button', { class: 'btn sm danger', onclick: () => { cfg.photo = null; change(); drawBody(); } }, 'Remove') : null)];
   }
   function thumb(id) {
     const t = THEMES[id];
@@ -505,14 +601,17 @@ function editor() {
   /* send */
   function stepSend() {
     const out = h('div', { class: 'sharebox' });
-    const warn = () => (!cfg.to.trim() ? h('div', { class: 'note' }, 'You haven’t written their name yet. Go back to step 1 👈') : null);
+    const consent = h('input', { type: 'checkbox', id: 'consent', checked: store.get('adate.consent', false), onchange: (e) => store.set('adate.consent', e.target.checked) });
+    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)', API.enabled && !consent.checked && 'tick the privacy box below'].filter(Boolean);
+    const warn = () => { const p = problems(); return p.length ? h('div', { class: 'note' }, 'Almost there. Still needed: ' + p.join(', ') + '.') : null; };
     async function publish(createNew) {
+      if (problems().length) { out.replaceChildren(warn(), ...ask()); return; }
       out.replaceChildren(h('p', { class: 'hint spark' }, '✨ creating your link…'));
       try {
         let link, priv, m = meta();
         if (API.enabled) {
           if (m && !createNew) { await API.update(m.id, m.token, cfg); }
-          else { m = { id: API.newId(), token: API.newToken() }; await API.create(m.id, m.token, cfg); store.set('adate.draftmeta', m); }
+          else { m = { id: API.newId(), token: API.newToken() }; await API.create(m.id, m.token, cfg, consent.checked); store.set('adate.draftmeta', m); }
           rememberInvite({ id: m.id, token: m.token, to: cfg.to || 'Someone', type: cfg.type, at: Date.now() });
           link = inviteUrl(m.id); priv = privateUrl(m.id, m.token);
         } else link = location.href.split('#')[0] + '#/v/' + await pack(cfg);
@@ -531,9 +630,11 @@ function editor() {
       } catch (e) { out.replaceChildren(h('div', { class: 'note' }, 'Something went wrong: ' + e.message), h('button', { class: 'btn pri', onclick: () => publish(false) }, 'Try again')); }
     }
     const m = meta();
-    out.append(...[warn(), h('p', { class: 'hint' }, 'Happy with it? Try the whole thing once, then create the link.'),
+    const ask = () => [API.enabled ? h('label', { class: 'row', style: 'gap:10px;align-items:flex-start', for: 'consent' }, consent, h('span', { class: 'hint' }, 'I agree that ADate keeps this invite, my number and their answer so it can be delivered to me. ', h('a', { href: '#/privacy' }, 'Privacy'))) : null,
+      h('p', { class: 'hint' }, 'Happy with it? Try the whole thing once, then create the link.'),
       h('button', { class: 'btn block', onclick: openPreview }, '▶ Try it like they will'),
-      h('button', { class: 'btn pri block', onclick: () => publish(false) }, API.enabled && m ? 'Save changes to my link' : 'Create my link')].filter(Boolean));
+      h('button', { class: 'btn pri block', onclick: () => publish(false) }, API.enabled && m ? 'Save changes to my link' : 'Create my link')].filter(Boolean);
+    out.append(...[warn(), ...ask()].filter(Boolean));
     return [out];
   }
   const STEPS = [['👤', 'You & them', stepNames], ['✍️', 'Words', stepWords], ['🖼️', 'Main picture', stepPic], ['🌍', 'Wallpaper', stepLook], ['😈', 'The “No” button', stepNo], ['🐱', 'Stickers', stepStickers], ['💌', 'Send it', stepSend]];
@@ -580,8 +681,8 @@ function inviteCard(rec, open) {
         h('div', null, s.opens ? `👀 Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : '👀 Not opened yet')];
       (s.responses || []).forEach((r) => {
         const a = r.answer || {};
-        rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 She said YES · ' + ago(r.at)),
-          h('div', { class: 'kv' }, a.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.date) + (a.time ? ' · ' + fmtTime(a.time) : '')) : null, a.act ? h('div', null, h('b', null, (a.label || 'Plan') + ': '), a.act) : null, a.noCount ? h('div', null, h('b', null, 'Pressed “No”: '), a.noCount + ' time' + (a.noCount > 1 ? 's 😂' : '')) : null),
+        rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 They said YES · ' + ago(r.at)),
+          h('div', { class: 'kv' }, a.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.date) + (a.time ? ' · ' + fmtTime(a.time) : '')) : null, a.act ? h('div', null, h('b', null, (a.label || 'Plan') + ': '), a.act) : null, r.phone ? h('div', null, h('b', null, 'Their number: '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone)) : null, a.noCount ? h('div', null, h('b', null, 'Pressed “No”: '), a.noCount + ' time' + (a.noCount > 1 ? 's 😂' : '')) : null),
           r.message ? h('div', { class: 'bubble' }, r.message) : null));
       });
       const cfg = s.config || {};
@@ -609,8 +710,44 @@ function dash(arg) {
   API.status(id, token).then((s) => { const l = myInvites().map((x) => x.id === id ? Object.assign(x, { to: (s.config && s.config.to) || x.to, type: (s.config && s.config.type) || x.type }) : x); store.set('adate.mine', l); inbox(); }).catch(() => inbox());
 }
 
+/* ------------------------------------------------------------------ privacy + owner dashboard */
+function privacy() {
+  document.title = 'ADate – Privacy';
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
+    h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
+      h('p', null, 'ADate is a free demo. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the invite you design (including any pictures you upload), and the answer, message and optional number the other person sends back.'),
+      h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
+      h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
+}
+async function admin() {
+  document.title = 'ADate – Owner';
+  const key0 = (() => { try { return sessionStorage.getItem('adate.key') || ''; } catch (e) { return ''; } })();
+  const out = h('div'), inp = h('input', { type: 'text', placeholder: 'Owner key', value: key0, autocomplete: 'off' });
+  async function load() {
+    const key = inp.value.trim(); if (!key) return;
+    out.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
+    try {
+      const d = await API.admin(key); try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
+      const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:110px;text-align:center;margin:0' }, h('b', { style: 'font-size:1.6rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
+      const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'receiver_phone', 'id']; const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); const a = h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }); a.click(); };
+      out.replaceChildren(h('div', { class: 'row' }, num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'phone numbers'])),
+        h('div', { class: 'row', style: 'margin:12px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export CSV'), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')),
+        ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ new')),
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), r.sender_phone ? h('a', { href: 'https://wa.me/' + r.sender_phone, target: '_blank', rel: 'noopener' }, '+' + r.sender_phone) : '—'),
+            r.receiver_phone ? h('div', null, h('b', null, 'Receiver: '), h('a', { href: 'https://wa.me/' + r.receiver_phone, target: '_blank', rel: 'noopener' }, '+' + r.receiver_phone)) : null,
+            h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))))));
+    } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
+  }
+  inp.onkeydown = (e) => { if (e.key === 'Enter') load(); };
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('span', { class: 'pill' }, 'Owner')),
+    h('div', { class: 'h2' }, '🔐 Owner dashboard'), h('div', { class: 'fieldrow' }, inp, h('button', { class: 'btn pri', onclick: load }, 'Open')), h('div', { style: 'height:12px' }), out));
+  if (key0) load();
+}
+
 /* ------------------------------------------------------------------ router */
 async function route() {
+  await API.ready;
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
   document.querySelectorAll('.modal').forEach((m) => m.remove());
@@ -619,6 +756,8 @@ async function route() {
   if (hash.startsWith('#/i/')) return API.enabled ? viewer('i', hash.slice(4)) : brokenLink();
   if (hash.startsWith('#/d/')) return dash(hash.slice(4));
   if (hash === '#/mine') return inbox();
+  if (hash === '#/privacy') return privacy();
+  if (hash === '#/admin') return admin();
   if (hash === '#/make') return editor();
   return home();
 }
