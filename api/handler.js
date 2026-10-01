@@ -21,7 +21,9 @@ function checkConfig(c) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) throw bad('Bad invite');
   if (JSON.stringify(c).length > 900000) throw bad('Invite is too large');
 }
-const cols = (c) => ({ name: String(c.from || '').slice(0, 60), phone: digits(c.contact).slice(0, 16), to: String(c.to || '').slice(0, 60), type: String(c.type || '').slice(0, 20) });
+const igOk = (v) => (/^[A-Za-z0-9._]{1,30}$/.test(v) && !/^\.+$/.test(v) ? v : '');
+const contactOf = (v) => { const t = String(v || '').trim(); return t[0] === '@' ? (igOk(t.slice(1)) ? '@' + igOk(t.slice(1)) : '') : digits(t).slice(0, 16); };
+const cols = (c) => ({ name: String(c.from || '').slice(0, 60), phone: digits(c.contact).slice(0, 16), to: String(c.to || '').slice(0, 60), type: String(c.type || '').slice(0, 20), toc: contactOf(c.toContact) || null });
 const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email });
 
 async function newSession(sql, userId) {
@@ -136,13 +138,13 @@ module.exports = async (req, res) => {
           (select count(*) from responses r where r.invite_id = i.id)::int as answers,
           (select count(*) from responses r where r.invite_id = i.id and r.seen_at is null)::int as unseen
         from invites i where i.user_id = ${u.id} order by i.created_at desc limit 100`;
-      const unseen = await sql`select r.id, r.invite_id, i.to_name, r.created_at as at, r.answer, r.message, r.receiver_phone as phone
+      const unseen = await sql`select r.id, r.invite_id, i.to_name, r.created_at as at, r.answer, r.message, r.receiver_phone as phone, r.receiver_ig as ig
         from responses r join invites i on i.id = r.invite_id where i.user_id = ${u.id} and r.seen_at is null order by r.created_at desc limit 20`;
       return res.status(200).json({ user: publicUser(u), invites, unseen });
     }
     if (action === 'inbox') { // one invite with all its answers; reading it marks them as seen
       const i = await owned(sql, b);
-      const rs = await sql`select created_at as at, answer, message, receiver_phone as phone from responses where invite_id = ${b.id} order by created_at desc`;
+      const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
       const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
       await sql`update responses set seen_at = now() where invite_id = ${b.id} and seen_at is null`;
       return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
@@ -169,14 +171,15 @@ module.exports = async (req, res) => {
       const u = await userOf(sql, b.session);
       checkConfig(b.config);
       const c = cols(b.config);
-      await sql`insert into invites (id, token_hash, config, sender_name, sender_phone, to_name, type, consent, user_id)
-                values (${b.id}, ${hash(b.token)}, ${JSON.stringify(b.config)}::jsonb, ${c.name}, ${c.phone || u.phone}, ${c.to}, ${c.type}, true, ${u.id})`;
+      if (!c.toc) throw bad('Add their WhatsApp number or Instagram');
+      await sql`insert into invites (id, token_hash, config, sender_name, sender_phone, to_name, type, consent, user_id, to_contact)
+                values (${b.id}, ${hash(b.token)}, ${JSON.stringify(b.config)}::jsonb, ${c.name}, ${c.phone || u.phone}, ${c.to}, ${c.type}, true, ${u.id}, ${c.toc})`;
       return res.status(200).json({ ok: true });
     }
     if (action === 'update') {
       await owned(sql, b); checkConfig(b.config);
       const c = cols(b.config);
-      await sql`update invites set config = ${JSON.stringify(b.config)}::jsonb, sender_name = ${c.name}, sender_phone = ${c.phone}, to_name = ${c.to}, type = ${c.type} where id = ${b.id}`;
+      await sql`update invites set config = ${JSON.stringify(b.config)}::jsonb, sender_name = ${c.name}, sender_phone = ${c.phone}, to_name = ${c.to}, type = ${c.type}, to_contact = coalesce(${c.toc}, to_contact) where id = ${b.id}`;
       return res.status(200).json({ ok: true });
     }
     if (action === 'open') {
@@ -206,15 +209,17 @@ module.exports = async (req, res) => {
       const have = await sql`select (select count(*) from responses where invite_id = ${b.id})::int as n from invites where id = ${b.id}`;
       if (!have.length) throw bad('Not found', 404);
       if (have[0].n >= 20) throw bad('Too many answers');
-      await sql`insert into responses (invite_id, answer, message, receiver_phone)
-                values (${b.id}, ${JSON.stringify(b.answer || {})}::jsonb, ${msg.slice(0, 1500)}, ${digits(b.phone).slice(0, 16) || null})`;
+      const rp = digits(b.phone).slice(0, 16), rig = igOk(String(b.ig || '').replace(/^@/, '').trim());
+      if (rp.length < 7 && !rig) throw bad('Add your WhatsApp number or Instagram');
+      await sql`insert into responses (invite_id, answer, message, receiver_phone, receiver_ig)
+                values (${b.id}, ${JSON.stringify(b.answer || {})}::jsonb, ${msg.slice(0, 1500)}, ${rp.length >= 7 ? rp : null}, ${rig || null})`;
       const later = b.answer && b.answer.yes === false, who = await nameOf(sql, b.id);
       await notify(sql, b.id, 'answer', later ? '🙂 ' + who + ' replied: not right now' : '💌 ' + who + ' answered your invite!', msg.slice(0, 90), 0);
       return res.status(200).json({ ok: true });
     }
     if (action === 'status') { // legacy private-link access
       const i = await owned(sql, b);
-      const rs = await sql`select created_at as at, answer, message, receiver_phone as phone from responses where invite_id = ${b.id} order by created_at desc`;
+      const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
       const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
       return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
     }
@@ -231,7 +236,7 @@ module.exports = async (req, res) => {
         if (!ID.test(b.id || '')) throw bad('Bad id');
         const i = await sql`select id, created_at, opens, first_opened_at, last_opened_at, config from invites where id = ${b.id}`;
         if (!i.length) throw bad('Not found', 404);
-        const rs = await sql`select created_at as at, answer, message, receiver_phone as phone from responses where invite_id = ${b.id} order by created_at desc`;
+        const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
         const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
         return res.status(200).json({ created_at: i[0].created_at, opens: i[0].opens, first_opened_at: i[0].first_opened_at, last_opened_at: i[0].last_opened_at, config: i[0].config, responses: rs, events });
       }
@@ -245,16 +250,17 @@ module.exports = async (req, res) => {
       }
       const users = await sql`select u.id, u.phone, u.name, u.email, u.created_at, u.last_login_at, u.question,
           (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
-      const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.opens,
+      const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
           (select count(*) from responses r where r.invite_id = i.id)::int as answers,
           (select max(created_at) from responses r where r.invite_id = i.id) as last_answer_at,
-          (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone
+          (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone,
+          (select r.receiver_ig from responses r where r.invite_id = i.id and r.receiver_ig is not null order by r.created_at desc limit 1) as receiver_ig
         from invites i order by i.created_at desc limit 1000`;
-      const answers = await sql`select r.created_at as at, r.message, r.receiver_phone, r.answer, i.sender_name, i.to_name, i.sender_phone
+      const answers = await sql`select r.created_at as at, r.message, r.receiver_phone, r.receiver_ig, r.answer, i.sender_name, i.to_name, i.sender_phone
         from responses r join invites i on i.id = r.invite_id order by r.created_at desc limit 100`;
       const stats = {
         users: users.length, invites: invites.length, opened: invites.filter((r) => r.opens > 0).length, answered: invites.filter((r) => r.answers > 0).length,
-        phones: new Set(users.map((r) => r.phone).concat(invites.map((r) => r.sender_phone), invites.map((r) => r.receiver_phone)).filter(Boolean)).size
+        phones: new Set(users.map((r) => r.phone).concat(invites.map((r) => r.sender_phone), invites.map((r) => r.receiver_phone), invites.map((r) => (r.to_contact && r.to_contact[0] !== '@' ? r.to_contact : null))).filter(Boolean)).size
       };
       return res.status(200).json({ stats, users, invites, answers });
     }

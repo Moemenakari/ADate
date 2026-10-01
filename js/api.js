@@ -41,7 +41,7 @@
     pushSubscribe: (sub) => call('push_subscribe', { session: tok(), sub }),
     pushUnsubscribe: (endpoint) => call('push_unsubscribe', { session: tok(), endpoint }),
     track: (id, kind, data) => call('track', { id, kind, data, visitor: visitor() }, true).catch(() => {}),
-    respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }, true),
+    respond: (id, answer, message, phone, ig) => call('respond', { id, answer, message, phone, ig }, true),
     status: (id, token) => call('status', { id, token }),
     remove: (id, token) => call('remove', { id, token, session: tok() }),
     admin: (key) => call('admin', { key }),

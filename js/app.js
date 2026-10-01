@@ -47,6 +47,38 @@ const ago = (iso) => { const s = (Date.now() - new Date(iso)) / 1000; if (!iso |
 
 const COUNTRIES = [['961', '🇱🇧 Lebanon +961'], ['966', '🇸🇦 Saudi Arabia +966'], ['971', '🇦🇪 UAE +971'], ['974', '🇶🇦 Qatar +974'], ['965', '🇰🇼 Kuwait +965'], ['973', '🇧🇭 Bahrain +973'], ['968', '🇴🇲 Oman +968'], ['962', '🇯🇴 Jordan +962'], ['963', '🇸🇾 Syria +963'], ['964', '🇮🇶 Iraq +964'], ['20', '🇪🇬 Egypt +20'], ['90', '🇹🇷 Turkey +90'], ['357', '🇨🇾 Cyprus +357'], ['33', '🇫🇷 France +33'], ['49', '🇩🇪 Germany +49'], ['44', '🇬🇧 UK +44'], ['1', '🇺🇸 USA / Canada +1'], ['55', '🇧🇷 Brazil +55'], ['61', '🇦🇺 Australia +61'], ['46', '🇸🇪 Sweden +46'], ['39', '🇮🇹 Italy +39'], ['34', '🇪🇸 Spain +34']];
 // Lebanese numbers: just the 8 digits (03 123 456 or 70 123 456). Others: country code + number.
+const IG_BAD = ['p', 'reel', 'reels', 'explore', 'accounts', 'stories', 'direct', 'tv'];
+function igHandle(s) { // "@sam.lee", "sam.lee" or an instagram.com link -> "sam.lee" (format only: we cannot check the account exists from the browser)
+  let t = String(s || '').trim();
+  const m = t.match(/instagram\.com\/([^/?#\s]+)/i); if (m) t = m[1];
+  t = t.replace(/^@/, '');
+  return /^[A-Za-z0-9._]{1,30}$/.test(t) && !/^\.+$/.test(t) && !IG_BAD.includes(t.toLowerCase()) ? t : '';
+}
+/** "WhatsApp number or Instagram" picker. onChange gets { kind, cc, phone, ig, contact } where contact is '' until it is valid. */
+function contactPicker(init, onChange) {
+  const st = { kind: init.kind === 'ig' ? 'ig' : 'wa', cc: COUNTRIES.some((c) => c[0] === init.cc) ? init.cc : '961', phone: digits(init.phone), ig: init.ig || '' };
+  const out = () => ({ kind: st.kind, cc: st.cc, phone: digits(st.phone), ig: st.ig, contact: st.kind === 'wa' ? normalizePhone(st.cc, st.phone) : (igHandle(st.ig) ? '@' + igHandle(st.ig) : '') });
+  const status = h('p', { class: 'hint' });
+  const sel = h('select', { style: 'flex:0 0 46%', 'aria-label': 'Country' }, COUNTRIES.map(([c, l]) => h('option', { value: c, selected: c === st.cc }, l)));
+  const tel = h('input', { type: 'tel', inputmode: 'numeric', maxlength: 16, value: st.phone, 'aria-label': 'WhatsApp number' });
+  const row = h('div', { class: 'fieldrow' }, sel, tel);
+  const igIn = h('input', { type: 'text', maxlength: 80, value: st.ig, placeholder: '@username or instagram.com/username', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
+  const chips = h('div', { class: 'row' });
+  const paint = () => {
+    const o = out(); row.style.display = st.kind === 'wa' ? '' : 'none'; igIn.style.display = st.kind === 'ig' ? '' : 'none';
+    tel.placeholder = st.cc === '961' ? '70 123 456' : 'number';
+    [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c.dataset.k === st.kind ? 'true' : 'false'));
+    const raw = st.kind === 'wa' ? st.phone : st.ig.trim();
+    status.textContent = !raw ? (st.kind === 'wa' ? (st.cc === '961' ? 'Lebanon: just the 8 digits.' : 'Number without the country code.') : 'The account name or its link.') : o.contact ? '✓ ' + (st.kind === 'wa' ? '+' + o.contact : o.contact + ' · instagram.com/' + o.contact.slice(1)) : '✗ That doesn’t look right yet.';
+    status.style.color = raw && !o.contact ? '#c0392b' : '';
+    onChange && onChange(o);
+  };
+  [['wa', '💬 WhatsApp'], ['ig', '📸 Instagram']].forEach(([k, l]) => chips.append(h('button', { class: 'chip', type: 'button', 'data-k': k, onclick: () => { st.kind = k; paint(); } }, l)));
+  tel.oninput = () => { st.phone = tel.value; paint(); }; sel.onchange = () => { st.cc = sel.value; paint(); }; igIn.oninput = () => { st.ig = igIn.value; paint(); };
+  const box = h('div', { class: 'stack' }, chips, row, igIn, status);
+  paint(); box.value = out;
+  return box;
+}
 function normalizePhone(cc, raw) {
   let d = digits(raw).replace(/^00/, '');
   if (!d) return '';
@@ -135,7 +167,7 @@ const DEFAULT_PICKUP = '{days} days until I pick you up from your doorstep 🚗'
 function newConfig(type, rel) {
   const p = PRESETS[type];
   return {
-    v: 3, type, rel: rel || '', vibe: DEFAULT_VIBE[type] || 'sweet', from: '', to: '', cc: '961', phone: '', contact: '', waReply: true,
+    v: 3, type, rel: rel || '', vibe: DEFAULT_VIBE[type] || 'sweet', from: '', to: '', cc: '961', phone: '', contact: '', waReply: true, toKind: 'wa', toCc: '961', toPhone: '', toIg: '', toContact: '',
     title: p.title, sub: p.sub, caption: '', yay: p.yay, yaySub: p.yaySub,
     dateTitle: p.dateTitle, dateSub: p.dateSub, pickup: type === 'birthday' ? '' : DEFAULT_PICKUP, dateMode: p.dateMode, fixedDate: '', fixedTime: '',
     actTitle: p.actTitle, acts: p.acts.slice(), doneTitle: p.doneTitle,
@@ -160,6 +192,10 @@ function sanitize(c) { // anything from a link or the server is untrusted
   o.phone = digits(o.phone).slice(0, 15);
   o.contact = normalizePhone(o.cc, o.phone) || digits(o.contact).slice(0, 16);
   o.waReply = o.waReply !== false;
+  o.toKind = o.toKind === 'ig' ? 'ig' : 'wa';
+  o.toCc = COUNTRIES.some((c) => c[0] === o.toCc) ? o.toCc : '961';
+  o.toPhone = digits(o.toPhone).slice(0, 15); o.toIg = t(o.toIg, 80);
+  o.toContact = o.toKind === 'wa' ? normalizePhone(o.toCc, o.toPhone) : (igHandle(o.toIg) ? '@' + igHandle(o.toIg) : '');
   o.fixedDate = /^\d{4}-\d{2}-\d{2}$/.test(o.fixedDate) ? o.fixedDate : '';
   o.fixedTime = /^\d{2}:\d{2}$/.test(o.fixedTime) ? o.fixedTime : '';
   o.theme = THEMES[o.theme] ? o.theme : 'pink';
@@ -341,23 +377,27 @@ function buildStage(cfg, opts) {
     }
     function another() { n++; touched = false; state.msg = AI.compose(ctxFor()); ta.value = state.msg; tag.textContent = '✨ new version · edit it if you like'; upgrade(); }
     const again = h('button', { class: 'gbtn no', style: 'font-size:.75em', onclick: another }, '↻ Another version');
-    const phoneIn = h('input', { type: 'tel', class: 'msg', style: 'min-height:0;display:none;margin-top:1cqw', placeholder: 'Your WhatsApp number (optional)', maxlength: '20', 'aria-label': 'Your number' });
-    const addPhone = h('button', { class: 'gbtn no', style: 'font-size:.7em', onclick: () => { addPhone.style.display = 'none'; phoneIn.style.display = 'block'; phoneIn.focus(); } }, '＋ Add my number so they can reach me');
+    const needContact = !!(opts.inviteId && window.API && API.enabled);   // the preview in the editor does not ask
+    let me = { contact: '' }, sendBtn = null;
+    const mine = contactPicker({ kind: cfg.toKind, cc: cfg.toCc || cfg.cc, phone: '', ig: '' }, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; });
+    const contactBox = needContact ? h('div', { class: 'stack', style: 'margin-top:1cqw' }, h('b', { style: 'font-size:.75em' }, `Your WhatsApp or Instagram *`), h('p', { class: 'caption', style: 'margin:0' }, `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.`), mine) : null;
     const waOn = !!(cfg.contact && cfg.waReply);
     const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with ADate · ${location.host}_`;
     const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(waText(m))}`;
-    const send = h('button', { class: 'gbtn' }, waOn ? '💬 Send on WhatsApp' : 'Send to ' + (cfg.from || 'them') + ' 💌');
+    const send = h('button', { class: 'gbtn', disabled: needContact && !me.contact }, waOn ? '💬 Send on WhatsApp' : 'Send to ' + (cfg.from || 'them') + ' 💌');
+    sendBtn = send;
     const siteOnly = waOn && opts.inviteId && window.API && API.enabled ? h('button', { class: 'gbtn no', style: 'font-size:.7em', onclick: () => deliver(false) }, 'Send on the website only') : null;
     const note = h('p', { class: 'nocap' }, ' ');
     async function deliver(openWa) {
       const msg = (ta.value || '').trim() || AI.compose(ctxFor()); state.msg = msg;
       const answer = { yes: true, date: state.date, time: state.time, act: state.act, noCount: state.noCount, label };
-      const myNum = normalizePhone(cfg.cc, phoneIn.value) || digits(phoneIn.value);
+      if (needContact && !me.contact) { note.textContent = 'Add your WhatsApp number or Instagram first 🙏'; return; }
+      const myNum = me.kind === 'wa' ? me.contact : '', myIg = me.kind === 'ig' ? me.contact.slice(1) : '';
       send.disabled = true;
       if (openWa && waOn) window.open(waUrl(msg), '_blank', 'noopener'); // must happen inside the tap
       if (opts.inviteId && window.API && API.enabled) {
-        try { await API.respond(opts.inviteId, answer, msg, myNum); state.sent = true; go('done'); opts.onSent && opts.onSent(); return; }
-        catch (e) { note.textContent = 'Could not save it on the website. Try again.'; send.disabled = false; return; }
+        try { await API.respond(opts.inviteId, answer, msg, myNum, myIg); state.sent = true; go('done'); opts.onSent && opts.onSent(); return; }
+        catch (e) { note.textContent = e && e.message ? e.message : 'Could not save it on the website. Try again.'; send.disabled = false; return; }
       }
       if (openWa && waOn) { state.sent = true; go('done'); return; }
       try { if (navigator.share) return await navigator.share({ text: waText(msg) }); } catch (e) { return; }
@@ -365,7 +405,7 @@ function buildStage(cfg, opts) {
     }
     send.onclick = () => deliver(true);
     setTimeout(upgrade, 50);
-    return [h('h1', { class: 'title', style: 'font-size:1.35em;margin-bottom:.1em' }, F(cfg.doneTitle)), ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw;flex-wrap:wrap' }, send, again), addPhone, phoneIn, siteOnly, note];
+    return [h('h1', { class: 'title', style: 'font-size:1.35em;margin-bottom:.1em' }, F(cfg.doneTitle)), ta, tag, h('div', { class: 'btns', style: 'min-height:0;margin-top:1cqw;flex-wrap:wrap' }, send, again), contactBox, siteOnly, note];
   }
   const screens = { ask: screenAsk, yay: screenYay, date: screenDate, time: screenTime, act: screenAct, done: screenDone };
   function go(name) {
@@ -534,7 +574,9 @@ function editor() {
       plain('Your name', 'from', { ph: 'e.g. Sam' }), plain('Their name', 'to', { ph: 'e.g. Lina' }),
       h('div', { class: 'stack' }, h('b', null, 'The vibe of your words'), h('p', { class: 'hint' }, 'The ✨ suggestions will write in this style.'),
         h('div', { class: 'row' }, AI.VIBES.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.vibe === id ? 'true' : 'false', onclick: (e) => { cfg.vibe = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
-      phoneField()
+      phoneField(),
+      h('div', { class: 'stack' }, h('b', null, 'Their WhatsApp number or Instagram *'), h('p', { class: 'hint' }, 'So you know exactly who this is for. Only you and the site owner see it.'),
+        contactPicker({ kind: cfg.toKind, cc: cfg.toCc, phone: cfg.toPhone, ig: cfg.toIg }, (v) => { cfg.toKind = v.kind; cfg.toCc = v.cc; cfg.toPhone = v.phone; cfg.toIg = v.ig; cfg.toContact = v.contact; save(); }))
     ];
   }
   function stepWords() {
@@ -621,7 +663,7 @@ function editor() {
     const consent = h('input', { type: 'checkbox', id: 'consent', checked: store.get('adate.consent', false), onchange: (e) => store.set('adate.consent', e.target.checked) });
     const acct = { mode: 'signup', password: '', email: '', question: (API.questions || [])[0] || 'What is your pet’s name?', answer: '' };
     const needAcct = () => API.enabled && !API.session;
-    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)',
+    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)', !cfg.toContact && 'their WhatsApp number or Instagram (step 1)',
       needAcct() && acct.password.length < 6 && 'a password (6+ characters)', needAcct() && acct.mode === 'signup' && acct.answer.trim().length < 2 && 'an answer to the security question',
       API.enabled && !consent.checked && 'tick the privacy box below'].filter(Boolean);
     function acctBlock() {
@@ -757,6 +799,7 @@ function bigCard(r) {
   const card = h('div', { class: 'bigcard' }, h('div', { class: 'bc-top' }, h('span', { class: 'bc-bell' }, '🔔'), h('b', null, `${r.to_name || 'Someone'} answered your invite!`), h('span', { class: 'hint' }, ago(r.at))),
     h('h2', { class: 'bc-yes' }, '💖 ' + (r.to_name || 'They') + ' said YES!'), details(r.answer || {}), r.message ? h('div', { class: 'bubble big' }, r.message) : null,
     h('div', { class: 'row' }, r.phone ? h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + r.phone + '?text=' + encodeURIComponent('Can’t wait! 💖') }, '💬 Reply on WhatsApp') : null,
+      r.ig ? h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://instagram.com/' + encodeURIComponent(r.ig) }, '📸 @' + r.ig) : null,
       h('button', { class: 'btn', onclick: () => card.remove() }, 'Got it')));
   return card;
 }
@@ -801,7 +844,8 @@ function inviteCard(rec, loader) {
       head.lastChild.replaceWith(h('span', { class: 'badge ' + (answered ? 'ok' : s.opens ? 'warn' : '') }, answered ? '✅ Answered' : s.opens ? '👀 Opened' : '⏳ Not opened yet'));
       const rows = [h('div', null, '📨 Created ' + ago(s.created_at)), h('div', null, s.opens ? `👀 Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : '👀 Not opened yet'), journey(s)];
       (s.responses || []).forEach((r) => rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 They said YES · ' + ago(r.at)), details(r.answer || {}),
-        r.phone ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📱 '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone))) : null, r.message ? h('div', { class: 'bubble' }, r.message) : null)));
+        r.phone ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📱 '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone))) : null,
+        r.ig ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📸 '), h('a', { href: 'https://instagram.com/' + encodeURIComponent(r.ig), target: '_blank', rel: 'noopener' }, '@' + r.ig))) : null, r.message ? h('div', { class: 'bubble' }, r.message) : null)));
       rows.push(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(inviteUrl(rec.id))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy invite link'),
         h('button', { class: 'btn sm danger', onclick: async () => { if (confirm('Delete this invite and its answers for good?')) { try { await API.remove(rec.id, rec.token); } catch (e) { /* already gone */ } store.set('adate.mine', myInvites().filter((x) => x.id !== rec.id)); route(); } } }, 'Delete')));
       body.replaceChildren(...rows);
@@ -870,7 +914,7 @@ function privacy() {
   document.title = 'ADate – Privacy';
   $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
-      h('p', null, 'ADate is a free demo. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the invite you design (including any pictures you upload), and the answer, message and optional number the other person sends back.'),
+      h('p', null, 'ADate is a free demo. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
       h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The invite page says so.'),
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
       h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
@@ -887,8 +931,9 @@ async function admin() {
       const d = await API.admin(key); try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
       const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:96px;text-align:center;margin:0;padding:10px' }, h('b', { style: 'font-size:1.5rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
       const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
+      const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
       const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-      const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'receiver_phone', 'id']; const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }).click(); };
+      const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'to_contact', 'receiver_phone', 'receiver_ig', 'id']; const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }).click(); };
       const csvUsers = () => { const cols = ['created_at', 'name', 'phone', 'email', 'last_login_at', 'invites']; const blob = new Blob([[cols.join(',')].concat(d.users.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-users.csv' }).click(); };
       const note = h('div');
       const views = {
@@ -897,10 +942,10 @@ async function admin() {
             h('div', { class: 'hint' }, 'Passwords are stored scrambled (nobody can read them). Reset gives a temporary one.')),
           h('button', { class: 'btn sm', onclick: async () => { if (!confirm('Reset the password for +' + u.phone + '?')) return; try { const r = await API.adminReset(key, u.phone); note.replaceChildren(h('div', { class: 'note' }, 'Temporary password for +' + r.phone + ': ', h('b', null, r.temp), '. Send it to them; they can change it with “Forgot password”.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Reset password')))],
         invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ new')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone ? h('div', null, h('b', null, 'Receiver: '), wa(r.receiver_phone)) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), h('div', null, h('b', null, 'For: '), contactLink(r.to_contact)), r.receiver_phone || r.receiver_ig ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
           (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey'), slot); })()))],
         answers: () => d.answers.map((a) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `💖 ${a.to_name || '?'} → ${a.sender_name || '?'}`), h('span', { class: 'hint' }, ago(a.at))),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(a.sender_phone)), a.receiver_phone ? h('div', null, h('b', null, 'Receiver: '), wa(a.receiver_phone)) : null, a.answer && a.answer.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.answer.date) + (a.answer.time ? ' · ' + fmtTime(a.answer.time) : '') + (a.answer.act ? ' · ' + a.answer.act : '')) : null),
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(a.sender_phone)), a.receiver_phone || a.receiver_ig ? h('div', null, h('b', null, 'Receiver: '), a.receiver_phone ? wa(a.receiver_phone) : null, a.receiver_phone && a.receiver_ig ? ' · ' : '', a.receiver_ig ? contactLink('@' + a.receiver_ig) : null) : null, a.answer && a.answer.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.answer.date) + (a.answer.time ? ' · ' + fmtTime(a.answer.time) : '') + (a.answer.act ? ' · ' + a.answer.act : '')) : null),
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
       };
       const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),

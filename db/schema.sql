@@ -54,3 +54,7 @@ create table if not exists push_subs (
 );
 create index if not exists push_subs_user_idx on push_subs(user_id);
 alter table invites add column if not exists last_notified_at timestamptz;
+
+-- Who the invite is for (their WhatsApp number or @instagram) and what the receiver left at the end.
+alter table invites add column if not exists to_contact text;
+alter table responses add column if not exists receiver_ig text;
