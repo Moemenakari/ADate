@@ -389,7 +389,7 @@ function footer() {
   return h('footer', { class: 'foot' },
     h('div', { class: 'star' }, '⭐ Like this free demo? Star it on GitHub and play it with your partner 💕'),
     h('a', { class: 'btn pri', href: GITHUB, target: '_blank', rel: 'noopener' }, '⭐ Star on GitHub'),
-    h('div', { class: 'by' }, 'Programming by ', h('a', { href: GITHUB, target: '_blank', rel: 'noopener' }, 'the author'), ' · ', h('a', { href: '#/privacy' }, 'Privacy')));
+    h('div', { class: 'by' }, h('a', { href: '#/privacy' }, 'Privacy')));
 }
 const myInvites = () => store.get('adate.mine', []);
 function rememberInvite(rec) { const l = myInvites().filter((x) => x.id !== rec.id); l.unshift(rec); store.set('adate.mine', l.slice(0, 30)); }

@@ -1,6 +1,6 @@
 # ADate 🐱💌
 
-> A personal project by **the author**: a small, smart idea with a lot of room to grow.
+> A personal project: a small, smart idea with a lot of room to grow.
 
 ADate turns "will you go out with me?" into a little experience. Pick a vibe, add a name and a few stickers, and send a link. The other person says yes, picks a day, a time and a plan, and the answer comes back to you on WhatsApp and in your own inbox. The "No" button, of course, never wins.
 
@@ -52,4 +52,4 @@ We store names, the WhatsApp numbers entered, the invite (including uploaded pic
     python3 -m http.server 8000     # demo mode, http://localhost:8000
 
 ## Credits
-Built by **the author** (idea, design, product and decisions), using AI tools as a coding helper. See `ROADMAP.md` for what comes next.
+Built with AI tools as a coding helper. See `ROADMAP.md` for what comes next.
