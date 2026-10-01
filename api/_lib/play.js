@@ -1,11 +1,11 @@
 // Truth or Dare, five levels. Level 1 is free; the others are opened for 24 hours with points.
-// Age limits are checked here on the server: level 3 from 16, level 4 from 18, level 5 from 25.
+// Age limits are checked here on the server: levels 1 to 3 from 13, level 4 from 18, level 5 from 25.
 const { ageOf } = require('./community');
 
 const LEVELS = {
   1: { name: 'Friendly', min: 13, price: 0 },
   2: { name: 'Normal', min: 13, price: 10 },
-  3: { name: 'Mixed', min: 16, price: 4 },
+  3: { name: 'Mixed', min: 13, price: 4 },
   4: { name: 'Flirty', min: 18, price: 10 },
   5: { name: 'Spicy', min: 25, price: 25 }
 };
