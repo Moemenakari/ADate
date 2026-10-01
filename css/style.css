@@ -39,7 +39,7 @@ a{color:var(--accent-d)}
 /* ---------- forms ---------- */
 label.f{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.92rem}
 label.f small{font-weight:400;color:var(--muted)}
-input[type=text],input[type=date],input[type=time],input[type=tel],select,textarea{width:100%;min-height:48px;border:2px solid var(--line);border-radius:16px;padding:.6em .85em;background:var(--surface);outline:0;font-size:1rem}
+input[type=text],input[type=password],input[type=date],input[type=time],input[type=tel],select,textarea{width:100%;min-height:48px;border:2px solid var(--line);border-radius:16px;padding:.6em .85em;background:var(--surface);outline:0;font-size:1rem}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 textarea{min-height:110px;resize:vertical}
 input[type=color]{width:56px;height:44px;border:2px solid var(--line);border-radius:14px;padding:2px;background:var(--surface)}
@@ -251,3 +251,10 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .fine{font-size:.62em;opacity:.7;margin:2.5cqw 0 0}
 .journey summary{font-weight:700;cursor:pointer}
 .journey .badge{font-size:.72rem}
+
+/* password fields: always readable, with an eye to show what you typed */
+.pwbox{position:relative;width:100%}
+.pwbox input{padding-right:3.2em}
+.pwbox .eye{position:absolute;right:.4em;top:50%;transform:translateY(-50%);width:2.4em;height:2.4em;border:0;border-radius:50%;background:transparent;font-size:1.15rem;line-height:1;cursor:pointer}
+.tabs2{display:flex;gap:8px}.tabs2 .chip{flex:1;text-align:center}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.85rem}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}

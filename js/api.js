@@ -12,18 +12,20 @@
   }
   async function ping() {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
-    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; if (j && j.vapid) API.vapid = j.vapid; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
+    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; if (j && j.vapid) API.vapid = j.vapid; if (j && j.google) API.google = j.google; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
   }
   const visitor = () => { try { let v = localStorage.getItem('adate.visitor'); if (!v) { v = rnd(12, 'abcdefghjkmnpqrstuvwxyz23456789'); localStorage.setItem('adate.visitor', v); } return v; } catch (e) { return 'anon'; } };
   const KEY = 'adate.session';
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
   const write = (v) => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } };
   const tok = () => (read() || {}).token;
-  const keep = (r) => { write({ token: r.session, phone: r.user.phone, name: r.user.name || '' }); return r; };
+  const stash = (u, token) => write({ token: token || tok(), phone: u.phone || '', name: u.name || '', profile_done: !!u.profile_done, google: !!u.google });
+  const keep = (r) => { stash(r.user, r.session); return r; };
   const API = {
     enabled: false,
     questions: [],
     vapid: null,
+    google: null,
     get session() { return read(); },
     clear: () => write(null),
     newId: () => rnd(8, 'abcdefghjkmnpqrstuvwxyz23456789'),
@@ -33,7 +35,10 @@
     recoverQuestion: (phone) => call('recover_question', { phone }),
     recover: (phone, answer, password) => call('recover', { phone, answer, password }).then(keep),
     logout: () => call('logout', { session: tok() }).catch(() => {}).then(() => write(null)),
-    me: () => call('me', { session: tok() }),
+    me: () => call('me', { session: tok() }).then((r) => { if (r && r.user) stash(r.user); return r; }),
+    googleLogin: (credential) => call('google', { credential }).then(keep),
+    profileSet: (p) => call('profile_set', Object.assign({ session: tok() }, p)).then((r) => { stash(r.user); return r; }),
+    linkLegacy: (phone, password) => call('link_legacy', { session: tok(), phone, password }).then((r) => { stash(r.user); return r; }),
     inbox: (id) => call('inbox', { id, session: tok() }),
     create: (id, token, config, consent) => call('create', { id, token, config, consent, session: tok() }),
     update: (id, token, config) => call('update', { id, token, config, session: tok() }),

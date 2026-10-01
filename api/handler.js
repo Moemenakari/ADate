@@ -24,7 +24,18 @@ function checkConfig(c) {
 const igOk = (v) => (/^[A-Za-z0-9._]{1,30}$/.test(v) && !/^\.+$/.test(v) ? v : '');
 const contactOf = (v) => { const t = String(v || '').trim(); return t[0] === '@' ? (igOk(t.slice(1)) ? '@' + igOk(t.slice(1)) : '') : digits(t).slice(0, 16); };
 const cols = (c) => ({ name: String(c.from || '').slice(0, 60), phone: digits(c.contact).slice(0, 16), to: String(c.to || '').slice(0, 60), type: String(c.type || '').slice(0, 20), toc: contactOf(c.toContact) || null });
-const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email });
+const publicUser = (u) => ({ phone: u.phone, name: u.name, email: u.email, first_name: u.first_name || '', last_name: u.last_name || '', birthdate: u.birthdate ? String(u.birthdate).slice(0, 10) : '', interests: u.interests || [], profile_done: !!u.profile_done, google: !!u.google_sub });
+const ageOn = (iso) => { const d = new Date(iso + 'T00:00:00Z'), n = new Date(); let a = n.getUTCFullYear() - d.getUTCFullYear(); if (n.getUTCMonth() < d.getUTCMonth() || (n.getUTCMonth() === d.getUTCMonth() && n.getUTCDate() < d.getUTCDate())) a--; return a; };
+async function verifyGoogle(cred) { // the Google sign-in button gives the browser a signed token; Google itself tells us whether it is real and for our app
+  const cid = process.env.GOOGLE_CLIENT_ID;
+  if (!cid) throw bad('Google sign-in is not set up yet', 503);
+  if (typeof cred !== 'string' || cred.length < 50 || cred.length > 4000) throw bad('Bad sign-in', 401);
+  const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(cred));
+  if (!r.ok) throw bad('Google did not accept that sign-in', 401);
+  const t = await r.json();
+  if (t.aud !== cid || !['accounts.google.com', 'https://accounts.google.com'].includes(t.iss) || String(t.email_verified) !== 'true' || !t.sub || Number(t.exp) * 1000 < Date.now()) throw bad('Google did not accept that sign-in', 401);
+  return t;
+}
 
 async function newSession(sql, userId) {
   const t = crypto.randomBytes(24).toString('hex');
@@ -85,7 +96,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const action = String((req.query && req.query.action) || '');
   try {
-    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, vapid: process.env.VAPID_PUBLIC_KEY || null });
+    if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, vapid: process.env.VAPID_PUBLIC_KEY || null, google: process.env.GOOGLE_CLIENT_ID || null });
     if (req.method !== 'POST') throw bad('POST only', 405);
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
@@ -112,9 +123,43 @@ module.exports = async (req, res) => {
       const r = await sql`select * from users where phone = ${phone}`;
       if (!r.length) throw bad('Wrong number or password', 401);
       const u = r[0]; await checkLock(sql, u);
-      if (!eq(kdf(b.password || '', u.pass_salt), u.pass_hash)) { await fail(sql, u); throw bad('Wrong number or password', 401); }
+      if (!u.pass_hash || !eq(kdf(b.password || '', u.pass_salt), u.pass_hash)) { await fail(sql, u); throw bad('Wrong number or password', 401); }
       await sql`update users set fails = 0, last_login_at = now() where id = ${u.id}`;
       return res.status(200).json({ session: await newSession(sql, u.id), user: publicUser(u) });
+    }
+    if (action === 'google') {
+      const t = await verifyGoogle(b.credential);
+      let r = await sql`select * from users where google_sub = ${t.sub}`;
+      if (!r.length) r = await sql`insert into users (google_sub, email, name, first_name, last_name) values (${t.sub}, ${String(t.email || '').slice(0, 120)}, ${String(t.given_name || t.name || '').slice(0, 60)}, ${String(t.given_name || '').slice(0, 40)}, ${String(t.family_name || '').slice(0, 40)}) returning *`;
+      await sql`update users set last_login_at = now() where id = ${r[0].id}`;
+      return res.status(200).json({ session: await newSession(sql, r[0].id), user: publicUser(r[0]) });
+    }
+    if (action === 'profile_set') {
+      const u = await userOf(sql, b.session);
+      const first = String(b.first_name || '').trim().slice(0, 40), last = String(b.last_name || '').trim().slice(0, 40), phone = digits(b.phone);
+      if (!first || !last) throw bad('Add your first and last name');
+      if (phone.length < 8 || phone.length > 15) throw bad('That number does not look right');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(b.birthdate || '') || isNaN(new Date(b.birthdate))) throw bad('Pick your birthday');
+      const age = ageOn(b.birthdate); if (age < 13) throw bad('ADate is for ages 13 and up'); if (age > 100) throw bad('That birthday does not look right');
+      const interests = Array.isArray(b.interests) ? [...new Set(b.interests.map((x) => String(x).trim().slice(0, 30)).filter(Boolean))].slice(0, 10) : [];
+      if (interests.length < 1) throw bad('Pick at least one interest');
+      const clash = await sql`select id from users where phone = ${phone} and id <> ${u.id}`;
+      if (clash.length) throw bad('This number is already used by another account. If it is your older ADate account, use “Link my old account”.', 409);
+      const r = await sql`update users set first_name = ${first}, last_name = ${last}, name = ${first}, phone = ${phone}, birthdate = ${b.birthdate}::date, interests = ${interests}, profile_done = true where id = ${u.id} returning *`;
+      return res.status(200).json({ user: publicUser(r[0]) });
+    }
+    if (action === 'link_legacy') { // bring the invites of an older phone+password account into this one
+      const u = await userOf(sql, b.session);
+      const r = await sql`select * from users where phone = ${digits(b.phone)} and pass_hash is not null`;
+      if (!r.length || r[0].id === u.id) throw bad('Wrong number or password', 401);
+      const old = r[0]; await checkLock(sql, old);
+      if (!eq(kdf(b.password || '', old.pass_salt), old.pass_hash)) { await fail(sql, old); throw bad('Wrong number or password', 401); }
+      await sql`update invites set user_id = ${u.id} where user_id = ${old.id}`;
+      await sql`update push_subs set user_id = ${u.id} where user_id = ${old.id}`;
+      await sql`delete from users where id = ${old.id}`;
+      if (!u.phone) await sql`update users set phone = ${old.phone} where id = ${u.id}`;
+      const n = await sql`select * from users where id = ${u.id}`;
+      return res.status(200).json({ user: publicUser(n[0]) });
     }
     if (action === 'recover_question') {
       const r = await sql`select question from users where phone = ${digits(b.phone)}`;
@@ -169,10 +214,12 @@ module.exports = async (req, res) => {
       if (!ID.test(b.id || '') || !TOK.test(b.token || '')) throw bad('Bad id');
       if (b.consent !== true) throw bad('Please accept the privacy note');
       const u = await userOf(sql, b.session);
+      if (!u.profile_done) throw bad('Finish your profile first', 403);
       checkConfig(b.config);
       const c = cols(b.config);
+      if (!c.toc) throw bad('Add their WhatsApp number or Instagram');
       await sql`insert into invites (id, token_hash, config, sender_name, sender_phone, to_name, type, consent, user_id, to_contact)
-                values (${b.id}, ${hash(b.token)}, ${JSON.stringify(b.config)}::jsonb, ${c.name}, ${c.phone || u.phone}, ${c.to}, ${c.type}, true, ${u.id}, ${c.toc})`;
+                values (${b.id}, ${hash(b.token)}, ${JSON.stringify(b.config)}::jsonb, ${c.name}, ${u.phone || c.phone}, ${c.to}, ${c.type}, true, ${u.id}, ${c.toc})`;
       return res.status(200).json({ ok: true });
     }
     if (action === 'update') {
@@ -247,16 +294,17 @@ module.exports = async (req, res) => {
         await sql`delete from sessions where user_id = ${r[0].id}`;
         return res.status(200).json({ phone, temp });
       }
-      const users = await sql`select u.id, u.phone, u.name, u.email, u.created_at, u.last_login_at, u.question,
+      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
           (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
       const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
+          i.first_opened_at, i.last_opened_at, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,
           (select count(*) from responses r where r.invite_id = i.id)::int as answers,
           (select max(created_at) from responses r where r.invite_id = i.id) as last_answer_at,
           (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone,
           (select r.receiver_ig from responses r where r.invite_id = i.id and r.receiver_ig is not null order by r.created_at desc limit 1) as receiver_ig,
           (select r.answer->>'src' from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_src
         from invites i order by i.created_at desc limit 1000`;
-      const answers = await sql`select r.created_at as at, r.message, r.receiver_phone, r.receiver_ig, r.answer, i.sender_name, i.to_name, i.sender_phone
+      const answers = await sql`select r.invite_id, r.created_at as at, r.message, r.receiver_phone, r.receiver_ig, r.answer, i.sender_name, i.to_name, i.sender_phone
         from responses r join invites i on i.id = r.invite_id order by r.created_at desc limit 100`;
       const stats = {
         users: users.length, invites: invites.length, opened: invites.filter((r) => r.opens > 0).length, answered: invites.filter((r) => r.answers > 0).length,

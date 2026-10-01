@@ -58,3 +58,14 @@ alter table invites add column if not exists last_notified_at timestamptz;
 -- Who the invite is for (their WhatsApp number or @instagram) and what the receiver left at the end.
 alter table invites add column if not exists to_contact text;
 alter table responses add column if not exists receiver_ig text;
+
+-- Sign in with Google, then a profile (name, number, birthday, interests) before the ADate game.
+alter table users alter column phone drop not null;
+alter table users alter column pass_salt drop not null;
+alter table users alter column pass_hash drop not null;
+alter table users add column if not exists google_sub text unique;
+alter table users add column if not exists first_name text;
+alter table users add column if not exists last_name text;
+alter table users add column if not exists birthdate date;
+alter table users add column if not exists interests text[];
+alter table users add column if not exists profile_done boolean not null default false;

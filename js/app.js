@@ -406,7 +406,7 @@ function buildStage(cfg, opts) {
     const needContact = !!(opts.inviteId && window.API && API.enabled);   // the preview in the editor does not ask
     let me = { contact: '', ig: '', src: '' }, sendBtn = null;
     const mine = waPicker(cfg.cc, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; });
-    const contactBox = needContact ? h('div', { class: 'stack', style: 'margin-top:1cqw' }, h('b', { style: 'font-size:.75em' }, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.`), mine) : null;
+    const contactBox = h('div', { class: 'stack', style: 'margin-top:1cqw' }, h('b', { style: 'font-size:.75em' }, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, needContact ? `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.` : '👀 Preview: she must add her own WhatsApp number here before she can send.'), mine);
     const waOn = !!(cfg.contact && cfg.waReply);
     const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with ADate · ${location.host}_`;
     const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(waText(m))}`;
@@ -453,8 +453,6 @@ function buildStage(cfg, opts) {
 /* ------------------------------------------------------------------ shared pieces */
 function footer() {
   return h('footer', { class: 'foot' },
-    h('div', { class: 'star' }, '⭐ Like this free demo? Star it on GitHub and play it with your partner 💕'),
-    h('a', { class: 'btn pri', href: GITHUB, target: '_blank', rel: 'noopener' }, '⭐ Star on GitHub'),
     h('div', { class: 'by' }, h('a', { href: '#/privacy' }, 'Privacy')));
 }
 const myInvites = () => store.get('adate.mine', []);
@@ -494,10 +492,9 @@ function home() {
   }).catch((e) => { if (/log in/i.test(e.message)) API.clear(); });
   const stk = (id, st) => { const d = h('div', { class: 'stk', style: st }); d.innerHTML = svgIcon(id); return d; };
   $app.replaceChildren(h('div', { class: 'wrap' },
-    h('a', { class: 'promo', href: GITHUB, target: '_blank', rel: 'noopener' }, '⭐ Free demo · Star it on GitHub and play it with your partner'),
     notif,
     h('div', { class: 'topbar' }, h('div', { class: 'brand' }, '🐱 A', h('b', null, 'Date')),
-      API.enabled ? (API.session ? h('a', { class: 'btn sm pri', href: '#/mine' }, '📬 Inbox ', badge) : h('a', { class: 'btn sm', href: '#/login' }, 'Log in')) : h('span', { class: 'pill' }, 'Free demo')),
+      API.enabled ? (API.session ? h('a', { class: 'btn sm pri', href: '#/mine' }, '📬 Inbox ', badge) : [h('a', { class: 'btn sm', href: '#/login' }, 'Log in'), h('a', { class: 'btn sm pri', href: '#/signup' }, 'Sign up')]) : null),
     h('div', { class: 'hero' }, h('div', { class: 'stks' }, stk('cat-orange', 'animation-delay:-1s'), stk('cat-love', 'width:72px'), stk('cat-white', 'animation-delay:-2s')),
       h('h1', null, 'Create your private invite'), h('p', null, 'For your girlfriend, your boyfriend, a friend or your birthday. Add their name, pick a vibe, and send a link with a sneaky “No” button.')),
     draft ? h('div', { class: 'row', style: 'justify-content:center;margin-bottom:6px' }, h('button', { class: 'btn pri sm', onclick: () => (location.hash = '#/make') }, '✏️ Continue my invite')) : null,
@@ -521,6 +518,8 @@ function editor() {
   let cfg = store.get('adate.draft', null);
   if (!cfg) { location.hash = '#/'; return; }
   cfg = sanitize(cfg);
+  const me = API.enabled ? API.session : null;                       // signed in: the number and name come from the profile, nothing to type twice
+  if (me && me.phone) { cfg.contact = digits(me.phone); cfg.phone = ''; if (!cfg.from) cfg.from = me.name || ''; }
   let step = clamp(store.get('adate.step', 0) | 0, 0, 6), sel = null, mode = 'edit', screen = 'ask';
   const meta = () => store.get('adate.draftmeta', null); // {id, token} once the invite exists
   const save = () => store.set('adate.draft', cfg);
@@ -600,7 +599,9 @@ function editor() {
       plain('Your name', 'from', { ph: 'e.g. Sam' }), plain('Their name', 'to', { ph: 'e.g. Lina' }),
       h('div', { class: 'stack' }, h('b', null, 'The vibe of your words'), h('p', { class: 'hint' }, 'The ✨ suggestions will write in this style.'),
         h('div', { class: 'row' }, AI.VIBES.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.vibe === id ? 'true' : 'false', onclick: (e) => { cfg.vibe = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
-      phoneField()
+      h('div', { class: 'stack' }, h('b', null, 'Their WhatsApp number or Instagram *'), h('p', { class: 'hint' }, 'The person this is for. Only you and the site owner see it.'),
+        contactPicker({ kind: cfg.toKind, cc: cfg.toCc, phone: cfg.toPhone, ig: cfg.toIg }, (v) => { cfg.toKind = v.kind; cfg.toCc = v.cc; cfg.toPhone = v.phone; cfg.toIg = v.ig; cfg.toContact = v.contact; save(); })),
+      me && me.phone ? h('label', { class: 'row', style: 'gap:10px' }, h('input', { type: 'checkbox', checked: cfg.waReply, onchange: (e) => { cfg.waReply = e.target.checked; save(); } }), 'Let them also reply to me on WhatsApp (+' + me.phone + ')') : phoneField()
     ];
   }
   function stepWords() {
@@ -685,32 +686,19 @@ function editor() {
   function stepSend() {
     const out = h('div', { class: 'sharebox' });
     const consent = h('input', { type: 'checkbox', id: 'consent', checked: store.get('adate.consent', false), onchange: (e) => store.set('adate.consent', e.target.checked) });
-    const acct = { mode: 'signup', password: '', email: '', question: (API.questions || [])[0] || 'What is your pet’s name?', answer: '' };
     const needAcct = () => API.enabled && !API.session;
-    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)',
-      needAcct() && acct.password.length < 6 && 'a password (6+ characters)', needAcct() && acct.mode === 'signup' && acct.answer.trim().length < 2 && 'an answer to the security question',
+    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)', !cfg.toContact && 'their WhatsApp number or Instagram (step 1)',
       API.enabled && !consent.checked && 'tick the privacy box below'].filter(Boolean);
     function acctBlock() {
       if (!API.enabled) return null;
       const sess = API.session;
-      if (sess) return h('div', { class: 'note' }, '✅ Logged in as +' + sess.phone + '. ', h('button', { class: 'btn sm', onclick: async () => { await API.logout(); drawBody(); } }, 'Not you? Log out'));
-      const login = acct.mode === 'login';
-      const pw = h('input', { type: 'password', autocomplete: login ? 'current-password' : 'new-password', placeholder: login ? 'Your password' : 'Choose a password (6+ characters)', value: acct.password, 'aria-label': 'Password', oninput: (e) => { acct.password = e.target.value; } });
-      return h('div', { class: 'stepbox' }, h('b', null, login ? '🔐 Log in' : '🔐 Create your account'),
-        h('p', { class: 'hint', style: 'margin:0' }, (login ? 'Welcome back. ' : 'So you can read their answer anytime, on any phone. ') + 'Your login is your WhatsApp number' + (cfg.contact ? ': +' + cfg.contact : '') + '.'), pw,
-        login ? h('a', { href: '#/recover', class: 'hint' }, 'Forgot your password?') : [
-          h('input', { type: 'text', autocomplete: 'email', inputmode: 'email', placeholder: 'Email (optional)', value: acct.email, 'aria-label': 'Email', oninput: (e) => { acct.email = e.target.value; } }),
-          h('label', { class: 'f' }, 'If you forget your password:', h('select', { onchange: (e) => { acct.question = e.target.value; } }, ((API.questions && API.questions.length) ? API.questions : [acct.question]).map((q) => h('option', { value: q, selected: q === acct.question }, q)))),
-          h('input', { type: 'text', placeholder: 'Your answer', value: acct.answer, 'aria-label': 'Security answer', oninput: (e) => { acct.answer = e.target.value; } })],
-        h('button', { class: 'btn sm', onclick: () => { acct.mode = login ? 'signup' : 'login'; out.replaceChildren(warn(), ...ask()); } }, login ? 'New here? Create an account' : 'I already have an account'));
+      if (sess) return h('div', { class: 'note' }, '✅ Signed in as ' + (sess.name || '+' + sess.phone) + '. ', h('button', { class: 'btn sm', onclick: async () => { await API.logout(); store.set('adate.after', '#/make'); location.hash = '#/login'; } }, 'Not you? Log out'));
+      return h('div', { class: 'note' }, 'Please sign in first. ', h('a', { href: '#/login', onclick: () => store.set('adate.after', '#/make') }, 'Sign in →'));
     }
     const warn = () => { const p = problems(); return p.length ? h('div', { class: 'note' }, 'Almost there. Still needed: ' + p.join(', ') + '.') : null; };
     async function publish(createNew) {
       if (problems().length) { out.replaceChildren(warn(), ...ask()); return; }
-      if (needAcct()) {
-        try { if (acct.mode === 'login') await API.login(cfg.contact, acct.password); else await API.signup({ phone: cfg.contact, name: cfg.from, email: acct.email, password: acct.password, question: acct.question, answer: acct.answer }); }
-        catch (e) { if (/already has an account/i.test(e.message)) acct.mode = 'login'; out.replaceChildren(h('div', { class: 'note' }, e.message), ...ask()); return; }
-      }
+      if (needAcct()) { store.set('adate.after', '#/make'); location.hash = '#/login'; return; }
       out.replaceChildren(h('p', { class: 'hint spark' }, '✨ creating your link…'));
       try {
         let link, priv, m = meta();
@@ -729,7 +717,7 @@ function editor() {
           h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: async (e) => { e.currentTarget.textContent = (await copyText(link)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy link'),
             h('a', { class: 'btn', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
             navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text: msg }).catch(() => {}) }, 'Share…') : null),
-          priv ? h('div', { class: 'note' }, h('b', null, '📬 Her answer lands in your inbox. '), 'Log in with your number any time to read it. A big card shows up when she answers.',
+          priv ? h('div', { class: 'note' }, h('b', null, '📬 Her answer lands in your inbox. '), 'Sign in any time to read it. A big card shows up when she answers.',
             h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: '#/mine' }, '📬 Open my inbox'),
               h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(priv)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy backup link (no login)'),
               cfg.contact ? h('a', { class: 'btn sm', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + cfg.contact + '?text=' + encodeURIComponent('My ADate inbox: ' + location.href.split('#')[0] + '#/mine') }, '📲 Save it on my WhatsApp') : null)) : null,
@@ -738,6 +726,7 @@ function editor() {
     }
     const m = meta();
     const ask = () => [acctBlock(), API.enabled ? h('label', { class: 'row', style: 'gap:10px;align-items:flex-start', for: 'consent' }, consent, h('span', { class: 'hint' }, 'I agree that ADate keeps this invite, my number and their answer so it can be delivered to me. ', h('a', { href: '#/privacy' }, 'Privacy'))) : null,
+      h('div', { class: 'note' }, '📲 On the last page ' + (cfg.to || 'they') + ' must add their own WhatsApp number (picked from their contacts when the phone allows it) before sending. You will see it in your inbox. Their Instagram is optional.'),
       h('p', { class: 'hint' }, 'Happy with it? Try the whole thing once, then create the link.'),
       h('button', { class: 'btn block', onclick: openPreview }, '▶ Try it like they will'),
       h('button', { class: 'btn pri block', onclick: () => publish(false) }, API.enabled && m ? 'Save changes to my link' : 'Create my link')].filter(Boolean);
@@ -786,17 +775,106 @@ function authShell(title, ...kids) {
   $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
     h('div', { class: 'panel stack' }, h('h2', { style: 'margin:0' }, title), ...kids), footer()));
 }
-function login() {
-  document.title = 'ADate – Log in';
-  const ph = phoneInputs('961'), pw = h('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Password', 'aria-label': 'Password' }), msg = h('div');
-  const go = async () => {
+const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['🎬', 'Movies & series'], ['⚽', 'Football'], ['💪', 'Gym & fitness'], ['✈️', 'Travel'], ['🍳', 'Cooking'], ['🐶', 'Animals'], ['🎨', 'Art & drawing'], ['📷', 'Photography'], ['💻', 'Tech & coding'],
+  ['👗', 'Fashion'], ['🌿', 'Nature & hiking'], ['🍥', 'Anime'], ['☕', 'Coffee spots'], ['🎤', 'Singing'], ['💃', 'Dancing'], ['🧠', 'Psychology'], ['🚗', 'Cars'], ['🏖️', 'Beach'], ['🎲', 'Board games'], ['✍️', 'Writing'], ['🗣️', 'Languages']];
+function goAfterAuth() {
+  const s = API.session, to = store.get('adate.after', null);
+  if (to === '#/make' && s && !s.profile_done) { location.hash = '#/profile'; return; }
+  store.set('adate.after', null); location.hash = to || (s && !s.profile_done ? '#/profile' : '#/');
+}
+function loadGsi() {
+  return new Promise((ok) => {
+    if (window.google && window.google.accounts) return ok();
+    const sc = h('script', { src: 'https://accounts.google.com/gsi/client', async: '', onload: () => ok(), onerror: () => ok() }); document.head.append(sc);
+  });
+}
+/** The "Continue with Google" button. */
+function googleButton(onError) {
+  const host = h('div', { style: 'display:flex;justify-content:center;min-height:44px' }, h('span', { class: 'hint spark' }, 'Loading Google…'));
+  loadGsi().then(() => {
+    if (!(window.google && window.google.accounts)) { host.replaceChildren(h('span', { class: 'hint' }, 'Could not load Google. Check your connection.')); return; }
+    google.accounts.id.initialize({ client_id: API.google, callback: async (r) => { try { await API.googleLogin(r.credential); goAfterAuth(); } catch (e) { onError(e.message); } } });
+    host.replaceChildren(); google.accounts.id.renderButton(host, { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', width: 280 });
+  });
+  return host;
+}
+/** Password box: dark readable text and an eye to show/hide what you typed. */
+function pwField(placeholder, autocomplete) {
+  const inp = h('input', { type: 'password', autocomplete, placeholder, 'aria-label': placeholder });
+  const eye = h('button', { type: 'button', class: 'eye', 'aria-label': 'Show password', onclick: () => { const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; eye.textContent = show ? '🙈' : '👁️'; eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); } }, '👁️');
+  const box = h('div', { class: 'pwbox' }, inp, eye); box.input = inp; return box;
+}
+function login(mode) {
+  mode = mode === 'signup' ? 'signup' : 'login';
+  document.title = 'ADate – ' + (mode === 'signup' ? 'Sign up' : 'Log in');
+  const ph = phoneInputs('961'), msg = h('div'), pw = pwField(mode === 'signup' ? 'Create a password (6+ characters)' : 'Password', mode === 'signup' ? 'new-password' : 'current-password');
+  const pw2 = pwField('Type the password again', 'new-password');
+  const Q = (API.questions && API.questions.length) ? API.questions : ['What is your pet’s name?'], qa = { q: Q[0], a: h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }) };
+  const submit = async () => {
     if (!ph.value) return msg.replaceChildren(h('div', { class: 'note' }, 'Check your number first.'));
-    msg.replaceChildren(h('p', { class: 'hint spark' }, 'Logging in…'));
-    try { await API.login(ph.value, pw.value); location.hash = '#/mine'; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
+    if (mode === 'signup') {
+      if (pw.input.value.length < 6) return msg.replaceChildren(h('div', { class: 'note' }, 'Password needs at least 6 characters.'));
+      if (pw.input.value !== pw2.input.value) return msg.replaceChildren(h('div', { class: 'note' }, 'The two passwords are not the same.'));
+      if (qa.a.value.trim().length < 2) return msg.replaceChildren(h('div', { class: 'note' }, 'Answer the security question, it helps you get back in.'));
+    }
+    msg.replaceChildren(h('p', { class: 'hint spark' }, mode === 'signup' ? 'Creating your account…' : 'Logging in…'));
+    try {
+      if (mode === 'signup') await API.signup({ phone: ph.value, name: '', password: pw.input.value, question: qa.q, answer: qa.a.value });
+      else await API.login(ph.value, pw.input.value);
+      goAfterAuth();
+    } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message), /already has an account/i.test(e.message) ? h('button', { class: 'btn sm', onclick: () => login('login') }, 'Log in instead') : null); }
   };
-  pw.onkeydown = (e) => { if (e.key === 'Enter') go(); };
-  authShell('📬 Log in to your inbox', h('p', { class: 'hint' }, 'Your login is your WhatsApp number. Lebanon: just the 8 digits.'), phoneRow(ph.sel, ph.inp), pw,
-    h('button', { class: 'btn pri block', onclick: go }, 'Log in'), msg, h('a', { href: '#/recover' }, 'Forgot your password?'), h('a', { href: '#/' }, 'No account yet? Create an invite →'));
+  pw.input.onkeydown = (e) => { if (e.key === 'Enter' && mode === 'login') submit(); };
+  const tabs = h('div', { class: 'tabs2' }, [['login', 'Log in'], ['signup', 'Sign up']].map(([m, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': m === mode ? 'true' : 'false', onclick: () => login(m) }, l)));
+  const form = h('div', { class: 'stack' }, h('p', { class: 'hint' }, mode === 'signup' ? 'Your number is your login. Lebanon: just the 8 digits.' : 'Your WhatsApp number and your password.'), phoneRow(ph.sel, ph.inp), pw,
+    mode === 'signup' ? [pw2, h('label', { class: 'f' }, 'If you forget your password:', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), qa.a] : null,
+    h('button', { class: 'btn pri block', onclick: submit }, mode === 'signup' ? 'Create my account' : 'Log in'), mode === 'login' ? h('a', { href: '#/recover' }, 'Forgot your password?') : null);
+  authShell(mode === 'signup' ? '✨ Create your account' : '📬 Welcome back', tabs,
+    API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, msg, h('a', { href: '#/' }, '← Back'));
+}
+/** After signing in: name, number, birthday and interests. Needed once, before the ADate game. */
+function profile() {
+  document.title = 'ADate – Your profile';
+  if (!API.session) { location.hash = '#/login'; return; }
+  const st = { first: '', last: '', d: '', m: '', y: '', interests: new Set() }, ph = phoneInputs('961'), msg = h('div'), host = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
+  const draw = () => {
+    const chips = h('div', { class: 'row' }, INTERESTS.map(([e, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': st.interests.has(l) ? 'true' : 'false', onclick: (ev) => {
+      if (st.interests.has(l)) st.interests.delete(l); else if (st.interests.size < 10) st.interests.add(l); else { msg.replaceChildren(h('div', { class: 'note' }, 'Up to 10 interests.')); return; }
+      ev.currentTarget.setAttribute('aria-pressed', st.interests.has(l) ? 'true' : 'false'); count.textContent = st.interests.size + ' / 10'; msg.replaceChildren(); } }, e + ' ' + l)));
+    const count = h('span', { class: 'hint' }, st.interests.size + ' / 10');
+    const sel = (key, opts, ph0) => h('select', { 'aria-label': ph0, onchange: (e) => { st[key] = e.target.value; } }, h('option', { value: '' }, ph0), opts.map(([v, l]) => h('option', { value: v, selected: String(st[key]) === String(v) }, l)));
+    const yr = new Date().getFullYear();
+    const save = async () => {
+      const bd = st.y && st.m && st.d ? `${st.y}-${String(st.m).padStart(2, '0')}-${String(st.d).padStart(2, '0')}` : '';
+      const age = bd ? Math.floor((Date.now() - new Date(bd + 'T00:00:00Z')) / 31557600000) : 0;
+      const bad = !st.first.trim() ? 'Add your first name.' : !st.last.trim() ? 'Add your last name.' : !ph.value ? 'Check your WhatsApp number.' : !bd || isNaN(new Date(bd)) ? 'Pick your birthday.' : age < 13 ? 'ADate is for ages 13 and up.' : !st.interests.size ? 'Pick at least one interest.' : '';
+      if (bad) return msg.replaceChildren(h('div', { class: 'note' }, bad));
+      msg.replaceChildren(h('p', { class: 'hint spark' }, 'Saving…'));
+      try { await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, birthdate: bd, interests: [...st.interests] }); store.set('adate.after', store.get('adate.after', null) || '#/make'); goAfterAuth(); }
+      catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
+    };
+    const lp = h('input', { type: 'tel', inputmode: 'numeric', placeholder: 'Old number', 'aria-label': 'Old phone number' }), lwb = pwField('Old password', 'current-password'), lw = lwb.input, lmsg = h('div');
+    const link = h('details', null, h('summary', { class: 'hint' }, 'Link my old account (number + password)'), h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'Brings the invites and answers of your older account into this one.'), lp, lwb,
+      h('button', { class: 'btn sm', onclick: async () => { try { await API.linkLegacy(digits(lp.value), lw.value); lmsg.replaceChildren(h('div', { class: 'note' }, '✅ Linked. Your old invites are here now.')); } catch (e) { lmsg.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Link it'), lmsg));
+    host.replaceChildren(
+      h('div', { class: 'fieldrow' }, h('input', { type: 'text', placeholder: 'First name', value: st.first, autocomplete: 'given-name', 'aria-label': 'First name', oninput: (e) => { st.first = e.target.value; } }), h('input', { type: 'text', placeholder: 'Last name', value: st.last, autocomplete: 'family-name', 'aria-label': 'Last name', oninput: (e) => { st.last = e.target.value; } })),
+      h('b', null, 'Your WhatsApp number *'), phoneRow(ph.sel, ph.inp),
+      h('b', null, 'Your birthday *'), h('div', { class: 'fieldrow' }, sel('d', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]), 'Day'), sel('m', MONTHS.map((n, i) => [i + 1, n]), 'Month'), sel('y', Array.from({ length: 88 }, (_, i) => [yr - 13 - i, String(yr - 13 - i)]), 'Year')),
+      h('div', { class: 'row', style: 'justify-content:space-between' }, h('b', null, 'Your interests * (pick up to 10)'), count), chips,
+      h('button', { class: 'btn pri block', onclick: save }, 'Save and continue'), msg, link);
+  };
+  (async () => {
+    try {
+      const u = (await API.me()).user || {};
+      st.first = u.first_name || u.name || ''; st.last = u.last_name || '';
+      if (u.birthdate) { const [y, m, d] = u.birthdate.split('-').map(Number); st.y = y; st.m = m; st.d = d; }
+      (u.interests || []).forEach((i) => st.interests.add(i));
+      if (u.phone) { const c = COUNTRIES.map((x) => x[0]).sort((a, b) => b.length - a.length).find((x) => u.phone.startsWith(x)); if (c) { ph.sel.value = c; ph.inp.value = u.phone.slice(c.length); } }
+      if (u.profile_done && store.get('adate.after', null) === '#/make') return goAfterAuth();
+    } catch (e) { if (/log in/i.test(e.message)) { API.clear(); location.hash = '#/login'; return; } }
+    draw();
+  })();
+  authShell('👤 Tell us about you', h('p', { class: 'hint' }, 'Once, before your first invite. Your number is only used so people can answer you on WhatsApp. Nobody else sees your birthday.'), host);
 }
 function recover() {
   document.title = 'ADate – Reset password';
@@ -805,8 +883,8 @@ function recover() {
     if (!ph.value) return box.replaceChildren(h('div', { class: 'note' }, 'Check your number first.'));
     try {
       const { question } = await API.recoverQuestion(ph.value);
-      const ans = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Answer' }), pw = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'New password (6+ characters)' }), msg = h('div');
-      box.replaceChildren(h('b', null, question), ans, pw, h('button', { class: 'btn pri block', onclick: async () => {
+      const ans = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Answer' }), pwb = pwField('New password (6+ characters)', 'new-password'), pw = pwb.input, msg = h('div');
+      box.replaceChildren(h('b', null, question), ans, pwb, h('button', { class: 'btn pri block', onclick: async () => {
         try { await API.recover(ph.value, ans.value, pw.value); location.hash = '#/mine'; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
       } }, 'Set new password'), msg);
     } catch (e) { box.replaceChildren(h('div', { class: 'note' }, e.message)); }
@@ -938,7 +1016,7 @@ function privacy() {
   document.title = 'ADate – Privacy';
   $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
-      h('p', null, 'ADate is a free demo. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
+      h('p', null, 'ADate is a free service. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
       h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The invite page says so.'),
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
       h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
@@ -958,30 +1036,43 @@ async function admin() {
       const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
       const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
       const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'receiver_phone', 'receiver_ig', 'id']; const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }).click(); };
-      const csvUsers = () => { const cols = ['created_at', 'name', 'phone', 'email', 'last_login_at', 'invites']; const blob = new Blob([[cols.join(',')].concat(d.users.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-users.csv' }).click(); };
+      const csvUsers = () => { const cols = ['created_at', 'first_name', 'last_name', 'phone', 'email', 'birthdate', 'interests', 'google', 'last_login_at', 'invites']; const blob = new Blob([[cols.join(',')].concat(d.users.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-users.csv' }).click(); };
       const note = h('div');
       const views = {
         users: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvUsers }, '⬇ Export users CSV')), note, ...d.users.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '👤 ' + (u.name || 'No name')), h('span', { class: 'badge' }, u.invites + ' invites')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Email: '), u.email || '—'), h('div', null, h('b', null, 'Joined: '), ago(u.created_at) + (u.last_login_at ? ' · last login ' + ago(u.last_login_at) : '')),
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Name: '), [u.first_name, u.last_name].filter(Boolean).join(' ') || '—', ' · ', u.google ? '🔵 Google' : '📱 number + password', u.profile_done ? '' : ' · profile not finished'), h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Email: '), u.email || '—'), h('div', null, h('b', null, 'Birthday: '), u.birthdate ? String(u.birthdate).slice(0, 10) : '—'), h('div', null, h('b', null, 'Interests: '), (u.interests || []).join(', ') || '—'), h('div', null, h('b', null, 'Joined: '), ago(u.created_at) + (u.last_login_at ? ' · last login ' + ago(u.last_login_at) : '')),
             h('div', { class: 'hint' }, 'Passwords are stored scrambled (nobody can read them). Reset gives a temporary one.')),
           h('button', { class: 'btn sm', onclick: async () => { if (!confirm('Reset the password for +' + u.phone + '?')) return; try { const r = await API.adminReset(key, u.phone); note.replaceChildren(h('div', { class: 'note' }, 'Temporary password for +' + r.phone + ': ', h('b', null, r.temp), '. Send it to them; they can change it with “Forgot password”.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Reset password')))],
         invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ new')),
           h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone || r.receiver_ig ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
           (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey'), slot); })()))],
         contacts: () => {
+          const byInvite = {}; d.answers.forEach((a) => (byInvite[a.invite_id] = byInvite[a.invite_id] || []).push(a));
           const rows = d.invites.map((r) => ({ r, got: !!(r.receiver_phone || r.receiver_ig) }));
-          const csvC = () => { const cols = ['created_at', 'sender_name', 'sender_phone', 'to_name', 'to_contact', 'receiver_phone', 'receiver_ig', 'confirmed']; const body = rows.map(({ r, got }) => cols.map((c) => q(c === 'confirmed' ? (got ? 'yes' : 'no') : r[c])).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-contacts.csv' }).click(); };
-          return [h('p', { class: 'hint' }, `${rows.filter((x) => x.got).length} of ${rows.length} receivers confirmed their own contact. “They left” is what the receiver gave on the last page.`),
-            h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvC }, '⬇ Export contacts CSV')),
-            ...rows.map(({ r, got }) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (got ? 'ok' : 'warn') }, got ? '✅ confirmed by her' : '⏳ not confirmed')),
-              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), got ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_src ? (r.receiver_src === 'contact' ? ' 📇 picked from contacts' : ' ⌨️ typed') : '', r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null)))];
+          const csvC = () => { const cols = ['created_at', 'account_name', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'receiver_phone', 'receiver_ig', 'confirmed']; const body = rows.map(({ r, got }) => cols.map((c) => q(c === 'confirmed' ? (got ? 'yes' : 'no') : r[c])).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-everything.csv' }).click(); };
+          const none = (t) => h('span', { class: 'hint' }, t);
+          return [h('p', { class: 'hint' }, `${rows.length} invites · ${rows.filter((x) => x.got).length} receivers gave their contact. Everything about each invite in one place: who sent it, who it is for, what they opened and answered, and their number or Instagram.`),
+            h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvC }, '⬇ Export everything CSV')),
+            ...rows.map(({ r, got }) => {
+              const ans = byInvite[r.id] || [], when = r.answers ? 'answered before this was required' : 'has not answered yet';
+              const slot = h('div');
+              return h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ not opened')),
+                h('div', { class: 'kv' },
+                  h('div', null, h('b', null, 'Sender: '), (r.account_name || r.sender_name || '?') + ' · ', wa(r.sender_phone)),
+                  h('div', null, h('b', null, 'Receiver: '), r.to_name || '?'),
+                  h('div', null, h('b', null, 'Receiver WhatsApp: '), r.receiver_phone ? [wa(r.receiver_phone), r.receiver_src ? (r.receiver_src === 'contact' ? ' 📇 from contacts' : ' ⌨️ typed') : ''] : none('— ' + when)),
+                  h('div', null, h('b', null, 'Receiver Instagram: '), r.receiver_ig ? contactLink('@' + r.receiver_ig) : none('— not given')),
+                  h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_opened_at ? ' · last ' + ago(r.last_opened_at) : ''))),
+                ...ans.map((a) => h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:6px 0 0' }, h('b', null, '💖 Answered ' + ago(a.at)), details(a.answer || {}), a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.'))),
+                h('div', { class: 'row', style: 'margin-top:6px' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey')), slot);
+            })];
         },
         answers: () => d.answers.map((a) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `💖 ${a.to_name || '?'} → ${a.sender_name || '?'}`), h('span', { class: 'hint' }, ago(a.at))),
           h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(a.sender_phone)), a.receiver_phone || a.receiver_ig ? h('div', null, h('b', null, 'Receiver: '), a.receiver_phone ? wa(a.receiver_phone) : null, a.receiver_phone && a.receiver_ig ? ' · ' : '', a.receiver_ig ? contactLink('@' + a.receiver_ig) : null) : null, a.answer && a.answer.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.answer.date) + (a.answer.time ? ' · ' + fmtTime(a.answer.time) : '') + (a.answer.act ? ' · ' + a.answer.act : '')) : null),
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
       };
       const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Contacts'], ['invites', '💌 Invites'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
+        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['invites', '💌 Invites'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
       draw();
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
@@ -999,7 +1090,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 }
 async function route() {
   await API.ready;
-  setRobots(!/^#\/(i|v|d|mine|admin|make|login|recover)/.test(location.hash || ''));
+  setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
   document.querySelectorAll('.modal').forEach((m) => m.remove());
@@ -1008,11 +1099,16 @@ async function route() {
   if (hash.startsWith('#/i/')) return API.enabled ? viewer('i', hash.slice(4)) : brokenLink();
   if (hash.startsWith('#/d/')) return dash(hash.slice(4));
   if (hash === '#/mine') return inbox();
-  if (hash === '#/login') return login();
+  if (hash === '#/login') return login('login');
+  if (hash === '#/signup') return login('signup');
   if (hash === '#/recover') return recover();
   if (hash === '#/privacy') return privacy();
   if (hash === '#/admin') return admin();
-  if (hash === '#/make') return editor();
+  if (hash === '#/profile') return profile();
+  if (hash === '#/make') {
+    if (API.enabled) { const s = API.session; if (!s) { store.set('adate.after', '#/make'); location.hash = '#/login'; return; } if (!s.profile_done) { store.set('adate.after', '#/make'); location.hash = '#/profile'; return; } }
+    return editor();
+  }
   return home();
 }
 window.addEventListener('hashchange', route);
