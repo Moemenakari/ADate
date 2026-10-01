@@ -260,6 +260,7 @@ function buildStage(cfg, opts) {
   const state = { date: cfg.dateMode === 'fixed' ? cfg.fixedDate : '', time: cfg.dateMode === 'fixed' ? cfg.fixedTime : '', act: '', noCount: 0, msg: '', sent: false };
   const F = (s) => fill(s, cfg);
   const T = (cls, tag, text) => h(tag, { class: cls }, F(text));
+  const track = (kind, data) => { if (!opts.edit && opts.inviteId && window.API && API.enabled) API.track(opts.inviteId, kind, data); };
 
   function screenAsk() {
     let noScale = 1, yesScale = 1, tx = 0, ty = 0, rot = 0, fade = 1;
@@ -270,6 +271,7 @@ function buildStage(cfg, opts) {
     yes.onclick = () => go('yay');
     no.onclick = () => {
       const step = cfg.steps[Math.min(state.noCount, cfg.steps.length - 1)]; state.noCount++;
+      track('no', { n: state.noCount, t: F(step.t).slice(0, 60) });
       cap.textContent = F(step.t) || ' ';
       if (step.e === 'shrink') noScale = Math.max(.35, noScale * .72);
       else if (step.e === 'fade') fade = Math.max(.25, fade * .6);
@@ -284,7 +286,7 @@ function buildStage(cfg, opts) {
       else if (cfg.yesFx === 'pulse') yes.animate([{ scale: 1 }, { scale: 1.25 }, { scale: 1 }], { duration: 380 });
       apply();
     };
-    return [frameContent(cfg), T('title', 'h1', cfg.title), cfg.sub ? T('subt', 'p', cfg.sub) : null, cfg.caption ? T('caption', 'p', cfg.caption) : null, btns, cap];
+    return [frameContent(cfg), T('title', 'h1', cfg.title), cfg.sub ? T('subt', 'p', cfg.sub) : null, cfg.caption ? T('caption', 'p', cfg.caption) : null, btns, cap, !opts.edit && opts.inviteId && cfg.from ? h('p', { class: 'fine' }, `💌 ${cfg.from} can see how far you get`) : null];
   }
   function screenYay() {
     setTimeout(() => confetti(el), 60);
@@ -365,6 +367,7 @@ function buildStage(cfg, opts) {
   }
   const screens = { ask: screenAsk, yay: screenYay, date: screenDate, time: screenTime, act: screenAct, done: screenDone };
   function go(name) {
+    if (!state.sent) track('step', { s: name, date: state.date || undefined, time: state.time || undefined, act: state.act || undefined });
     content.replaceChildren(...screens[name]().filter(Boolean));
     content.style.animation = 'none'; void content.offsetWidth; content.style.animation = '';
   }
@@ -754,6 +757,34 @@ function bigCard(r) {
       h('button', { class: 'btn', onclick: () => card.remove() }, 'Got it')));
   return card;
 }
+const SCREEN_NAME = { ask: 'The question', yay: 'Said YES', date: 'Choosing a day', time: 'Choosing a time', act: 'Choosing a plan', done: 'Writing the reply' };
+function journey(s) {
+  const ev = s.events || [], resp = s.responses || [], fixed = s.config && s.config.dateMode === 'fixed';
+  const order = ['ask', 'yay'].concat(fixed ? [] : ['date', 'time'], ['act', 'done']);
+  const reached = new Set(ev.filter((e) => e.kind === 'step').map((e) => e.data && e.data.s)); if (resp.length) order.forEach((k) => reached.add(k));
+  const noMax = Math.max(0, ...ev.filter((e) => e.kind === 'no').map((e) => (e.data && e.data.n) || 0));
+  const hm = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const line = (e) => {
+    const d = e.data || {};
+    if (e.kind === 'no') return `😈 Pressed “No” #${d.n}${d.t ? ': “' + d.t + '”' : ''}`;
+    if (d.s === 'ask') return '👀 Opened the invite';
+    if (d.s === 'yay') return '💖 Pressed YES';
+    if (d.s === 'date') return '📅 Choosing a day';
+    if (d.s === 'time') return '⏰ Picked ' + (d.date ? fmtDate(d.date) : 'a day') + ', choosing a time';
+    if (d.s === 'act') return '✨ Picked ' + (d.time ? fmtTime(d.time) : 'a time') + ', choosing a plan';
+    if (d.s === 'done') return '✍️ Picked “' + (d.act || 'a plan') + '”, writing the reply';
+    return '• ' + (d.s || e.kind);
+  };
+  const items = ev.map((e) => ({ at: e.at, text: line(e) })).concat(resp.map((r) => ({ at: r.at, text: '💌 Sent the answer' })));
+  items.sort((a, b) => new Date(a.at) - new Date(b.at));
+  const last = order.filter((k) => reached.has(k)).pop();
+  const visitors = new Set(ev.map((e) => e.visitor).filter(Boolean)).size;
+  const verdict = resp.length ? '✅ Finished all the steps and sent the answer.' : !ev.length ? 'No steps recorded yet.' : last === 'ask' ? '⏸ Stopped at the question' + (noMax ? ` (pressed “No” ${noMax} time${noMax > 1 ? 's' : ''})` : '') + '.' : `⏸ Stopped at “${SCREEN_NAME[last]}”.`;
+  return h('details', { class: 'journey', open: '' }, h('summary', null, '🧭 Their journey'),
+    h('div', { class: 'row', style: 'margin:6px 0' }, order.map((k) => h('span', { class: 'badge ' + (reached.has(k) ? 'ok' : '') }, (reached.has(k) ? '✓ ' : '· ') + SCREEN_NAME[k])), resp.length ? null : null),
+    h('p', { style: 'margin:4px 0;font-weight:600' }, verdict), visitors > 1 ? h('p', { class: 'hint', style: 'margin:0' }, `Opened from ${visitors} different phones/browsers.`) : null,
+    items.length ? h('div', { class: 'tl' }, items.slice(-40).map((i) => h('div', null, h('span', { class: 'hint', style: 'min-width:4.5em' }, hm(i.at)), i.text))) : null);
+}
 function inviteCard(rec, loader) {
   const card = h('div', { class: 'inv' }), head = h('header', null, h('h3', null, `${PRESETS[rec.type] ? PRESETS[rec.type].emoji : '💌'} For ${rec.to}`), h('span', { class: 'badge' }, 'loading…'));
   const body = h('div', { class: 'tl' }); card.append(head, body);
@@ -762,7 +793,7 @@ function inviteCard(rec, loader) {
       const s = await loader(rec);
       const answered = s.responses && s.responses.length;
       head.lastChild.replaceWith(h('span', { class: 'badge ' + (answered ? 'ok' : s.opens ? 'warn' : '') }, answered ? '✅ Answered' : s.opens ? '👀 Opened' : '⏳ Not opened yet'));
-      const rows = [h('div', null, '📨 Created ' + ago(s.created_at)), h('div', null, s.opens ? `👀 Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : '👀 Not opened yet')];
+      const rows = [h('div', null, '📨 Created ' + ago(s.created_at)), h('div', null, s.opens ? `👀 Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : '👀 Not opened yet'), journey(s)];
       (s.responses || []).forEach((r) => rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 They said YES · ' + ago(r.at)), details(r.answer || {}),
         r.phone ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📱 '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone))) : null, r.message ? h('div', { class: 'bubble' }, r.message) : null)));
       rows.push(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(inviteUrl(rec.id))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy invite link'),
@@ -809,6 +840,7 @@ function privacy() {
   $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
       h('p', null, 'ADate is a free demo. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the invite you design (including any pictures you upload), and the answer, message and optional number the other person sends back.'),
+      h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The invite page says so.'),
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
       h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
 }

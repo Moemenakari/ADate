@@ -35,3 +35,12 @@ create index if not exists sessions_user_idx on sessions(user_id);
 alter table invites add column if not exists user_id bigint references users(id) on delete set null;
 create index if not exists invites_user_idx on invites(user_id);
 alter table responses add column if not exists seen_at timestamptz;
+
+-- Journey: which screen a viewer reached and how many times they pressed "No" (visitor = anonymous random id per browser).
+create table if not exists events (
+  id bigint generated always as identity primary key,
+  invite_id text not null references invites(id) on delete cascade,
+  kind text not null, data jsonb, visitor text,
+  created_at timestamptz not null default now()
+);
+create index if not exists events_invite_idx on events(invite_id, created_at);

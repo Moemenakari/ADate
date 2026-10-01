@@ -14,6 +14,7 @@
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
     try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); if (j && j.questions) API.questions = j.questions; return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
   }
+  const visitor = () => { try { let v = localStorage.getItem('adate.visitor'); if (!v) { v = rnd(12, 'abcdefghjkmnpqrstuvwxyz23456789'); localStorage.setItem('adate.visitor', v); } return v; } catch (e) { return 'anon'; } };
   const KEY = 'adate.session';
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
   const write = (v) => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } };
@@ -36,6 +37,7 @@
     create: (id, token, config, consent) => call('create', { id, token, config, consent, session: tok() }),
     update: (id, token, config) => call('update', { id, token, config, session: tok() }),
     open: (id) => call('open', { id }),
+    track: (id, kind, data) => call('track', { id, kind, data, visitor: visitor() }, true).catch(() => {}),
     respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }, true),
     status: (id, token) => call('status', { id, token }),
     remove: (id, token) => call('remove', { id, token, session: tok() }),
