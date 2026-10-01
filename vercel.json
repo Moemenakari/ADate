@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/api/:action", "destination": "/api/handler?action=:action" }]
+  "rewrites": [{ "source": "/api/:action", "destination": "/api/handler?action=:action" }],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
+  ]
 }

@@ -875,5 +875,10 @@ async function route() {
   return home();
 }
 window.addEventListener('hashchange', route);
+// A tab left open for hours keeps old code. When it comes back to the front, reload if a newer build is live.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !CFG.build) return;
+  try { const j = await (await fetch('/version.json', { cache: 'no-store' })).json(); if (j && j.build && j.build !== CFG.build) location.reload(); } catch (e) { /* offline: keep going */ }
+});
 route();
 })();
