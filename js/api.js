@@ -1,26 +1,31 @@
-// Tiny client for the optional Supabase backend (see supabase/schema.sql).
-// Without it the site still works: the invite lives inside the link and the answer is sent by WhatsApp/share.
+// Client for the backend in /api (Vercel + Neon). If it isn't there (GitHub Pages, local file server)
+// the site falls back to "demo mode": the invite lives inside the link.
 (function () {
   const CFG = window.ADATE_CONFIG || {};
-  const enabled = !!(CFG.supabaseUrl && CFG.supabaseKey);
+  const base = (CFG.apiBase || '') + '/api';
   const rnd = (n, al) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, (b) => al[b % al.length]).join(''); };
-  async function rpc(fn, args) {
-    const r = await fetch(`${CFG.supabaseUrl}/rest/v1/rpc/adate_${fn}`, {
-      method: 'POST', headers: { apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify(args)
-    });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'Request failed (' + r.status + ')');
-    const t = await r.text();
-    return t ? JSON.parse(t) : null;
+  async function call(action, body) {
+    const r = await fetch(`${base}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch (e) { /* not json */ }
+    if (!r.ok) throw new Error((j && j.message) || 'Request failed (' + r.status + ')');
+    return j;
   }
-  window.API = {
-    enabled,
+  async function ping() {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
+    try { const r = await fetch(`${base}/ping`, { signal: ctl.signal }); const j = await r.json(); return !!(j && j.ok && j.app === 'adate'); } catch (e) { return false; } finally { clearTimeout(t); }
+  }
+  const API = {
+    enabled: false,
     newId: () => rnd(8, 'abcdefghjkmnpqrstuvwxyz23456789'),
     newToken: () => rnd(28, 'abcdefghjkmnpqrstuvwxyz23456789'),
-    create: (id, token, config) => rpc('create_invite', { p_id: id, p_token: token, p_config: config }),
-    update: (id, token, config) => rpc('update_invite', { p_id: id, p_token: token, p_config: config }),
-    open: (id) => rpc('open_invite', { p_id: id }),
-    respond: (id, answer, message) => rpc('submit_response', { p_id: id, p_answer: answer, p_message: message }),
-    status: (id, token) => rpc('get_status', { p_id: id, p_token: token }),
-    remove: (id, token) => rpc('delete_invite', { p_id: id, p_token: token })
+    create: (id, token, config, consent) => call('create', { id, token, config, consent }),
+    update: (id, token, config) => call('update', { id, token, config }),
+    open: (id) => call('open', { id }),
+    respond: (id, answer, message, phone) => call('respond', { id, answer, message, phone }),
+    status: (id, token) => call('status', { id, token }),
+    remove: (id, token) => call('remove', { id, token }),
+    admin: (key) => call('admin', { key })
   };
+  API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
+  window.API = API;
 })();

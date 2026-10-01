@@ -209,3 +209,29 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .stage[data-theme=minecraft] .msg{font-size:.6em}
 .col{display:flex;flex-direction:column}
 .stage[data-theme=night] .msg{background:#2a1f52;color:#fff4d6}
+
+/* ---------- round photo frame, pickers, promo ---------- */
+.frame{border-radius:var(--frame,50%)}
+.frame .ph{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.frame svg{width:84%;height:84%}
+.stage[data-theme=minecraft]{--frame:0}
+.pk{width:100%;margin:0 auto}
+.pk-head{display:flex;align-items:center;justify-content:space-between;gap:.4em;margin-bottom:.5em;font-weight:700}
+.pk-nav{border:0;width:2.1em;height:2.1em;border-radius:50%;background:#fff;color:var(--accent2,#b03a61);font-weight:700;font-size:1.05em;box-shadow:0 .15em 0 rgba(0,0,0,.14);padding:0}
+.pk-nav[disabled]{opacity:.3}
+.pk-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.28em}
+.pk-dow{font-size:.62em;text-align:center;font-weight:700;opacity:.7;align-self:center}
+.pk-cell{border:.12em solid transparent;aspect-ratio:1;border-radius:50%;background:#fff;color:#4b3443;font-size:.82em;font-weight:600;padding:0;box-shadow:0 .12em 0 rgba(0,0,0,.1)}
+.pk-cell.sq{aspect-ratio:auto;border-radius:.7em;padding:.5em 0}
+.pk-cell.today{border-color:var(--accent)}
+.pk-cell[aria-pressed=true]{background:var(--accent);color:#fff}
+.pk-cell[disabled]{opacity:.28;box-shadow:none}
+.pk-lab{font-size:.68em;font-weight:700;text-align:left;margin:.55em 0 .2em;opacity:.8;min-height:.4em}
+.pk-times{display:grid;grid-template-columns:repeat(6,1fr);gap:.28em}
+.pk-times.two{grid-template-columns:1fr 1fr}
+.pk-sum{margin-top:.6em;font-weight:700;color:var(--accent2,#b03a61)}
+.stage[data-dark] .pk-cell,.stage[data-dark] .pk-nav,.stage[data-dark] .opt,.stage[data-dark] .ticket,.stage[data-dark] .msg,.stage[data-dark] .gbtn.no{background:#2a1f52;color:#fff4d6}
+.stage[data-dark] .pk-cell[aria-pressed=true],.stage[data-dark] .opt[aria-pressed=true]{background:var(--accent);color:#2a1f52}
+.stage[data-dark] .frame{background:#2a1f52}
+.wiz .pk,.body .pk{max-width:340px;font-size:1rem;color:var(--ink)}
+.promo{display:block;text-align:center;background:linear-gradient(90deg,var(--butter),var(--accent-soft),var(--lav));border-radius:99px;padding:.45em 1em;font-size:.82rem;font-weight:600;color:var(--ink);text-decoration:none;margin-bottom:12px}
