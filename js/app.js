@@ -261,6 +261,8 @@ function buildStage(cfg, opts) {
   const F = (s) => fill(s, cfg);
   const T = (cls, tag, text) => h(tag, { class: cls }, F(text));
   const track = (kind, data) => { if (!opts.edit && opts.inviteId && window.API && API.enabled) API.track(opts.inviteId, kind, data); };
+  let cur = 'ask';
+  if (!opts.edit && opts.inviteId && window.API && API.enabled) document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !state.sent) track('leave', { s: cur }); });
 
   function screenAsk() {
     let noScale = 1, yesScale = 1, tx = 0, ty = 0, rot = 0, fade = 1;
@@ -367,6 +369,7 @@ function buildStage(cfg, opts) {
   }
   const screens = { ask: screenAsk, yay: screenYay, date: screenDate, time: screenTime, act: screenAct, done: screenDone };
   function go(name) {
+    cur = name;
     if (!state.sent) track('step', { s: name, date: state.date || undefined, time: state.time || undefined, act: state.act || undefined });
     content.replaceChildren(...screens[name]().filter(Boolean));
     content.style.animation = 'none'; void content.offsetWidth; content.style.animation = '';
@@ -766,6 +769,7 @@ function journey(s) {
   const hm = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const line = (e) => {
     const d = e.data || {};
+    if (e.kind === 'leave') return `👋 Left the page (was on “${SCREEN_NAME[d.s] || d.s}”)`;
     if (e.kind === 'no') return `😈 Pressed “No” #${d.n}${d.t ? ': “' + d.t + '”' : ''}`;
     if (d.s === 'ask') return '👀 Opened the invite';
     if (d.s === 'yay') return '💖 Pressed YES';
@@ -775,11 +779,13 @@ function journey(s) {
     if (d.s === 'done') return '✍️ Picked “' + (d.act || 'a plan') + '”, writing the reply';
     return '• ' + (d.s || e.kind);
   };
-  const items = ev.map((e) => ({ at: e.at, text: line(e) })).concat(resp.map((r) => ({ at: r.at, text: '💌 Sent the answer' })));
+  const items = ev.filter((e) => e.kind !== 'open').map((e) => ({ at: e.at, text: line(e), step: e.kind === 'step' })).concat(resp.map((r) => ({ at: r.at, text: '💌 Sent the answer' })));
   items.sort((a, b) => new Date(a.at) - new Date(b.at));
+  items.forEach((it, i) => { const nx = items[i + 1]; if (it.step && nx) { const sec = (new Date(nx.at) - new Date(it.at)) / 1000; if (sec >= 1 && sec < 900) it.text += ' · ' + (sec < 90 ? Math.round(sec) + 's' : Math.round(sec / 60) + ' min'); } });
   const last = order.filter((k) => reached.has(k)).pop();
   const visitors = new Set(ev.map((e) => e.visitor).filter(Boolean)).size;
-  const verdict = resp.length ? '✅ Finished all the steps and sent the answer.' : !ev.length ? 'No steps recorded yet.' : last === 'ask' ? '⏸ Stopped at the question' + (noMax ? ` (pressed “No” ${noMax} time${noMax > 1 ? 's' : ''})` : '') + '.' : `⏸ Stopped at “${SCREEN_NAME[last]}”.`;
+  const lastLeave = ev.filter((e) => e.kind === 'leave').pop();
+  const verdict = resp.length ? '✅ Finished all the steps and sent the answer.' : !ev.length ? 'No steps recorded yet.' : last === 'ask' ? '⏸ Stopped at the question' + (noMax ? ` (pressed “No” ${noMax} time${noMax > 1 ? 's' : ''})` : '') + '.' : `⏸ Stopped at “${SCREEN_NAME[last]}”` + (lastLeave ? ' and left the page.' : '.');
   return h('details', { class: 'journey', open: '' }, h('summary', null, '🧭 Their journey'),
     h('div', { class: 'row', style: 'margin:6px 0' }, order.map((k) => h('span', { class: 'badge ' + (reached.has(k) ? 'ok' : '') }, (reached.has(k) ? '✓ ' : '· ') + SCREEN_NAME[k])), resp.length ? null : null),
     h('p', { style: 'margin:4px 0;font-weight:600' }, verdict), visitors > 1 ? h('p', { class: 'hint', style: 'margin:0' }, `Opened from ${visitors} different phones/browsers.`) : null,
@@ -803,14 +809,39 @@ function inviteCard(rec, loader) {
   }
   load(); card.reload = load; return card;
 }
+const b64ToBytes = (b) => { const p = '='.repeat((4 - (b.length % 4)) % 4), r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, (c) => c.charCodeAt(0)); };
+async function pushControl() { // "tell me on my phone when they open / answer"
+  if (!API.vapid) return null;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window))
+    return h('div', { class: 'note' }, ios && !standalone ? '📲 To get phone notifications on iPhone: tap Share, then “Add to Home Screen”, open ADate from your home screen, and come back here.' : 'This browser can’t show phone notifications. Try Chrome on Android, or add ADate to your iPhone home screen.');
+  const box = h('div');
+  async function draw() {
+    const reg = await navigator.serviceWorker.getRegistration('/'), sub = reg && await reg.pushManager.getSubscription();
+    if (Notification.permission === 'denied') return box.replaceChildren(h('div', { class: 'note' }, '🔕 Notifications are blocked for this site. Allow them in your browser settings, then reload.'));
+    if (sub && Notification.permission === 'granted') return box.replaceChildren(h('div', { class: 'note' }, '🔔 Notifications are on for this phone. ', h('button', { class: 'btn sm', onclick: async () => { try { await API.pushUnsubscribe(sub.endpoint); await sub.unsubscribe(); } catch (e) { /* ignore */ } draw(); } }, 'Turn off')));
+    box.replaceChildren(h('button', { class: 'btn pri block', onclick: async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        if (await Notification.requestPermission() !== 'granted') return draw();
+        const r = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready;
+        const s = (await r.pushManager.getSubscription()) || await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(API.vapid) });
+        await API.pushSubscribe(s.toJSON());
+      } catch (x) { box.replaceChildren(h('div', { class: 'note' }, 'Could not turn notifications on: ' + x.message)); return; }
+      draw();
+    } }, '🔔 Notify me on this phone when they open or answer'));
+  }
+  await draw(); return box;
+}
 async function inbox() { // logged-in inbox: new answers first as big cards, then all invites
   document.title = 'ADate – My inbox';
   if (!API.enabled) { $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'panel' }, h('h2', null, 'Inbox is off in demo mode'), h('p', null, 'The inbox needs the backend.'), h('a', { class: 'btn', href: '#/' }, 'Back')))); return; }
   if (!API.session) { location.hash = '#/login'; return; }
-  const top = h('div'), list = h('div'), who = h('span', { class: 'hint' });
+  const top = h('div'), list = h('div'), who = h('span', { class: 'hint' }), push = h('div', { style: 'margin:8px 0' });
   $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')),
     h('button', { class: 'btn sm', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')),
-    h('div', { class: 'h2' }, '📬 My inbox'), who, top, list, h('p', { class: 'hint', style: 'margin-top:14px' }, 'This page updates by itself.'), footer()));
+    h('div', { class: 'h2' }, '📬 My inbox'), who, push, top, list, h('p', { class: 'hint', style: 'margin-top:14px' }, 'This page updates by itself.'), footer()));
+  pushControl().then((n) => n && push.replaceChildren(n)).catch(() => {});
   let cards = [];
   async function load() {
     let d;
@@ -866,7 +897,8 @@ async function admin() {
             h('div', { class: 'hint' }, 'Passwords are stored scrambled (nobody can read them). Reset gives a temporary one.')),
           h('button', { class: 'btn sm', onclick: async () => { if (!confirm('Reset the password for +' + u.phone + '?')) return; try { const r = await API.adminReset(key, u.phone); note.replaceChildren(h('div', { class: 'note' }, 'Temporary password for +' + r.phone + ': ', h('b', null, r.temp), '. Send it to them; they can change it with “Forgot password”.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Reset password')))],
         invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ new')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone ? h('div', null, h('b', null, 'Receiver: '), wa(r.receiver_phone)) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : '')))))],
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone ? h('div', null, h('b', null, 'Receiver: '), wa(r.receiver_phone)) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
+          (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey'), slot); })()))],
         answers: () => d.answers.map((a) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `💖 ${a.to_name || '?'} → ${a.sender_name || '?'}`), h('span', { class: 'hint' }, ago(a.at))),
           h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(a.sender_phone)), a.receiver_phone ? h('div', null, h('b', null, 'Receiver: '), wa(a.receiver_phone)) : null, a.answer && a.answer.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.answer.date) + (a.answer.time ? ' · ' + fmtTime(a.answer.time) : '') + (a.answer.act ? ' · ' + a.answer.act : '')) : null),
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))

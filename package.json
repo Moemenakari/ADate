@@ -2,5 +2,8 @@
   "name": "adate",
   "private": true,
   "version": "1.0.0",
-  "dependencies": { "@neondatabase/serverless": "^1.0.0" }
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "web-push": "^3.6.7"
+  }
 }
