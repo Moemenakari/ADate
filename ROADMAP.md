@@ -7,6 +7,11 @@
 - Share cards: export an invite or an answer as an image for Snapchat / Instagram stories.
 - Rate limiting and an owner key per admin.
 
+## Next: prove phone ownership
+- Today an account is a WhatsApp number plus a password and nobody proves the number is theirs.
+- Options researched: WhatsApp Business Platform code (about 1 cent per message, needs a Meta business account and a dedicated number), email magic-link login (free tier, needs a sending domain), SMS code.
+- Leaning towards: email as the verified login, WhatsApp number kept as a contact picked from the phone's contacts, WhatsApp code later when there is revenue.
+
 ## Later: "Ask me" community games
 - A person opens a public "Ask me anything" page and shares it.
 - Friends send anonymous questions; she answers them privately or publicly.
