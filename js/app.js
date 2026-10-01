@@ -54,6 +54,32 @@ function igHandle(s) { // "@sam.lee", "sam.lee" or an instagram.com link -> "sam
   t = t.replace(/^@/, '');
   return /^[A-Za-z0-9._]{1,30}$/.test(t) && !/^\.+$/.test(t) && !IG_BAD.includes(t.toLowerCase()) ? t : '';
 }
+/** The receiver's WhatsApp number: picked from her phone's contacts where the browser allows it (so it is a real number, not typed), typed otherwise. Instagram is optional. */
+function waPicker(cc0, onChange) {
+  const canPick = !!(navigator.contacts && navigator.contacts.select);
+  const st = { cc: COUNTRIES.some((c) => c[0] === cc0) ? cc0 : '961', phone: '', ig: '', src: '', contact: '' };
+  const out = () => ({ contact: st.contact, ig: igHandle(st.ig), src: st.src });
+  const status = h('p', { class: 'hint' });
+  const sel = h('select', { style: 'flex:0 0 46%', 'aria-label': 'Country' }, COUNTRIES.map(([c, l]) => h('option', { value: c, selected: c === st.cc }, l)));
+  const tel = h('input', { type: 'tel', inputmode: 'numeric', maxlength: 16, 'aria-label': 'WhatsApp number' });
+  const row = h('div', { class: 'fieldrow' }, sel, tel);
+  const igIn = h('input', { type: 'text', maxlength: 80, placeholder: 'Instagram (optional): @username', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
+  const paint = () => { status.textContent = st.contact ? '✓ +' + st.contact + (st.src === 'contact' ? ' · from your contacts' : '') : (canPick ? 'Tap the button and choose your own contact card.' : st.phone ? '✗ That number doesn’t look right yet.' : 'Your number without the country code.'); status.style.color = !st.contact && st.phone ? '#c0392b' : ''; onChange(out()); };
+  tel.oninput = () => { st.phone = digits(tel.value); st.contact = normalizePhone(st.cc, st.phone); st.src = st.contact ? 'typed' : ''; paint(); };
+  sel.onchange = () => { st.cc = sel.value; tel.oninput(); };
+  igIn.oninput = () => { st.ig = igIn.value; paint(); };
+  const pickBtn = canPick ? h('button', { class: 'btn pri', type: 'button', onclick: async () => {
+    try {
+      const r = await navigator.contacts.select(['tel'], { multiple: false }), raw = r && r[0] && r[0].tel && r[0].tel[0]; if (!raw) return;
+      const d = digits(raw), n = /^\s*(\+|00)/.test(raw) ? d.replace(/^00/, '') : (normalizePhone(st.cc, d) || '');
+      st.contact = n.length >= 8 && n.length <= 15 ? n : ''; st.src = st.contact ? 'contact' : ''; st.phone = st.contact; paint();
+      if (!st.contact) status.textContent = '✗ That contact has no usable number. Pick another.';
+    } catch (e) { /* cancelled */ }
+  } }, '📇 Choose my number from contacts') : null;
+  const box = h('div', { class: 'stack' }, pickBtn, canPick ? null : row, status, igIn);
+  paint();
+  return box;
+}
 /** "WhatsApp number or Instagram" picker. onChange gets { kind, cc, phone, ig, contact } where contact is '' until it is valid. */
 function contactPicker(init, onChange) {
   const st = { kind: init.kind === 'ig' ? 'ig' : 'wa', cc: COUNTRIES.some((c) => c[0] === init.cc) ? init.cc : '961', phone: digits(init.phone), ig: init.ig || '' };
@@ -378,9 +404,9 @@ function buildStage(cfg, opts) {
     function another() { n++; touched = false; state.msg = AI.compose(ctxFor()); ta.value = state.msg; tag.textContent = '✨ new version · edit it if you like'; upgrade(); }
     const again = h('button', { class: 'gbtn no', style: 'font-size:.75em', onclick: another }, '↻ Another version');
     const needContact = !!(opts.inviteId && window.API && API.enabled);   // the preview in the editor does not ask
-    let me = { contact: '' }, sendBtn = null;
-    const mine = contactPicker({ kind: cfg.toKind, cc: cfg.toCc || cfg.cc, phone: '', ig: '' }, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; });
-    const contactBox = needContact ? h('div', { class: 'stack', style: 'margin-top:1cqw' }, h('b', { style: 'font-size:.75em' }, `Your WhatsApp or Instagram *`), h('p', { class: 'caption', style: 'margin:0' }, `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.`), mine) : null;
+    let me = { contact: '', ig: '', src: '' }, sendBtn = null;
+    const mine = waPicker(cfg.cc, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; });
+    const contactBox = needContact ? h('div', { class: 'stack', style: 'margin-top:1cqw' }, h('b', { style: 'font-size:.75em' }, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it.`), mine) : null;
     const waOn = !!(cfg.contact && cfg.waReply);
     const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with ADate · ${location.host}_`;
     const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(waText(m))}`;
@@ -390,9 +416,9 @@ function buildStage(cfg, opts) {
     const note = h('p', { class: 'nocap' }, ' ');
     async function deliver(openWa) {
       const msg = (ta.value || '').trim() || AI.compose(ctxFor()); state.msg = msg;
-      const answer = { yes: true, date: state.date, time: state.time, act: state.act, noCount: state.noCount, label };
-      if (needContact && !me.contact) { note.textContent = 'Add your WhatsApp number or Instagram first 🙏'; return; }
-      const myNum = me.kind === 'wa' ? me.contact : '', myIg = me.kind === 'ig' ? me.contact.slice(1) : '';
+      const answer = { yes: true, date: state.date, time: state.time, act: state.act, noCount: state.noCount, label, src: me.src || undefined };
+      if (needContact && !me.contact) { note.textContent = 'Add your WhatsApp number first 🙏'; return; }
+      const myNum = me.contact, myIg = me.ig;
       send.disabled = true;
       if (openWa && waOn) window.open(waUrl(msg), '_blank', 'noopener'); // must happen inside the tap
       if (opts.inviteId && window.API && API.enabled) {
@@ -574,9 +600,7 @@ function editor() {
       plain('Your name', 'from', { ph: 'e.g. Sam' }), plain('Their name', 'to', { ph: 'e.g. Lina' }),
       h('div', { class: 'stack' }, h('b', null, 'The vibe of your words'), h('p', { class: 'hint' }, 'The ✨ suggestions will write in this style.'),
         h('div', { class: 'row' }, AI.VIBES.map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': cfg.vibe === id ? 'true' : 'false', onclick: (e) => { cfg.vibe = id; e.currentTarget.parentNode.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); save(); } }, l)))),
-      phoneField(),
-      h('div', { class: 'stack' }, h('b', null, 'Their WhatsApp number or Instagram *'), h('p', { class: 'hint' }, 'So you know exactly who this is for. Only you and the site owner see it.'),
-        contactPicker({ kind: cfg.toKind, cc: cfg.toCc, phone: cfg.toPhone, ig: cfg.toIg }, (v) => { cfg.toKind = v.kind; cfg.toCc = v.cc; cfg.toPhone = v.phone; cfg.toIg = v.ig; cfg.toContact = v.contact; save(); }))
+      phoneField()
     ];
   }
   function stepWords() {
@@ -663,7 +687,7 @@ function editor() {
     const consent = h('input', { type: 'checkbox', id: 'consent', checked: store.get('adate.consent', false), onchange: (e) => store.set('adate.consent', e.target.checked) });
     const acct = { mode: 'signup', password: '', email: '', question: (API.questions || [])[0] || 'What is your pet’s name?', answer: '' };
     const needAcct = () => API.enabled && !API.session;
-    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)', !cfg.toContact && 'their WhatsApp number or Instagram (step 1)',
+    const problems = () => [!cfg.to.trim() && 'their name (step 1)', API.enabled && !cfg.contact && 'your WhatsApp number (step 1)',
       needAcct() && acct.password.length < 6 && 'a password (6+ characters)', needAcct() && acct.mode === 'signup' && acct.answer.trim().length < 2 && 'an answer to the security question',
       API.enabled && !consent.checked && 'tick the privacy box below'].filter(Boolean);
     function acctBlock() {
@@ -846,12 +870,6 @@ function inviteCard(rec, loader) {
       (s.responses || []).forEach((r) => rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 They said YES · ' + ago(r.at)), details(r.answer || {}),
         r.phone ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📱 '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone))) : null,
         r.ig ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📸 '), h('a', { href: 'https://instagram.com/' + encodeURIComponent(r.ig), target: '_blank', rel: 'noopener' }, '@' + r.ig))) : null, r.message ? h('div', { class: 'bubble' }, r.message) : null)));
-      if (s.config && !s.config.toContact) { // older invites were made before this was required
-        let v = { contact: '' }; const save = h('button', { class: 'btn sm pri', disabled: true }), msg = h('span', { class: 'hint' });
-        const pick = contactPicker({ kind: 'wa', cc: s.config.cc || '961', phone: '', ig: '' }, (x) => { v = x; save.disabled = !x.contact; });
-        save.textContent = 'Save'; save.onclick = async () => { save.disabled = true; try { await API.update(rec.id, rec.token, Object.assign({}, s.config, { toKind: v.kind, toCc: v.cc, toPhone: v.phone, toIg: v.ig, toContact: v.contact })); msg.textContent = 'Saved ✓'; } catch (e) { msg.textContent = e.message || 'Could not save'; save.disabled = false; } };
-        rows.push(h('div', { class: 'note' }, h('b', null, 'Add who this is for'), h('p', { class: 'hint', style: 'margin:4px 0' }, 'Their WhatsApp number or Instagram. Only you and the site owner see it.'), pick, h('div', { class: 'row' }, save, msg)));
-      }
       rows.push(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(inviteUrl(rec.id))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy invite link'),
         h('button', { class: 'btn sm danger', onclick: async () => { if (confirm('Delete this invite and its answers for good?')) { try { await API.remove(rec.id, rec.token); } catch (e) { /* already gone */ } store.set('adate.mine', myInvites().filter((x) => x.id !== rec.id)); route(); } } }, 'Delete')));
       body.replaceChildren(...rows);
@@ -939,7 +957,7 @@ async function admin() {
       const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
       const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
       const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-      const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'to_contact', 'receiver_phone', 'receiver_ig', 'id']; const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }).click(); };
+      const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'receiver_phone', 'receiver_ig', 'id']; const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }).click(); };
       const csvUsers = () => { const cols = ['created_at', 'name', 'phone', 'email', 'last_login_at', 'invites']; const blob = new Blob([[cols.join(',')].concat(d.users.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-users.csv' }).click(); };
       const note = h('div');
       const views = {
@@ -948,16 +966,15 @@ async function admin() {
             h('div', { class: 'hint' }, 'Passwords are stored scrambled (nobody can read them). Reset gives a temporary one.')),
           h('button', { class: 'btn sm', onclick: async () => { if (!confirm('Reset the password for +' + u.phone + '?')) return; try { const r = await API.adminReset(key, u.phone); note.replaceChildren(h('div', { class: 'note' }, 'Temporary password for +' + r.phone + ': ', h('b', null, r.temp), '. Send it to them; they can change it with “Forgot password”.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Reset password')))],
         invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ new')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), h('div', null, h('b', null, 'For: '), contactLink(r.to_contact)), r.receiver_phone || r.receiver_ig ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone || r.receiver_ig ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
           (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey'), slot); })()))],
         contacts: () => {
           const rows = d.invites.map((r) => ({ r, got: !!(r.receiver_phone || r.receiver_ig) }));
           const csvC = () => { const cols = ['created_at', 'sender_name', 'sender_phone', 'to_name', 'to_contact', 'receiver_phone', 'receiver_ig', 'confirmed']; const body = rows.map(({ r, got }) => cols.map((c) => q(c === 'confirmed' ? (got ? 'yes' : 'no') : r[c])).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-contacts.csv' }).click(); };
-          return [h('p', { class: 'hint' }, `${rows.filter((x) => x.got).length} of ${rows.length} receivers confirmed their own contact. “For” is what the sender typed; “They left” is what the receiver typed herself.`),
+          return [h('p', { class: 'hint' }, `${rows.filter((x) => x.got).length} of ${rows.length} receivers confirmed their own contact. “They left” is what the receiver gave on the last page.`),
             h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvC }, '⬇ Export contacts CSV')),
             ...rows.map(({ r, got }) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (got ? 'ok' : 'warn') }, got ? '✅ confirmed by her' : '⏳ not confirmed')),
-              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), h('div', null, h('b', null, 'For (typed by sender): '), contactLink(r.to_contact)),
-                got ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null)))];
+              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), got ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_src ? (r.receiver_src === 'contact' ? ' 📇 picked from contacts' : ' ⌨️ typed') : '', r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null)))];
         },
         answers: () => d.answers.map((a) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `💖 ${a.to_name || '?'} → ${a.sender_name || '?'}`), h('span', { class: 'hint' }, ago(a.at))),
           h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(a.sender_phone)), a.receiver_phone || a.receiver_ig ? h('div', null, h('b', null, 'Receiver: '), a.receiver_phone ? wa(a.receiver_phone) : null, a.receiver_phone && a.receiver_ig ? ' · ' : '', a.receiver_ig ? contactLink('@' + a.receiver_ig) : null) : null, a.answer && a.answer.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.answer.date) + (a.answer.time ? ' · ' + fmtTime(a.answer.time) : '') + (a.answer.act ? ' · ' + a.answer.act : '')) : null),

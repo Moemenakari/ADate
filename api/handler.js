@@ -171,7 +171,6 @@ module.exports = async (req, res) => {
       const u = await userOf(sql, b.session);
       checkConfig(b.config);
       const c = cols(b.config);
-      if (!c.toc) throw bad('Add their WhatsApp number or Instagram');
       await sql`insert into invites (id, token_hash, config, sender_name, sender_phone, to_name, type, consent, user_id, to_contact)
                 values (${b.id}, ${hash(b.token)}, ${JSON.stringify(b.config)}::jsonb, ${c.name}, ${c.phone || u.phone}, ${c.to}, ${c.type}, true, ${u.id}, ${c.toc})`;
       return res.status(200).json({ ok: true });
@@ -210,9 +209,9 @@ module.exports = async (req, res) => {
       if (!have.length) throw bad('Not found', 404);
       if (have[0].n >= 20) throw bad('Too many answers');
       const rp = digits(b.phone).slice(0, 16), rig = igOk(String(b.ig || '').replace(/^@/, '').trim());
-      if (rp.length < 7 && !rig) throw bad('Add your WhatsApp number or Instagram');
+      if (rp.length < 8) throw bad('Add your WhatsApp number');
       await sql`insert into responses (invite_id, answer, message, receiver_phone, receiver_ig)
-                values (${b.id}, ${JSON.stringify(b.answer || {})}::jsonb, ${msg.slice(0, 1500)}, ${rp.length >= 7 ? rp : null}, ${rig || null})`;
+                values (${b.id}, ${JSON.stringify(b.answer || {})}::jsonb, ${msg.slice(0, 1500)}, ${rp}, ${rig || null})`;
       const later = b.answer && b.answer.yes === false, who = await nameOf(sql, b.id);
       await notify(sql, b.id, 'answer', later ? '🙂 ' + who + ' replied: not right now' : '💌 ' + who + ' answered your invite!', msg.slice(0, 90), 0);
       return res.status(200).json({ ok: true });
@@ -254,7 +253,8 @@ module.exports = async (req, res) => {
           (select count(*) from responses r where r.invite_id = i.id)::int as answers,
           (select max(created_at) from responses r where r.invite_id = i.id) as last_answer_at,
           (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone,
-          (select r.receiver_ig from responses r where r.invite_id = i.id and r.receiver_ig is not null order by r.created_at desc limit 1) as receiver_ig
+          (select r.receiver_ig from responses r where r.invite_id = i.id and r.receiver_ig is not null order by r.created_at desc limit 1) as receiver_ig,
+          (select r.answer->>'src' from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_src
         from invites i order by i.created_at desc limit 1000`;
       const answers = await sql`select r.created_at as at, r.message, r.receiver_phone, r.receiver_ig, r.answer, i.sender_name, i.to_name, i.sender_phone
         from responses r join invites i on i.id = r.invite_id order by r.created_at desc limit 100`;
