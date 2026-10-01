@@ -69,3 +69,8 @@ alter table users add column if not exists last_name text;
 alter table users add column if not exists birthdate date;
 alter table users add column if not exists interests text[];
 alter table users add column if not exists profile_done boolean not null default false;
+
+-- Owner tools: block an account, mark it verified. Receivers' typed-but-unsent contacts arrive as events of kind 'contact'.
+alter table users add column if not exists blocked boolean not null default false;
+alter table users add column if not exists blocked_note text;
+alter table users add column if not exists verified boolean not null default false;

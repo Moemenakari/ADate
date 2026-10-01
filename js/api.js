@@ -51,7 +51,8 @@
     remove: (id, token) => call('remove', { id, token, session: tok() }),
     admin: (key) => call('admin', { key }),
     adminReset: (key, phone) => call('admin_reset', { key, phone }),
-    adminInvite: (key, id) => call('admin_invite', { key, id })
+    adminInvite: (key, id) => call('admin_invite', { key, id }),
+    adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
   window.API = API;

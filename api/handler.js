@@ -46,6 +46,7 @@ async function userOf(sql, session) {
   if (!SES.test(session || '')) throw bad('Please log in', 401);
   const r = await sql`select u.* from sessions s join users u on u.id = s.user_id where s.token_hash = ${hash(session)}`;
   if (!r.length) throw bad('Please log in', 401);
+  if (r[0].blocked) throw bad('This account is blocked', 403);
   return r[0];
 }
 // the owner of an invite: logged-in account that created it, or the holder of its private token
@@ -122,7 +123,7 @@ module.exports = async (req, res) => {
       const phone = digits(b.phone);
       const r = await sql`select * from users where phone = ${phone}`;
       if (!r.length) throw bad('Wrong number or password', 401);
-      const u = r[0]; await checkLock(sql, u);
+      const u = r[0]; if (u.blocked) throw bad('This account is blocked', 403); await checkLock(sql, u);
       if (!u.pass_hash || !eq(kdf(b.password || '', u.pass_salt), u.pass_hash)) { await fail(sql, u); throw bad('Wrong number or password', 401); }
       await sql`update users set fails = 0, last_login_at = now() where id = ${u.id}`;
       return res.status(200).json({ session: await newSession(sql, u.id), user: publicUser(u) });
@@ -131,6 +132,7 @@ module.exports = async (req, res) => {
       const t = await verifyGoogle(b.credential);
       let r = await sql`select * from users where google_sub = ${t.sub}`;
       if (!r.length) r = await sql`insert into users (google_sub, email, name, first_name, last_name) values (${t.sub}, ${String(t.email || '').slice(0, 120)}, ${String(t.given_name || t.name || '').slice(0, 60)}, ${String(t.given_name || '').slice(0, 40)}, ${String(t.family_name || '').slice(0, 40)}) returning *`;
+      if (r[0].blocked) throw bad('This account is blocked', 403);
       await sql`update users set last_login_at = now() where id = ${r[0].id}`;
       return res.status(200).json({ session: await newSession(sql, r[0].id), user: publicUser(r[0]) });
     }
@@ -169,7 +171,7 @@ module.exports = async (req, res) => {
     if (action === 'recover') {
       const r = await sql`select * from users where phone = ${digits(b.phone)}`;
       if (!r.length) throw bad('No account with this number', 404);
-      const u = r[0]; await checkLock(sql, u); checkPassword(b.password);
+      const u = r[0]; if (u.blocked) throw bad('This account is blocked', 403); await checkLock(sql, u); checkPassword(b.password);
       if (!eq(kdf(norm(b.answer), u.answer_salt), u.answer_hash)) { await fail(sql, u); throw bad('That answer is not right', 401); }
       const ps = salt();
       await sql`update users set pass_salt = ${ps}, pass_hash = ${kdf(b.password, ps)}, fails = 0 where id = ${u.id}`;
@@ -190,7 +192,7 @@ module.exports = async (req, res) => {
     if (action === 'inbox') { // one invite with all its answers; reading it marks them as seen
       const i = await owned(sql, b);
       const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
-      const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
+      const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} and kind <> 'contact' order by created_at asc limit 400`;
       await sql`update responses set seen_at = now() where invite_id = ${b.id} and seen_at is null`;
       return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
     }
@@ -237,8 +239,10 @@ module.exports = async (req, res) => {
       return res.status(200).json(rows[0].config);
     }
     if (action === 'track') { // which screen they reached / how many times they pressed No. Fire-and-forget from the invite page.
-      if (!ID.test(b.id || '') || !['step', 'no', 'leave'].includes(b.kind)) throw bad('Bad event');
-      const data = JSON.stringify(b.data || {});
+      if (!ID.test(b.id || '') || !['step', 'no', 'leave', 'contact'].includes(b.kind)) throw bad('Bad event');
+      let dd = b.data || {};
+      if (b.kind === 'contact') dd = { phone: digits(dd.phone).slice(0, 16), ig: igOk(String(dd.ig || '').replace(/^@/, '').trim()), src: dd.src === 'contact' ? 'contact' : 'typed' }; // what the receiver typed on the last page, even if she never pressed send
+      const data = JSON.stringify(dd);
       if (data.length > 600) throw bad('Too large');
       const have = await sql`select (select count(*) from events where invite_id = ${b.id})::int as n from invites where id = ${b.id}`;
       if (!have.length) throw bad('Not found', 404);
@@ -266,7 +270,7 @@ module.exports = async (req, res) => {
     if (action === 'status') { // legacy private-link access
       const i = await owned(sql, b);
       const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
-      const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
+      const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} and kind <> 'contact' order by created_at asc limit 400`;
       return res.status(200).json({ created_at: i.created_at, opens: i.opens, first_opened_at: i.first_opened_at, last_opened_at: i.last_opened_at, config: i.config, responses: rs, events });
     }
     if (action === 'remove') {
@@ -276,7 +280,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
-    if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite') {
+    if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
       if (action === 'admin_invite') {
         if (!ID.test(b.id || '')) throw bad('Bad id');
@@ -286,6 +290,18 @@ module.exports = async (req, res) => {
         const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
         return res.status(200).json({ created_at: i[0].created_at, opens: i[0].opens, first_opened_at: i[0].first_opened_at, last_opened_at: i[0].last_opened_at, config: i[0].config, responses: rs, events });
       }
+      if (action === 'admin_mark') { // block / unblock / mark as verified, per account
+        const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
+        const op = String(b.op || '');
+        if (!['block', 'unblock', 'verify', 'unverify'].includes(op)) throw bad('Bad action');
+        const note = String(b.note || '').slice(0, 200) || null;
+        const r = op === 'block' ? await sql`update users set blocked = true, blocked_note = ${note} where id = ${id} returning id`
+          : op === 'unblock' ? await sql`update users set blocked = false, blocked_note = null where id = ${id} returning id`
+          : await sql`update users set verified = ${op === 'verify'} where id = ${id} returning id`;
+        if (!r.length) throw bad('No such account', 404);
+        if (op === 'block') { await sql`delete from sessions where user_id = ${id}`; await sql`delete from push_subs where user_id = ${id}`; }
+        return res.status(200).json({ ok: true });
+      }
       if (action === 'admin_reset') { // owner sets a temporary password; passwords themselves are never readable
         const phone = digits(b.phone);
         const temp = crypto.randomBytes(5).toString('hex'), ps = salt();
@@ -294,10 +310,10 @@ module.exports = async (req, res) => {
         await sql`delete from sessions where user_id = ${r[0].id}`;
         return res.status(200).json({ phone, temp });
       }
-      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
+      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
           (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
       const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
-          i.first_opened_at, i.last_opened_at, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,
+          i.first_opened_at, i.last_opened_at, i.config->>'toIg' as to_ig, (select u.email from users u where u.id = i.user_id) as account_email, (select u.id from users u where u.id = i.user_id) as account_id, (select e.data->>'phone' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'phone', '') <> '' order by e.created_at desc limit 1) as typed_phone, (select e.data->>'ig' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'ig', '') <> '' order by e.created_at desc limit 1) as typed_ig, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,
           (select count(*) from responses r where r.invite_id = i.id)::int as answers,
           (select max(created_at) from responses r where r.invite_id = i.id) as last_answer_at,
           (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone,
