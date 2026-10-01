@@ -846,6 +846,12 @@ function inviteCard(rec, loader) {
       (s.responses || []).forEach((r) => rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 They said YES · ' + ago(r.at)), details(r.answer || {}),
         r.phone ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📱 '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone))) : null,
         r.ig ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📸 '), h('a', { href: 'https://instagram.com/' + encodeURIComponent(r.ig), target: '_blank', rel: 'noopener' }, '@' + r.ig))) : null, r.message ? h('div', { class: 'bubble' }, r.message) : null)));
+      if (s.config && !s.config.toContact) { // older invites were made before this was required
+        let v = { contact: '' }; const save = h('button', { class: 'btn sm pri', disabled: true }), msg = h('span', { class: 'hint' });
+        const pick = contactPicker({ kind: 'wa', cc: s.config.cc || '961', phone: '', ig: '' }, (x) => { v = x; save.disabled = !x.contact; });
+        save.textContent = 'Save'; save.onclick = async () => { save.disabled = true; try { await API.update(rec.id, rec.token, Object.assign({}, s.config, { toKind: v.kind, toCc: v.cc, toPhone: v.phone, toIg: v.ig, toContact: v.contact })); msg.textContent = 'Saved ✓'; } catch (e) { msg.textContent = e.message || 'Could not save'; save.disabled = false; } };
+        rows.push(h('div', { class: 'note' }, h('b', null, 'Add who this is for'), h('p', { class: 'hint', style: 'margin:4px 0' }, 'Their WhatsApp number or Instagram. Only you and the site owner see it.'), pick, h('div', { class: 'row' }, save, msg)));
+      }
       rows.push(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(inviteUrl(rec.id))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy invite link'),
         h('button', { class: 'btn sm danger', onclick: async () => { if (confirm('Delete this invite and its answers for good?')) { try { await API.remove(rec.id, rec.token); } catch (e) { /* already gone */ } store.set('adate.mine', myInvites().filter((x) => x.id !== rec.id)); route(); } } }, 'Delete')));
       body.replaceChildren(...rows);
