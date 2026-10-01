@@ -50,4 +50,4 @@ We store names, the WhatsApp numbers entered, the invite (including uploaded pic
     python3 -m http.server 8000     # demo mode, http://localhost:8000
 
 ## Credits
-Idea, product and direction: **Moemen Akari**. Implemented with AI assistance (Claude Code). See `ROADMAP.md` for what comes next.
+Built by **Moemen Akari** (idea, design, product and decisions), using AI tools as a coding helper. See `ROADMAP.md` for what comes next.
