@@ -6,6 +6,7 @@ window.CommunityInit = function (ui) {
   const API = window.API;
   const THEMES = window.THEMES || {}, STICKERS = window.STICKERS || {};
   const FLAG = { LB: '🇱🇧', AE: '🇦🇪', SA: '🇸🇦', QA: '🇶🇦', KW: '🇰🇼', FR: '🇫🇷', US: '🇺🇸', CA: '🇨🇦', AU: '🇦🇺', DE: '🇩🇪', GB: '🇬🇧', EG: '🇪🇬', AF: '🌍', BH: '🇧🇭', OM: '🇴🇲', JO: '🇯🇴', SY: '🇸🇾', IQ: '🇮🇶', TR: '🇹🇷', CY: '🇨🇾', BR: '🇧🇷', SE: '🇸🇪', IT: '🇮🇹', ES: '🇪🇸' };
+  const CNAME = { LB: 'Lebanon', AE: 'United Arab Emirates', SA: 'Saudi Arabia', QA: 'Qatar', KW: 'Kuwait', FR: 'France', US: 'United States', CA: 'Canada', AU: 'Australia', DE: 'Germany', GB: 'United Kingdom', EG: 'Egypt', AF: 'Afghanistan' };
   const NICK_COUNTRIES = ['LB', 'AE', 'SA', 'QA', 'KW', 'FR', 'US', 'CA', 'AU', 'DE', 'GB', 'EG'];
   let ME = null;
   const err = (e) => (e && e.message) || 'Something went wrong';
@@ -55,16 +56,22 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     const d = await API.rooms(); let filter = 'all', q = '';
     const list = h('div', { class: 'stack' });
+    const card = (r) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title + (r.country ? ' ' + (FLAG[r.country] || '') : '')), h('small', null, `${r.members} members · ${r.msgs24} messages today`)),
+      r.member ? h('a', { class: 'btn sm pri', href: '#/room/' + r.id }, 'Open') : h('button', { class: 'btn sm', onclick: async (e) => {
+        if (r.price && !confirm(`Joining ${r.title} costs ${r.price} points. You have ${d.balance}. Join?`)) return;
+        e.currentTarget.disabled = true; try { await API.roomJoin(r.id); location.hash = '#/room/' + r.id; } catch (x) { toast(err(x), 'bad'); e.currentTarget.disabled = false; } } }, r.price ? 'Join · ⭐ ' + r.price : 'Join · free'));
     const draw = () => {
-      const rs = d.rooms.filter((r) => (filter === 'all' || (filter === 'mine' && r.member) || (filter === 'foryou' && r.score > 0) || (filter === r.kind)) && (!q || r.title.toLowerCase().includes(q)));
-      list.replaceChildren(...(rs.length ? rs.map((r) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title + (r.country ? ' ' + (FLAG[r.country] || '') : '')), h('small', null, `${r.members} members · ${r.msgs24} messages today` + (r.score >= 60 ? ' · 🔥 great match' : ''))),
-        r.member ? h('a', { class: 'btn sm pri', href: '#/room/' + r.id }, 'Open') : h('button', { class: 'btn sm', onclick: async (e) => {
-          if (r.price && !confirm(`Joining ${r.title} costs ${r.price} points. You have ${d.balance}. Join?`)) return;
-          e.currentTarget.disabled = true; try { await API.roomJoin(r.id); location.hash = '#/room/' + r.id; } catch (x) { toast(err(x), 'bad'); e.currentTarget.disabled = false; } } }, r.price ? 'Join · ⭐ ' + r.price : 'Join · free'))) : [h('p', { class: 'hint' }, 'No rooms here.')]));
+      const match = (r) => !q || r.title.toLowerCase().includes(q) || (r.country && ((CNAME[r.country] || '').toLowerCase().includes(q) || r.country.toLowerCase() === q));
+      const rs = d.rooms.filter((r) => (filter === 'all' || (filter === 'mine' && r.member) || (filter === 'foryou' && r.score > 0) || (filter === r.kind)) && match(r));
+      if (!rs.length) return list.replaceChildren(h('p', { class: 'hint' }, 'No groups found. Try another place or word.'));
+      const places = rs.filter((r) => r.kind === 'region'), others = rs.filter((r) => r.kind !== 'region');
+      const byCountry = {}; places.forEach((r) => { (byCountry[r.country || '??'] = byCountry[r.country || '??'] || []).push(r); });
+      const order = Object.keys(byCountry).sort((a, b) => (b === ME.country) - (a === ME.country) || a.localeCompare(b));
+      list.replaceChildren(...others.map(card), ...order.flatMap((c) => [h('div', { class: 'h2 country' }, (FLAG[c] || '📍') + ' ' + (CNAME[c] || c)), ...byCountry[c].map(card)]));
     };
-    const search = h('input', { type: 'text', placeholder: 'Search rooms', 'aria-label': 'Search rooms', oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } });
+    const search = h('input', { type: 'text', placeholder: 'Search a place or a group', 'aria-label': 'Search rooms', oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } });
     const chips = h('div', { class: 'row' }, [['all', 'All'], ['foryou', 'For you'], ['mine', 'Joined'], ['region', '📍 Places'], ['interest', 'Interests'], ['season', '🎃 Seasonal']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': id === filter ? 'true' : 'false', onclick: (e) => { filter = id; chips.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); draw(); } }, l)));
-    page('#/rooms', h('div', { class: 'h2' }, 'Rooms'), h('p', { class: 'hint' }, 'Text only. No links, no numbers. Places are free; some interest rooms cost 10 to 25 points.'), search, chips, list); draw();
+    page('#/rooms', h('div', { class: 'h2' }, 'Groups'), h('p', { class: 'hint' }, 'Text only, like a WhatsApp group. Search by place: city or country. Places are free; some interest groups cost 10 to 25 points.'), search, chips, list); draw();
   }
 
   /* ---------------------------------------------------------------- profile card */
