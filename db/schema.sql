@@ -309,3 +309,5 @@ create index if not exists matches_b_idx on matches (b, state);
 create table if not exists match_msgs (id bigserial primary key, match_id bigint not null references matches(id) on delete cascade, from_user bigint not null references users(id) on delete cascade, body text not null, kind text not null default 'text', created_at timestamptz not null default now());
 create index if not exists match_msgs_idx on match_msgs (match_id, id);
 create table if not exists match_votes (match_id bigint not null references matches(id) on delete cascade, user_id bigint not null references users(id) on delete cascade, round int not null, yes boolean not null, primary key (match_id, user_id, round));
+
+create table if not exists swipes (from_user bigint not null references users(id) on delete cascade, to_user bigint not null references users(id) on delete cascade, act text not null, created_at timestamptz not null default now(), primary key (from_user, to_user));

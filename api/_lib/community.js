@@ -326,4 +326,4 @@ async function handleAdmin(action, ctx) {
   return false;
 }
 
-module.exports = { handle, reportTarget, pushUsers, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };
+module.exports = { handle, reportTarget, pushUsers, photoOn, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };

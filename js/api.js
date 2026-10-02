@@ -101,6 +101,10 @@
     matchGame: (match) => call('match_game', { session: tok(), match }),
     matchVote: (match, yes) => call('match_vote', { session: tok(), match, yes }),
     matchReport: (match, block) => call('match_report', { session: tok(), match, block }),
+    discoverNext: () => call('discover_next', { session: tok() }),
+    discoverAct: (to, act, body) => call('discover_act', { session: tok(), to, act, body }),
+    discoverReport: (to) => call('discover_report', { session: tok(), to }),
+    discoverNear: () => call('discover_near', { session: tok() }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
