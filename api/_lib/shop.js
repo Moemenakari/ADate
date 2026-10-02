@@ -1,5 +1,6 @@
 // Buying points. The person pays with Whish (a link the owner shares), tells us the reference, and the owner approves it.
 // Nothing here touches a card or a bank: we only record a claim and, once the owner confirms the payment, add the points.
+const { pushUsers } = require('./community');
 // 5 points = $1, 25 points = $5
 const FIRST_BUY_BONUS = 10; // free points on a person's first paid order
 const PRODUCTS = { points5: { cents: 100, points: 5, label: '5 points' }, points25: { cents: 500, points: 25, label: '25 points' } };
@@ -10,7 +11,7 @@ async function handle(action, ctx) {
 
   if (action === 'shop') {
     const u = await need();
-    const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note')`;
+    const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note', 'whish_number')`;
     const orders = await sql`select id, kind, cents, status, created_at as at from orders where user_id = ${u.id} order by id desc limit 20`;
     return out({ first_bonus: orders.some((x) => x.status === 'paid') ? 0 : FIRST_BUY_BONUS, products: Object.entries(PRODUCTS).map(([kind, p]) => ({ kind, cents: p.cents, points: p.points, label: p.label })), settings: Object.fromEntries(s.map((x) => [x.key, x.value])), orders });
   }
@@ -27,6 +28,8 @@ async function handle(action, ctx) {
     if (!Number.isInteger(id)) throw bad('Bad id');
     const r = await sql`update orders set status = 'claimed', note = ${String(b.note || '').trim().slice(0, 120)} where id = ${id} and user_id = ${u.id} and status = 'pending' returning id`;
     if (!r.length) throw bad('Order not found', 404);
+    const admins = await sql`select id from users where is_admin and not blocked`; // the owner is told at once so the points can be added in minutes
+    await pushUsers(sql, admins.map((x) => x.id), '💳 A payment is waiting', 'Open Orders, check it on Whish and add the points.', '/#/admin');
     return out({ ok: true });
   }
   return false;
