@@ -15,6 +15,7 @@ window.CommunityInit = function (ui) {
   const applyTheme = (key) => { document.body.style.background = THEMES[key] ? THEMES[key].sky : ''; };
 
   const FRAME_LOOK = { halloween: ['#ff7a00', '🎃'], newyear: ['#e6b422', '🎆'], ramadan: ['#6b4fbb', '🌙'] };
+  const TICK = (ok) => (ok ? ' ✅' : '');
   function avatar(av, nick, size, frame, photo) {
     const sz = size || 40, box = h('span', { class: 'avatar' + (frame ? ' framed' : ''), style: `width:${sz}px;height:${sz}px` + (FRAME_LOOK[frame] ? `;--ring:${FRAME_LOOK[frame][0]}` : '') });
     const k = String(av || '').replace(/^cartoon:/, ''), an = /^animal:/.test(av || '') ? (window.ANIMALS || []).find((x) => 'animal:' + x[0] === av) : null;
@@ -95,7 +96,7 @@ window.CommunityInit = function (ui) {
     let p; try { p = await API.profileView(userId); } catch (e) { return toast(err(e), 'bad'); }
     const m = h('div', { class: 'modal', onclick: (e) => { if (e.target === m) m.remove(); } });
     const dm = h('div', { class: 'stack' });
-    m.append(h('div', { class: 'sheet stack' }, h('div', { class: 'hello' }, avatar(p.avatar, p.nick, 56, p.frame, p.photo), h('div', null, h('b', null, p.nick + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, `Age ${p.age} · ${p.zodiac}` + (p.verified ? ' · ✅ checked' : '')))),
+    m.append(h('div', { class: 'sheet stack' }, h('div', { class: 'hello' }, avatar(p.avatar, p.nick, 56, p.frame, p.photo), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, `Age ${p.age} · ${p.zodiac}` + (p.verified ? ' · ✅ checked' : '')))),
       p.interests.length ? h('div', { class: 'row' }, p.interests.map((i) => h('span', { class: 'chip static' }, i))) : null,
       p.me ? null : [p.can_dm ? h('div', { class: 'stack' }, h('input', { type: 'text', maxlength: 300, placeholder: 'Say hi (text only)', 'aria-label': 'First message' }), h('button', { class: 'btn pri block', onclick: async (e) => {
         const body = e.currentTarget.parentNode.querySelector('input').value; try { const r = await API.dmStart(p.id, body); m.remove(); location.hash = '#/dm/' + r.thread; } catch (x) { dm.replaceChildren(h('div', { class: 'note' }, err(x))); } } }, '💬 Send message request')) : h('p', { class: 'hint' }, 'Private messages are only between people in the same age circles.'), dm,
@@ -178,7 +179,7 @@ window.CommunityInit = function (ui) {
       const send = async () => { try { const r = await API.discoverAct(c.id, 'invite', msg.value.trim()); toast(r.state === 'friends' ? '🎉 It is a match! Open Chats' : r.state === 'waiting' ? 'Wait until they answer' : 'Invite sent 💜'); next(); } catch (e) { toast(err(e), 'bad'); } };
       msg.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
       box.replaceChildren(h('div', { class: 'swcard', style: 'background:' + gradOf(c.id) }, more, face,
-        h('div', { class: 'sw-info' }, h('div', { class: 'sw-name' }, h('b', null, c.nick), h('span', null, c.age_band), h('span', null, FLAG[c.country] || '')), h('div', { class: 'row' }, (c.shared.length ? c.shared : c.interests).slice(0, 5).map((x) => h('span', { class: 'sw-tag' }, (c.shared.includes(x) ? '✨ ' : '') + x))), c.langs && c.langs.length ? h('small', null, '🗣 ' + c.langs.join(' · ')) : null)),
+        h('div', { class: 'sw-info' }, h('div', { class: 'sw-name' }, h('b', null, c.nick + TICK(c.selfie_ok)), h('span', null, c.age_band), h('span', null, FLAG[c.country] || '')), h('div', { class: 'row' }, (c.shared.length ? c.shared : c.interests).slice(0, 5).map((x) => h('span', { class: 'sw-tag' }, (c.shared.includes(x) ? '✨ ' : '') + x))), c.langs && c.langs.length ? h('small', null, '🗣 ' + c.langs.join(' · ')) : null)),
         h('div', { class: 'sw-actions' }, h('button', { class: 'sw-skip', 'aria-label': 'Skip', onclick: async () => { try { await API.discoverAct(c.id, 'skip'); } catch (e) { /* ignore */ } next(); } }, '✕'), msg, h('button', { class: 'sw-send', 'aria-label': 'Send invite', onclick: send }, '🚀')));
     }
     async function next() { try { const d = await API.discoverNext(); show(d.card); } catch (e) { if (/who you are/i.test(err(e))) return prefsView(); toast(err(e), 'bad'); } }
@@ -198,7 +199,7 @@ window.CommunityInit = function (ui) {
     let stop = false, shown = '', lastId = 0, cur = null, prefs = { gender: '', meet: 'both' };
     const box = h('div', { class: 'matchbox stack' });
     const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('random'), box), bar('#/match', ME && ME.points));
-    const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, 'Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
+    const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, 'Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
     function prefsView(first) {
       const pick = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (prefs[key] === v ? ' on' : ''), onclick: () => { prefs[key] = v; prefsView(first); } }, h('span', null, e), h('b', null, l))));
       box.replaceChildren(h('div', { class: 'h2' }, 'Who you want to meet'), pick(IAM, 'gender'), pick(MEET, 'meet'),
@@ -308,6 +309,16 @@ window.CommunityInit = function (ui) {
     const blockedList = h('div', { class: 'stack' });
     const drawBlocked = (rows) => blockedList.replaceChildren(...(rows.length ? rows.map((x) => h('div', { class: 'setrow' }, h('span', null, x.nick), h('button', { class: 'btn sm', onclick: async () => { try { await API.userBlock(x.id, true); toast('Unblocked'); drawBlocked(rows.filter((y) => y.id !== x.id)); } catch (e) { toast(err(e), 'bad'); } } }, 'Unblock'))) : [h('p', { class: 'hint' }, 'You have not blocked anyone.')]));
     drawBlocked(bl.blocked || []);
+    const selfieBox = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
+    API.selfieState().then((st) => {
+      if (st.ok) return selfieBox.replaceChildren(h('p', null, '✅ You are verified by selfie.'));
+      if (st.state === 'pending') return selfieBox.replaceChildren(h('p', null, '⏳ Your selfie is waiting to be checked. We will tell you.'));
+      const f = h('input', { type: 'file', accept: 'image/*', capture: 'user', 'aria-label': 'Take a selfie' }), ok = h('input', { type: 'checkbox', 'aria-label': 'I agree' }), msg2 = h('div');
+      selfieBox.replaceChildren(h('p', null, 'Get a ✅ next to your name and ' + st.reward + ' points.'), ...(st.state === 'rejected' ? [h('div', { class: 'note' }, 'Your last selfie was not accepted. Try again.')] : []),
+        h('p', null, '1. Hold up ', h('b', { style: 'font-size:1.4rem' }, st.code + (st.code === 1 ? ' finger' : ' fingers')), ' next to your face.'), h('p', null, '2. Take the selfie.'), f,
+        h('label', { class: 'row', style: 'gap:8px;align-items:flex-start' }, ok, h('span', { class: 'hint' }, 'I agree that the site owner looks at this selfie once to check that I am a real person. It is deleted right after. It is never shown to anyone.')),
+        h('button', { class: 'btn pri block', onclick: async () => { const file = f.files[0]; if (!file) return msg2.replaceChildren(h('div', { class: 'note' }, 'Take the selfie first.')); if (!ok.checked) return msg2.replaceChildren(h('div', { class: 'note' }, 'Please agree first.')); try { const data = await ui.shrinkImage(file, 480, 0.7, true); await API.selfieSubmit(data); toast('Sent. We will check it soon.'); settings(); } catch (e) { msg2.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Send my selfie'), msg2);
+    }).catch(() => selfieBox.replaceChildren(h('p', { class: 'hint' }, 'Not available now.')));
     const pc = ui.pushControl ? await ui.pushControl() : null;
     const dpw = h('input', { type: 'password', placeholder: 'Your password', 'aria-label': 'Password to delete', autocomplete: 'current-password' }), dtx = h('input', { type: 'text', placeholder: 'Type DELETE', 'aria-label': 'Type DELETE', autocapitalize: 'characters' });
     page('#/me', h('div', { class: 'wz-h', style: 'font-size:1.9rem;margin:6px 0' }, 'Settings'),
@@ -315,6 +326,7 @@ window.CommunityInit = function (ui) {
       sec('✏️', 'My profile', link('🪪', 'Nickname, avatar, photo, frame', '#/me', 'Change how people see you')),
       sec('💜', 'Matching', h('b', null, 'I am'), pickRow(IAM, 'gender'), h('b', null, 'I want to meet'), pickRow(MEET, 'meet'), h('b', null, 'Languages'), langBox,
         h('button', { class: 'btn pri block', onclick: async () => { if (!pr.gender) return toast('Pick who you are', 'bad'); try { await API.matchPrefs({ gender: pr.gender, meet: pr.meet, langs: [...pr.langs] }); toast('Saved ✓'); } catch (e) { toast(err(e), 'bad'); } } }, 'Save')),
+      sec('🤳', 'Verified by selfie', selfieBox),
       sec('🔔', 'Notifications', pc || h('p', { class: 'hint' }, 'Not available on this phone.')),
       sec('🌓', 'Look', h('button', { class: 'btn block', onclick: () => { ui.toggleMode(); } }, 'Switch light / dark')),
       sec('🛡️', 'Safety', h('p', { class: 'hint' }, 'Chats are text only. Links, phone numbers and usernames are blocked. Three people reporting someone mutes them for 24 hours.'), h('b', null, 'People I blocked'), blockedList),
@@ -330,7 +342,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     const d = await API.points(); ME.points = d.balance;
     const link = location.origin + '/#/join/' + ME.ref_code, text = 'Come play on ADate with me: ' + link;
-    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', gift: 'Gift from the ADate team', tod: 'Truth or Dare' };
+    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', gift: 'Gift from the ADate team', selfie: 'Verified by selfie', tod: 'Truth or Dare' };
     page('#/points', h('div', { class: 'bigpts' }, h('small', null, 'Your points'), h('b', null, '⭐ ' + d.balance)),
       h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open ADate (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Invite a friend: +5 points'), h('p', { class: 'hint' }, 'You earn 5 when your friend joins and sends their first message. Up to 10 friends a day.'), h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your invite link' }),

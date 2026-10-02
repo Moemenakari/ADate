@@ -317,3 +317,10 @@ create table if not exists match_games (match_id bigint not null references matc
 -- ===== Messages from the ADate team (with optional gift points) =====
 create table if not exists notices (id bigserial primary key, user_id bigint not null references users(id) on delete cascade, body text not null, points int not null default 0, read boolean not null default false, created_at timestamptz not null default now());
 create index if not exists notices_user_idx on notices (user_id, read, id);
+
+-- ===== Verified by selfie (the picture is deleted as soon as the owner decides) =====
+alter table users add column if not exists selfie text;
+alter table users add column if not exists selfie_state text not null default 'none';
+alter table users add column if not exists selfie_code int;
+alter table users add column if not exists selfie_ok boolean not null default false;
+alter table users add column if not exists selfie_at timestamptz;

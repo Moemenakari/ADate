@@ -26,6 +26,7 @@ function screenText(raw, max) {
 // Seasonal frames around the profile picture: 5 points, can be bought while the season runs and are kept afterwards.
 const FRAMES = { halloween: { name: 'Halloween', emoji: '🎃', price: 5, from: '2026-10-01', to: '2026-11-05' }, newyear: { name: 'New Year', emoji: '🎆', price: 5, from: '2026-12-15', to: '2027-01-06' }, ramadan: { name: 'Ramadan', emoji: '🌙', price: 5, from: '2027-02-08', to: '2027-03-12' } };
 const frameOpen = (f) => { const t = new Date().toISOString().slice(0, 10); return t >= f.from && t <= f.to; };
+const SELFIE_REWARD = 5;
 const PHOTO_PRICE = 25, SHARE_REWARD = 2, SHARE_PER_DAY = 3;
 const roomPrice = (r, msgs24) => (r.free || r.kind !== 'interest' ? 0 : 10 + 5 * Math.round(3 * Math.min(1, msgs24 / 300)));
 const photoOn = (u) => !!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date();
@@ -61,7 +62,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
-      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
+      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: !!u.selfie_ok, has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
     }
     /* ------------------------------------------------ nickname, theme, avatar */
     case 'nick_set': {
@@ -89,11 +90,11 @@ async function handle(action, ctx) {
     }
     case 'profile_view': {
       const u = await need(), id = idNum(b.user_id);
-      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, blocked from users where id = ${id}`;
+      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, selfie_ok, blocked from users where id = ${id}`;
       if (!r.length || r[0].blocked) throw bad('Not found', 404);
       const t = r[0], age = ageOf(t.birthdate);
       const blockedByMe = (await sql`select 1 from blocks where blocker = ${u.id} and blocked = ${id}`).length > 0;
-      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
+      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: !!t.selfie_ok, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
       const u = await need(); if (photoOn(u)) return out({ ok: true, balance: await balanceOf(sql, u.id) });
@@ -203,6 +204,21 @@ async function handle(action, ctx) {
       return out({ ok: true, id: r[0].id });
     }
     /* ------------------------------------------------ safety */
+    case 'selfie_state': { // am I verified by selfie, is one waiting, and which number of fingers to show
+      const u = await need();
+      let code = u.selfie_code;
+      if (!u.selfie_ok && !code) { code = 1 + Math.floor(Math.random() * 5); await sql`update users set selfie_code = ${code} where id = ${u.id}`; }
+      return out({ ok: !!u.selfie_ok, state: u.selfie_ok ? 'approved' : u.selfie_state, code: u.selfie_ok ? null : code, reward: SELFIE_REWARD });
+    }
+    case 'selfie_submit': { // the picture is only for the owner to look at once, then it is deleted
+      const u = await need();
+      if (u.selfie_ok) throw bad('You are already verified');
+      if (u.selfie_state === 'pending') throw bad('Your selfie is waiting to be checked', 409);
+      const d = String(b.data || ''); if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(d) || d.length > 260000) throw bad('That picture is too big or not a picture');
+      await sql`update users set selfie = ${d}, selfie_state = 'pending', selfie_at = now() where id = ${u.id}`;
+      await notifyAdmins(sql, '🤳 A selfie is waiting', (u.nick || 'Someone') + ' wants to be verified.');
+      return out({ ok: true });
+    }
     case 'notices_list': { // messages from the ADate team that I have not dismissed
       const u = await need();
       const rows = await sql`select id, body, points, created_at as at from notices where user_id = ${u.id} and not read order by id desc limit 10`;
@@ -304,7 +320,7 @@ async function handle(action, ctx) {
     }
     /* ------------------------------------------------ cleanup: messages live 3 days, reports 7 days. Points and money are never touched. */
     case 'cleanup': {
-      await sql`delete from match_queue where since < now() - interval '10 minutes'`; await sql`delete from matches where created_at < now() - interval '3 days'`;
+      await sql`delete from match_queue where since < now() - interval '10 minutes'`; await sql`update users set selfie = null, selfie_state = 'none' where selfie_state = 'pending' and selfie_at < now() - interval '7 days'`; await sql`delete from matches where created_at < now() - interval '3 days'`;
       const a = await sql`delete from messages where expires_at < now() returning id`, d = await sql`delete from dm_messages where expires_at < now() returning id`, r = await sql`delete from reports where created_at < now() - interval '7 days' returning id`;
       return out({ ok: true, messages: a.length, dms: d.length, reports: r.length });
     }
@@ -328,6 +344,25 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  if (action === 'admin_selfies') {
+    const rows = await sql`select id, nick, name, first_name, last_name, phone, selfie as data, selfie_code as code, selfie_at as at from users where selfie_state = 'pending' and selfie is not null order by selfie_at limit 30`;
+    return out({ selfies: rows });
+  }
+  if (action === 'admin_selfie_decide') { // approve: badge + points; either way the picture is erased now
+    const uid = Number(b.user_id); if (!Number.isInteger(uid) || uid < 1) throw bad('Bad user');
+    const t = await sql`select id from users where id = ${uid} and selfie_state = 'pending'`; if (!t.length) throw bad('Nothing waiting', 404);
+    if (b.approve) {
+      await sql`update users set selfie_ok = true, selfie_state = 'approved', selfie = null where id = ${uid}`;
+      await sql`insert into points_ledger (user_id, delta, reason, ref) select ${uid}, ${SELFIE_REWARD}, 'selfie', null where not exists (select 1 from points_ledger where user_id = ${uid} and reason = 'selfie')`;
+      await sql`insert into notices (user_id, body, points) values (${uid}, 'You are now verified by selfie ✓ Thank you!', ${SELFIE_REWARD})`;
+      await pushUsers(sql, [uid], '✅ You are verified', `Your selfie was accepted. +${SELFIE_REWARD} points.`, '/#/');
+    } else {
+      await sql`update users set selfie_state = 'rejected', selfie = null, selfie_code = ${1 + Math.floor(Math.random() * 5)} where id = ${uid}`;
+      await sql`insert into notices (user_id, body, points) values (${uid}, 'Your selfie was not accepted. Try again: your face clear and the right number of fingers.', 0)`;
+      await pushUsers(sql, [uid], '🤳 Selfie not accepted', 'Please try again from Settings.', '/#/settings');
+    }
+    return out({ ok: true });
+  }
   if (action === 'admin_gift') { // the owner thanks someone: points (or a deduction) and a message from the team
     const uid = Number(b.user_id), pts = Math.trunc(Number(b.points) || 0), msg = String(b.message || '').trim().slice(0, 300);
     if (!Number.isInteger(uid) || uid < 1) throw bad('Bad user');

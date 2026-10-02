@@ -1155,6 +1155,7 @@ function privacy() {
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
       h('p', null, 'ADate is a free service. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
       h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The number or Instagram typed on the last page is saved as soon as it is typed, even if the answer is never sent. The site owner can block accounts that look fake. The invite page says so.'),
+      h('p', null, 'Verified by selfie: if you choose to send a selfie, only the site owner looks at it, once, to check you are a real person. It is erased as soon as the owner decides (or after 7 days). It is never shown to anyone. Only the result (a tick) is kept.'),
       h('p', null, 'In the community, chat messages are text only and are deleted after 3 days (or when a room passes 1000 messages). Reports are kept 7 days so they can be reviewed. Points are kept. You can block anyone and report any message.'),
       h('p', null, 'Payments: you pay for points on Whish yourself. ADate never asks for, sees or stores your card or bank details. We keep only the order, its amount and the reference you type, so the owner can check it and add your points.'),
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
@@ -1169,7 +1170,7 @@ async function admin() {
     const key = inp.value.trim(); if (!key) return;
     out.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
     try {
-      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { d.reports = (await API.adminReports(key)).targets; } catch (e) { d.reports = []; } try { d.tod = (await API.adminTod(key)).questions; } catch (e) { d.tod = []; } try { d.orders = await API.adminOrders(key); } catch (e) { d.orders = { orders: [], done: [] }; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
+      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { d.reports = (await API.adminReports(key)).targets; } catch (e) { d.reports = []; } try { d.tod = (await API.adminTod(key)).questions; } catch (e) { d.tod = []; } try { d.selfies = (await API.adminSelfies(key)).selfies; } catch (e) { d.selfies = []; } try { d.orders = await API.adminOrders(key); } catch (e) { d.orders = { orders: [], done: [] }; } try { sessionStorage.setItem('adate.key', key); } catch (e) { /* ignore */ }
       const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:96px;text-align:center;margin:0;padding:10px' }, h('b', { style: 'font-size:1.5rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
       const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
       const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
@@ -1226,6 +1227,13 @@ async function admin() {
             h('div', { class: 'stack' }, h('div', { class: 'fieldrow' }, lvl, kind), txt, h('button', { class: 'btn pri', onclick: () => { if (txt.value.trim().length < 5) return; refresh({ op: 'add', level: lvl.value, kind: kind.value, text: txt.value }); } }, 'Add')),
             ...[1, 2, 3, 4, 5].map((n) => h('details', null, h('summary', null, `Level ${n} (${qs.filter((x) => x.level === n && x.active).length} active)`), ...qs.filter((x) => x.level === n).map((x) => h('div', { class: 'hist' }, h('span', { style: x.active ? '' : 'opacity:.4;text-decoration:line-through' }, (x.kind === 'dare' ? '🔥 ' : '💬 ') + x.text), h('button', { class: 'btn sm', onclick: () => refresh({ op: x.active ? 'hide' : 'show', id: x.id }) }, x.active ? 'Hide' : 'Show')))))];
         },
+        selfies: () => {
+          const decide = async (x, ok) => { if (!confirm(ok ? 'Approve and give the badge and points?' : 'Reject this selfie?')) return; try { await API.adminSelfieDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
+          return [h('p', { class: 'hint' }, 'Check that the face is real and the person shows the right number of fingers. The picture is erased as soon as you decide, and after 7 days if you do not.'), note,
+            ...((d.selfies || []).length ? d.selfies.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🤳 ' + (x.nick || x.name || '?')), h('span', { class: 'badge' }, 'Fingers: ' + x.code)),
+              h('img', { src: x.data, alt: 'selfie', style: 'max-width:100%;border-radius:14px' }), h('div', { class: 'hint' }, ago(x.at)),
+              h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject')))) : [h('p', { class: 'hint' }, 'No selfies waiting.')])];
+        },
         orders: () => {
           const o = d.orders || { orders: [], done: [] };
           const decide = async (x, ok) => { if (!confirm(ok ? `Add the points to ${x.name || x.nick}? Check Whish first.` : 'Reject this order?')) return; try { await API.adminOrderDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
@@ -1268,7 +1276,7 @@ async function admin() {
           a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
       };
       const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['reports', '🚩 Reports'], ['orders', '🛒 Orders'], ['tod', '🎲 Questions'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
+        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['reports', '🚩 Reports'], ['orders', '🛒 Orders'], ['selfies', '🤳 Selfies'], ['tod', '🎲 Questions'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
       draw();
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
