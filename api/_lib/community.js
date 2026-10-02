@@ -79,7 +79,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
-      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
+      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, nudge_off: !!u.nudge_off, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
     }
     /* ------------------------------------------------ nickname, theme, avatar */
     case 'nick_set': {
@@ -283,6 +283,17 @@ async function handle(action, ctx) {
       if (!r.length) throw bad('Come back tomorrow for the next one', 409);
       return out({ ok: true, prize, balance: await balanceOf(sql, u.id) });
     }
+    case 'mute_get': { const u = await need(); return out({ muted: (await sql`select 1 from notif_mutes where user_id = ${u.id} and kind = ${b.kind === 'room' ? 'room' : 'dm'} and ref = ${idNum(b.id)}`).length > 0 }); }
+    case 'mute_set': {
+      const u = await need(), kind = b.kind === 'room' ? 'room' : 'dm', ref = idNum(b.id);
+      if (b.on) await sql`insert into notif_mutes (user_id, kind, ref) values (${u.id}, ${kind}, ${ref}) on conflict do nothing`; else await sql`delete from notif_mutes where user_id = ${u.id} and kind = ${kind} and ref = ${ref}`;
+      return out({ ok: true });
+    }
+    case 'nudge_set': { // switch the reminder notifications on or off
+      const u = await need();
+      await sql`update users set nudge_off = ${!!b.off} where id = ${u.id}`;
+      return out({ ok: true });
+    }
     case 'notices_list': { // messages from the ADate team that I have not dismissed
       const u = await need();
       const rows = await sql`select id, body, points, created_at as at from notices where user_id = ${u.id} and not read order by id desc limit 10`;
@@ -411,7 +422,13 @@ async function handle(action, ctx) {
         let streak = t[0].streak || 0, newSd = sd;
         if (aDay === today && bDay === today && sd !== today) { streak = sd === yest ? streak + 1 : 1; newSd = today; }
         await sql`update dm_threads set a_day = ${aDay}, b_day = ${bDay}, streak = ${streak}, streak_day = ${newSd} where id = ${id}`; }
-      await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open ADate to read it.', '/#/dm/' + id);
+      const bot = (await sql`select role from users where id = ${other}`)[0];
+      if (bot && bot.role === 'bot') { // Engy and other labelled bots are always online and answer straight away
+        const R = ['Hey! 😊 Great to hear from you. How is your day going?', 'Haha nice! Tell me more 😄', 'Want to play something? Open a game from the Play menu 🎮', 'I like that! What music are you into these days? 🎧', 'Same here! What do you do when you are bored?', 'Tell me one thing that made you smile today 🌟', 'Ooh, interesting. Truth or Dare later? 🎭', 'I am a bot, so I never sleep. Ask me anything fun! 🤖'];
+        await sql`insert into dm_messages (thread_id, from_user, body) values (${id}, ${other}, ${R[Math.floor(Math.random() * R.length)]})`;
+        return out({ ok: true });
+      }
+      if (!(await sql`select 1 from notif_mutes where user_id = ${other} and kind = 'dm' and ref = ${id}`).length) await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open ADate to read it.', '/#/dm/' + id);
       return out({ ok: true });
     }
     case 'dm_respond': {

@@ -107,9 +107,10 @@ module.exports = async (req, res) => {
   const action = String((req.query && req.query.action) || '');
   try {
     if (action === 'ping') return res.status(200).json({ ok: true, app: 'adate', questions: QUESTIONS, q2: Q2, vapid: process.env.VAPID_PUBLIC_KEY || null, google: GOOGLE_ID || null });
-    if (req.method !== 'POST' && action !== 'cleanup') throw bad('POST only', 405);
+    if (req.method !== 'POST' && action !== 'cleanup' && action !== 'nudge') throw bad('POST only', 405);
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const sql = db();
+    if (await require('./_lib/nudge').handle(action, { sql, req, res, bad })) return;
     if (await community.handle(action, { sql, b, res, bad, userOf })) return;
     if (await play.handle(action, { sql, b, res, bad, userOf })) return;
     if (await shop.handle(action, { sql, b, res, bad, userOf })) return;

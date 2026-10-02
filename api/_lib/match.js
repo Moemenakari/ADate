@@ -273,7 +273,7 @@ async function handle(action, ctx) {
     const meet = u.meet || 'both', age = ageOf(u.birthdate);
     const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.avatar, t.frame, t.last_seen, t.selfie_ok, t.is_admin, t.role, t.reply_n, t.reply_secs,
         exists (select 1 from dm_threads d where d.status = 'open' and ((d.a = ${u.id} and d.b = t.id) or (d.b = ${u.id} and d.a = t.id))) as friend
-      from users t where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and t.last_seen > now() - interval '150 seconds'
+      from users t where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.last_seen > now() - interval '150 seconds' or t.role = 'bot')
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = t.id) or (bl.blocker = t.id and bl.blocked = ${u.id}))
       order by t.last_seen desc limit 60`;

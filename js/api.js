@@ -144,6 +144,9 @@
     notices: () => call('notices_list', { session: tok() }),
     noticeRead: (id) => call('notice_read', { session: tok(), id }),
     adminGift: (key, user_id, points, message) => call('admin_gift', { key, user_id, points, message }),
+    muteGet: (kind, id) => call('mute_get', { session: tok(), kind, id }),
+    muteSet: (kind, id, on) => call('mute_set', { session: tok(), kind, id, on }),
+    nudgeSet: (off) => call('nudge_set', { session: tok(), off }),
     installClaim: () => call('install_claim', { session: tok() }),
     payCard: (id) => call('pay_card', { session: tok(), id }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })

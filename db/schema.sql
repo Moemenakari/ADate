@@ -367,3 +367,8 @@ alter table users add column if not exists reply_n int not null default 0;
 alter table users add column if not exists reply_secs bigint not null default 0;
 create table if not exists profile_views (id bigserial primary key, viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, notified boolean not null default false, created_at timestamptz not null default now());
 create index if not exists profile_views_target_idx on profile_views (target, id desc);
+
+alter table users add column if not exists nudge_off boolean not null default false;
+alter table users add column if not exists nudged_at timestamptz;
+create table if not exists notif_mutes (user_id bigint not null references users(id) on delete cascade, kind text not null, ref bigint not null, primary key (user_id, kind, ref));
+update users set nick = 'Bot' where phone = 'bot-engy';

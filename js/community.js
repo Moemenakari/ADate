@@ -120,6 +120,7 @@ window.CommunityInit = function (ui) {
   }
 
   /* ---------------------------------------------------------------- chat engine (rooms and private) */
+  const muteBtn = (kind, id) => { const b = h('button', { class: 'btn sm', 'aria-label': 'Notifications' }, '🔔'); let off = false; const paint = () => { b.textContent = off ? '🔕' : '🔔'; }; API.muteGet(kind, id).then((r) => { off = !!r.muted; paint(); }).catch(() => {}); b.onclick = async () => { try { await API.muteSet(kind, id, !off); off = !off; paint(); toast(off ? 'Notifications are off for this chat' : 'Notifications are on'); } catch (e) { toast(err(e), 'bad'); } }; return b; };
   function chat({ title, emoji, backHref, headerExtra, fetchFirst, fetchAfter, send, mineKey, report, extraTick, afterLayout }) {
     let last = 0, mutedUntil = null;
     const list = h('div', { class: 'chatlist' }), msg = h('div'), inp = h('input', { type: 'text', maxlength: 500, placeholder: 'Write a message (text only)', 'aria-label': 'Message', enterkeyhint: 'send' });
@@ -142,7 +143,7 @@ window.CommunityInit = function (ui) {
   async function room(id) {
     if (!ME) await load();
     chat({ title: 'Room', backHref: '#/rooms', fetchFirst: () => API.msgList(id), fetchAfter: (a) => API.msgList(id, a), send: (b) => API.msgSend(id, b), report: (mid) => API.report(mid, 'room'),
-      headerExtra: h('button', { class: 'btn sm', onclick: async () => { if (confirm('Leave this room?')) { await API.roomLeave(id); location.hash = '#/rooms'; } } }, 'Leave') });
+      headerExtra: h('span', { class: 'row' }, muteBtn('room', id), h('button', { class: 'btn sm', onclick: async () => { if (confirm('Leave this room?')) { await API.roomLeave(id); location.hash = '#/rooms'; } } }, 'Leave')) });
     API.rooms().then((d) => { const r = d.rooms.find((x) => String(x.id) === String(id)); if (r) document.querySelector('.chathead .ct b').textContent = (r.emoji || '') + ' ' + r.title; }).catch(() => {});
   }
 
@@ -202,7 +203,7 @@ window.CommunityInit = function (ui) {
       if (th.locked) status.append(h('div', { class: 'note stack' }, h('span', null, '⏳ The free hour is over. One of you can unlock the chat for 3 ⭐ (you have ' + d.balance + ').'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.dmUnlock(id); ME.points = r.balance; toast('Unlocked'); dm(id); } catch (e) { toast(err(e), 'bad'); } } }, 'Unlock for 3 ⭐')));
       else if (th.source === 'match' && !th.unlocked && th.unlock_until) { const min = Math.max(0, Math.round((new Date(th.unlock_until) - Date.now()) / 60000)); status.append(h('small', { class: 'hint' }, '⏳ Free chat: ' + min + ' min left')); }
     }
-    chat({ title: 'Chat', backHref: '#/dms',
+    chat({ title: 'Chat', backHref: '#/dms', headerExtra: muteBtn('dm', id),
       afterLayout: ({ banner }) => { banner.after(status, tools, slot); playMenu(); },
       extraTick: (d, first) => { if (!d.thread) return; banners(d); if (d.thread.status === 'open') API.fgameState(id).then((r) => showGame(r.game)).catch(() => {}); else tools.style.display = 'none'; },
       fetchFirst: async () => { const d = await API.dmOpen(id); t = d; if (d.thread.status === 'pending' && d.thread.started_by !== ME.id) showRequest(d); return { messages: pack(d), other: d.other, thread: d.thread, balance: d.balance }; },
@@ -391,7 +392,7 @@ window.CommunityInit = function (ui) {
         h('button', { class: 'btn pri block', onclick: async () => { if (!pr.gender) return toast('Pick who you are', 'bad'); try { await API.matchPrefs({ gender: pr.gender, meet: pr.meet, langs: [...pr.langs] }); toast('Saved ✓'); } catch (e) { toast(err(e), 'bad'); } } }, 'Save')),
       sec('🤳', 'Verified by selfie', selfieBox),
       socialSec,
-      sec('🔔', 'Notifications', pc || h('p', { class: 'hint' }, 'Not available on this phone.')),
+      sec('🔔', 'Notifications', pc || h('p', { class: 'hint' }, 'Not available on this phone.'), h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: !ME.nudge_off, onchange: async (e) => { try { await API.nudgeSet(!e.target.checked); ME.nudge_off = !e.target.checked; toast('Saved ✓'); } catch (x) { toast(err(x), 'bad'); } } }), h('span', null, 'Reminders when I have been away (one a day at most)'))),
       sec('🌓', 'Look', h('button', { class: 'btn block', onclick: () => { ui.toggleMode(); } }, 'Switch light / dark')),
       sec('🛡️', 'Safety', h('p', { class: 'hint' }, 'Chats are text only. Links, phone numbers and usernames are blocked. Three people reporting someone mutes them for 24 hours.'), h('b', null, 'People I blocked'), blockedList),
       sec('⭐', 'Points', link('⭐', 'My points: ' + ME.points, '#/points', 'History and invite links'), link('🛒', 'Get more points', '#/shop'), link('🎲', 'Truth or Dare levels', '#/tod')),
