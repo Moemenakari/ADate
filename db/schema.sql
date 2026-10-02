@@ -357,3 +357,13 @@ insert into rooms (slug, title, emoji, kind, country, interest, free) values
 on conflict (slug) do nothing;
 alter table users add column if not exists socials jsonb;
 create table if not exists social_unlocks (viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, created_at timestamptz not null default now(), primary key (viewer, target));
+
+-- ===== Streaks between friends, fast replies, who viewed my profile =====
+alter table dm_threads add column if not exists streak int not null default 0;
+alter table dm_threads add column if not exists streak_day date;
+alter table dm_threads add column if not exists a_day date;
+alter table dm_threads add column if not exists b_day date;
+alter table users add column if not exists reply_n int not null default 0;
+alter table users add column if not exists reply_secs bigint not null default 0;
+create table if not exists profile_views (id bigserial primary key, viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, notified boolean not null default false, created_at timestamptz not null default now());
+create index if not exists profile_views_target_idx on profile_views (target, id desc);

@@ -2,7 +2,7 @@
 // (age circle, who they want to meet, shared interests) are put in a short chat that is erased afterwards.
 // They play up to 3 rounds of Truth or Dare questions; after each round each says Yes or No.
 // If both say Yes at least 2 times out of 3 they become friends (a normal private chat opens). Otherwise they part.
-const { ageOf, shareCircle, circlesOf, bandOf, screenText, reportTarget, pushUsers, zodiac, dateStr, photoOn, tickOf, roleOf } = require('./community');
+const { ageOf, shareCircle, circlesOf, bandOf, screenText, reportTarget, pushUsers, zodiac, dateStr, photoOn, tickOf, roleOf, fastOf } = require('./community');
 
 const ROUNDS = 3, NEED_YES = 2, WAIT_SECONDS = 120, COOLDOWN_HOURS = 24;
 const GENDERS = ['m', 'f'], MEETS = ['m', 'f', 'both'];
@@ -21,9 +21,9 @@ async function handle(action, ctx) {
   const mine = async (u, id) => { const m = await sql`select * from matches where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!m.length) throw bad('Not found', 404); return m[0]; };
   const peerCard = async (u, m) => {
     const pid = m.a === u.id ? m.b : m.a;
-    const p = (await sql`select id, nick, country, birthdate, interests, avatar, frame, langs, selfie_ok, is_admin, role, last_seen from users where id = ${pid}`)[0];
+    const p = (await sql`select id, nick, country, birthdate, interests, avatar, frame, langs, selfie_ok, is_admin, role, last_seen, reply_n, reply_secs from users where id = ${pid}`)[0];
     const mi = new Set(u.interests || []);
-    return { id: p.id, nick: p.nick, last_seen: p.last_seen, selfie_ok: tickOf(p), role: roleOf(p), country: p.country, age_band: bandOf(ageOf(p.birthdate)), avatar: p.avatar || '', frame: p.frame || '', langs: p.langs || [], shared: (p.interests || []).filter((x) => mi.has(x)) };
+    return { id: p.id, nick: p.nick, last_seen: p.last_seen, selfie_ok: tickOf(p), role: roleOf(p), fast: fastOf(p), country: p.country, age_band: bandOf(ageOf(p.birthdate)), avatar: p.avatar || '', frame: p.frame || '', langs: p.langs || [], shared: (p.interests || []).filter((x) => mi.has(x)) };
   };
   const stateOf = async (u, m) => {
     const pid = m.a === u.id ? m.b : m.a, inv = m.kind === 'invite', judge = m.judge === u.id;
@@ -187,7 +187,7 @@ async function handle(action, ctx) {
     const u = await need();
     if (!u.gender) throw bad('Tell us who you are first', 409);
     const meet = u.meet || 'both', age = ageOf(u.birthdate), mi = new Set(u.interests || []);
-    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
+    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, t.reply_n, t.reply_secs, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
       where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.muted_until is null or t.muted_until < now())
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
         and not exists (select 1 from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'invite')
@@ -198,7 +198,7 @@ async function handle(action, ctx) {
       .sort((x, y) => (y.fresh - x.fresh) || (x.fresh ? y.score - x.score : new Date(x.t.skipped_at) - new Date(y.t.skipped_at))); // people you skipped come back, oldest skip first, once the new ones run out
     if (!ok.length) return out({ card: null });
     const t = ok[0].t;
-    return out({ card: { id: t.id, nick: t.nick, last_seen: t.last_seen, selfie_ok: tickOf(t), role: roleOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
+    return out({ card: { id: t.id, nick: t.nick, last_seen: t.last_seen, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
   }
   if (action === 'discover_act') { // Skip, or Invite with an optional first message
     const u = await need(), to = idNum(b.to); if (to === u.id) throw bad('That is you');
@@ -238,7 +238,7 @@ async function handle(action, ctx) {
     return out({ country: c, people: n[0].n, rooms });
   }
   /* ------------------------------------------------ Game invitations from Swipe or Online */
-  const cardOf = (u, p) => { const mi = new Set(u.interests || []); return { id: p.id, nick: p.nick, last_seen: p.last_seen, selfie_ok: tickOf(p), role: roleOf(p), country: p.country, age_band: bandOf(ageOf(p.birthdate)), avatar: p.avatar || '', frame: p.frame || '', shared: (p.interests || []).filter((x) => mi.has(x)) }; };
+  const cardOf = (u, p) => { const mi = new Set(u.interests || []); return { id: p.id, nick: p.nick, last_seen: p.last_seen, selfie_ok: tickOf(p), role: roleOf(p), fast: fastOf(p), country: p.country, age_band: bandOf(ageOf(p.birthdate)), avatar: p.avatar || '', frame: p.frame || '', shared: (p.interests || []).filter((x) => mi.has(x)) }; };
   if (action === 'invite_game') {
     const u = await need(), to = idNum(b.to); if (to === u.id) throw bad('That is you');
     const t = await sql`select id, nick, birthdate, blocked, profile_done from users where id = ${to}`;
@@ -255,10 +255,10 @@ async function handle(action, ctx) {
   }
   if (action === 'invite_list') { // incoming and outgoing game invitations
     const u = await need();
-    const rows = await sql`select m.id, m.state, m.round, m.invited_by, m.judge, m.thread_id, m.created_at as at, x.id as pid, x.nick, x.avatar, x.frame, x.country, x.birthdate, x.interests, x.last_seen, x.selfie_ok, x.is_admin, x.role
+    const rows = await sql`select m.id, m.state, m.round, m.invited_by, m.judge, m.thread_id, m.created_at as at, x.id as pid, x.nick, x.avatar, x.frame, x.country, x.birthdate, x.interests, x.last_seen, x.selfie_ok, x.is_admin, x.role, x.reply_n, x.reply_secs
       from matches m join users x on x.id = case when m.a = ${u.id} then m.b else m.a end
       where m.kind = 'invite' and (m.a = ${u.id} or m.b = ${u.id}) and (m.state in ('invited', 'chat') or (m.state = 'friends' and m.created_at > now() - interval '3 days')) order by m.id desc limit 40`;
-    return out({ invites: rows.map((r) => ({ id: r.id, state: r.state, round: r.round, mine: r.invited_by === u.id, thread: r.thread_id, at: r.at, peer: cardOf(u, { id: r.pid, nick: r.nick, avatar: r.avatar, frame: r.frame, country: r.country, birthdate: r.birthdate, interests: r.interests, last_seen: r.last_seen, selfie_ok: r.selfie_ok, is_admin: r.is_admin, role: r.role }) })) });
+    return out({ invites: rows.map((r) => ({ id: r.id, state: r.state, round: r.round, mine: r.invited_by === u.id, thread: r.thread_id, at: r.at, peer: cardOf(u, { id: r.pid, nick: r.nick, avatar: r.avatar, frame: r.frame, country: r.country, birthdate: r.birthdate, interests: r.interests, last_seen: r.last_seen, selfie_ok: r.selfie_ok, is_admin: r.is_admin, role: r.role, reply_n: r.reply_n, reply_secs: r.reply_secs }) })) });
   }
   if (action === 'invite_respond') {
     const u = await need(), m = await mine(u, idNum(b.match));
@@ -271,7 +271,7 @@ async function handle(action, ctx) {
     const u = await need();
     if (!u.gender) throw bad('Tell us who you are first', 409);
     const meet = u.meet || 'both', age = ageOf(u.birthdate);
-    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.avatar, t.frame, t.last_seen, t.selfie_ok, t.is_admin, t.role,
+    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.avatar, t.frame, t.last_seen, t.selfie_ok, t.is_admin, t.role, t.reply_n, t.reply_secs,
         exists (select 1 from dm_threads d where d.status = 'open' and ((d.a = ${u.id} and d.b = t.id) or (d.b = ${u.id} and d.a = t.id))) as friend
       from users t where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and t.last_seen > now() - interval '150 seconds'
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})

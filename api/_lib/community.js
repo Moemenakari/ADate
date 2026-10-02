@@ -27,6 +27,14 @@ function screenText(raw, max) {
 const FRAMES = { halloween: { name: 'Halloween', emoji: '🎃', price: 5, from: '2026-10-01', to: '2026-11-05' }, newyear: { name: 'New Year', emoji: '🎆', price: 5, from: '2026-12-15', to: '2027-01-06' }, ramadan: { name: 'Ramadan', emoji: '🌙', price: 5, from: '2027-02-08', to: '2027-03-12' } };
 const frameOpen = (f) => { const t = new Date().toISOString().slice(0, 10); return t >= f.from && t <= f.to; };
 const SELFIE_REWARD = 5;
+/** Replies fast: on average within half an hour, over at least 10 replies. */
+const fastOf = (u) => (u.reply_n || 0) >= 10 && Number(u.reply_secs || 0) / u.reply_n <= 1800;
+const dayStr = (d) => d.toISOString().slice(0, 10);
+const streakOf = (t) => { // a streak shows while it was kept yesterday or today; nothing is taken away from anyone when it stops
+  const today = dayStr(new Date()), yest = dayStr(new Date(Date.now() - 86400000)), sd = t.streak_day ? dateStr(t.streak_day) : '';
+  const live = (sd === today || sd === yest) ? t.streak || 0 : 0;
+  return { streak: live, streak_pending: live > 0 && sd !== today };
+};
 /** The tick: verified by selfie, or the owner. Moderators and agents get a tag, not a tick. */
 const tickOf = (u) => !!(u.selfie_ok || u.is_admin);
 const roleOf = (u) => (u.is_admin ? 'owner' : u.role || '');
@@ -99,11 +107,16 @@ async function handle(action, ctx) {
     }
     case 'profile_view': {
       const u = await need(), id = idNum(b.user_id);
-      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, selfie_ok, is_admin, role, socials, blocked from users where id = ${id}`;
+      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, selfie_ok, is_admin, role, socials, reply_n, reply_secs, blocked from users where id = ${id}`;
       if (!r.length || r[0].blocked) throw bad('Not found', 404);
       const t = r[0], age = ageOf(t.birthdate);
       const blockedByMe = (await sql`select 1 from blocks where blocker = ${u.id} and blocked = ${id}`).length > 0;
-      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), can_socials: ageOf(u.birthdate) >= 18 && ageOf(t.birthdate) >= 18 && !!(t.socials && Object.keys(t.socials).length), can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
+      if (id !== u.id && !(await blockedPair(u.id, id))) { // someone opened this profile: remember it, and tell them (at most one notice every 2 hours)
+        const seen = await sql`select 1 from profile_views where viewer = ${u.id} and target = ${id} and created_at > now() - interval '24 hours'`;
+        if (!seen.length) { const recent = await sql`select 1 from profile_views where target = ${id} and notified and created_at > now() - interval '2 hours'`; const tell = !recent.length;
+          await sql`insert into profile_views (viewer, target, notified) values (${u.id}, ${id}, ${tell})`;
+          if (tell) await pushUsers(sql, [id], '👀 ' + (u.nick || 'Someone') + ' viewed your profile', 'Open ADate to see who.', '/#/settings'); } }
+      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: ageOf(u.birthdate) >= 18 && ageOf(t.birthdate) >= 18 && !!(t.socials && Object.keys(t.socials).length), can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
       const u = await need(); if (photoOn(u)) return out({ ok: true, balance: await balanceOf(sql, u.id) });
@@ -253,6 +266,11 @@ async function handle(action, ctx) {
       if (!had.length) { const bal = await balanceOf(sql, u.id); if (bal < 5) throw bad(`Seeing their accounts costs 5 points. You have ${bal}.`, 402); await addPoints(sql, u.id, -5, 'social_view', String(id)); await sql`insert into social_unlocks (viewer, target) values (${u.id}, ${id}) on conflict do nothing`; }
       return out({ ok: true, nick: t[0].nick, socials: t[0].socials, balance: await balanceOf(sql, u.id) });
     }
+    case 'views_list': { // who looked at my profile lately
+      const u = await need();
+      const rows = await sql`select distinct on (p.viewer) p.viewer as id, x.nick, x.avatar, x.frame, p.created_at as at from profile_views p join users x on x.id = p.viewer where p.target = ${u.id} and not x.blocked and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = p.viewer) or (bl.blocker = p.viewer and bl.blocked = ${u.id})) order by p.viewer, p.id desc`;
+      return out({ views: rows.sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 15) });
+    }
     case 'box_state': { // a free surprise once a day: 1 to 5 points, nothing to buy
       const u = await need();
       const t = await sql`select 1 from points_ledger where user_id = ${u.id} and reason = 'box' and created_at >= date_trunc('day', now())`;
@@ -309,12 +327,12 @@ async function handle(action, ctx) {
     /* ------------------------------------------------ private messages, only inside shared age circles */
     case 'dm_list': {
       const u = await need();
-      const rows = await sql`select t.id, t.status, t.started_by, t.boosted, t.source, t.unlocked, case when t.a = ${u.id} then t.b else t.a end as other,
+      const rows = await sql`select t.id, t.status, t.started_by, t.boosted, t.source, t.unlocked, t.streak, t.streak_day, case when t.a = ${u.id} then t.b else t.a end as other,
           (select nick from users where id = case when t.a = ${u.id} then t.b else t.a end) as nick,
           (select body from dm_messages x where x.thread_id = t.id order by id desc limit 1) as last_body,
           (select max(created_at) from dm_messages x where x.thread_id = t.id) as last_at
         from dm_threads t where (t.a = ${u.id} or t.b = ${u.id}) and t.status <> 'declined' order by last_at desc nulls last limit 100`;
-      return out({ threads: rows });
+      return out({ threads: rows.map((r) => { const s = streakOf(r); delete r.streak_day; return { ...r, ...s }; }) });
     }
     case 'dm_start': {
       const u = await need(), to = idNum(b.to); if (to === u.id) throw bad('That is you');
@@ -350,8 +368,8 @@ async function handle(action, ctx) {
       const other = t[0].a === u.id ? t[0].b : t[0].a;
       const rows = after ? await sql`select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and id > ${after} and expires_at > now() order by id limit 100`
         : await sql`select * from (select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and expires_at > now() order by id desc limit 60) z order by id`;
-      const o = (await sql`select id, nick, last_seen from users where id = ${other}`)[0];
-      return out({ thread: { id, status: t[0].status, started_by: t[0].started_by, locked: threadLocked(t[0]), unlock_price: unlockPrice(t[0]), unlock_until: t[0].unlock_until, unlocked: !!t[0].unlocked, source: t[0].source || null }, balance: await balanceOf(sql, u.id), other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
+      const o = (await sql`select id, nick, last_seen, reply_n, reply_secs from users where id = ${other}`)[0]; o.fast = fastOf(o); delete o.reply_n; delete o.reply_secs;
+      return out({ thread: { id, status: t[0].status, started_by: t[0].started_by, ...streakOf(t[0]), locked: threadLocked(t[0]), unlock_price: unlockPrice(t[0]), unlock_until: t[0].unlock_until, unlocked: !!t[0].unlocked, source: t[0].source || null }, balance: await balanceOf(sql, u.id), other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
     }
     case 'dm_unlock': { // after the free hour of a match chat: one of them pays 3 points and it stays open
       const u = await need(), id = idNum(b.thread);
@@ -385,7 +403,14 @@ async function handle(action, ctx) {
       const why = screenText(b.body); if (why) throw bad(why);
       const last = await sql`select created_at from dm_messages where from_user = ${u.id} order by id desc limit 1`;
       if (last.length && Date.now() - new Date(last[0].created_at).getTime() < 1500) throw bad('Slow down a little', 429);
+      const prev = await sql`select from_user, created_at from dm_messages where thread_id = ${id} order by id desc limit 1`;
+      if (prev.length && prev[0].from_user !== u.id) { const secs = Math.min(21600, Math.round((Date.now() - new Date(prev[0].created_at).getTime()) / 1000)); if (secs >= 0 && secs <= 86400) await sql`update users set reply_n = reply_n + 1, reply_secs = reply_secs + ${secs} where id = ${u.id}`; }
       await sql`insert into dm_messages (thread_id, from_user, body) values (${id}, ${u.id}, ${String(b.body).replace(/\s+/g, ' ').trim()})`;
+      { const today = dayStr(new Date()), yest = dayStr(new Date(Date.now() - 86400000)), isA = t[0].a === u.id; // streak: both wrote today
+        const aDay = isA ? today : (t[0].a_day ? dateStr(t[0].a_day) : null), bDay = isA ? (t[0].b_day ? dateStr(t[0].b_day) : null) : today, sd = t[0].streak_day ? dateStr(t[0].streak_day) : null;
+        let streak = t[0].streak || 0, newSd = sd;
+        if (aDay === today && bDay === today && sd !== today) { streak = sd === yest ? streak + 1 : 1; newSd = today; }
+        await sql`update dm_threads set a_day = ${aDay}, b_day = ${bDay}, streak = ${streak}, streak_day = ${newSd} where id = ${id}`; }
       await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open ADate to read it.', '/#/dm/' + id);
       return out({ ok: true });
     }
@@ -479,4 +504,4 @@ async function handleAdmin(action, ctx) {
   return false;
 }
 
-module.exports = { handle, reportTarget, pushUsers, photoOn, tickOf, roleOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };
+module.exports = { handle, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };

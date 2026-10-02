@@ -132,6 +132,7 @@
     socialGet: () => call('social_get', { session: tok() }),
     socialSet: (o) => call('social_set', Object.assign({ session: tok() }, o)),
     socialView: (user_id) => call('social_view', { session: tok(), user_id }),
+    viewsList: () => call('views_list', { session: tok() }),
     boxState: () => call('box_state', { session: tok() }),
     boxOpen: () => call('box_open', { session: tok() }),
     adminHosts: (key) => call('admin_hosts', { key }),
