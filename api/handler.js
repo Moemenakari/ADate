@@ -355,11 +355,12 @@ module.exports = async (req, res) => {
       if (action === 'admin_mark') { // block / unblock / mark as verified, per account
         const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
         const op = String(b.op || '');
-        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off'].includes(op)) throw bad('Bad action');
+        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off', 'role_mod', 'role_agent', 'role_none'].includes(op)) throw bad('Bad action');
         const note = String(b.note || '').slice(0, 200) || null;
         const r = op === 'block' ? await sql`update users set blocked = true, blocked_note = ${note} where id = ${id} returning id`
           : op === 'unblock' ? await sql`update users set blocked = false, blocked_note = null where id = ${id} returning id`
           : op === 'photo_off' ? await sql`update users set photo = null, photo_ok = false where id = ${id} returning id`
+          : op === 'role_mod' || op === 'role_agent' || op === 'role_none' ? await sql`update users set role = ${op === 'role_none' ? null : op.slice(5)} where id = ${id} returning id`
           : op === 'admin' || op === 'unadmin' ? await sql`update users set is_admin = ${op === 'admin'} where id = ${id} returning id`
           : await sql`update users set verified = ${op === 'verify'} where id = ${id} returning id`;
         if (!r.length) throw bad('No such account', 404);
@@ -374,7 +375,7 @@ module.exports = async (req, res) => {
         await sql`delete from sessions where user_id = ${r[0].id}`;
         return res.status(200).json({ phone, temp });
       }
-      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, u.verify_code, u.is_admin, u.muted_until, (u.photo is not null) as has_photo, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
+      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, u.verify_code, u.is_admin, u.role, u.muted_until, (u.photo is not null) as has_photo, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
           (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
       const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
           i.first_opened_at, i.last_opened_at, i.config->>'toIg' as to_ig, (select u.email from users u where u.id = i.user_id) as account_email, (select u.id from users u where u.id = i.user_id) as account_id, (select e.data->>'phone' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'phone', '') <> '' order by e.created_at desc limit 1) as typed_phone, (select e.data->>'ig' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'ig', '') <> '' order by e.created_at desc limit 1) as typed_ig, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,

@@ -324,3 +324,6 @@ alter table users add column if not exists selfie_state text not null default 'n
 alter table users add column if not exists selfie_code int;
 alter table users add column if not exists selfie_ok boolean not null default false;
 alter table users add column if not exists selfie_at timestamptz;
+
+-- ===== Account roles shown as a badge: mod, agent (the owner is is_admin) =====
+alter table users add column if not exists role text;
