@@ -438,3 +438,5 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .installbar{display:flex;gap:10px;align-items:center;background:linear-gradient(135deg,#ffe36e,#ffb36b);color:#15131f;border-radius:18px;padding:10px 12px;margin:8px 0}
 .installbar div{flex:1;display:flex;flex-direction:column}.installbar small{opacity:.85;font-size:.78rem;line-height:1.25}
 .installbar .btn{min-height:36px;border-color:rgba(0,0,0,.15);background:rgba(255,255,255,.55);color:#15131f}
+
+.teamnote{background:linear-gradient(135deg,#a78bff,#ff6bb5);color:#15131f;border-radius:20px;padding:14px 16px;margin:8px 0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}.teamnote p{margin:0}.teamnote .btn{align-self:flex-end;background:rgba(255,255,255,.6);color:#15131f;border-color:transparent}

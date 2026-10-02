@@ -116,6 +116,9 @@
     blocksList: () => call('blocks_list', { session: tok() }),
     deleteAccount: (password, confirm) => call('account_delete', { session: tok(), password, confirm }).then(() => write(null)),
     orderCancel: (id) => call('order_cancel', { session: tok(), id }),
+    notices: () => call('notices_list', { session: tok() }),
+    noticeRead: (id) => call('notice_read', { session: tok(), id }),
+    adminGift: (key, user_id, points, message) => call('admin_gift', { key, user_id, points, message }),
     installClaim: () => call('install_claim', { session: tok() }),
     payCard: (id) => call('pay_card', { session: tok(), id }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })

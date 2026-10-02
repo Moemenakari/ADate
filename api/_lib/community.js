@@ -203,6 +203,16 @@ async function handle(action, ctx) {
       return out({ ok: true, id: r[0].id });
     }
     /* ------------------------------------------------ safety */
+    case 'notices_list': { // messages from the ADate team that I have not dismissed
+      const u = await need();
+      const rows = await sql`select id, body, points, created_at as at from notices where user_id = ${u.id} and not read order by id desc limit 10`;
+      return out({ notices: rows });
+    }
+    case 'notice_read': {
+      const u = await need();
+      await sql`update notices set read = true where id = ${idNum(b.id)} and user_id = ${u.id}`;
+      return out({ ok: true });
+    }
     case 'install_claim': { // +10 points once, for opening ADate from the home screen
       const u = await need();
       const r = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 10, 'install', null where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'install') returning id`;
@@ -318,6 +328,18 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  if (action === 'admin_gift') { // the owner thanks someone: points (or a deduction) and a message from the team
+    const uid = Number(b.user_id), pts = Math.trunc(Number(b.points) || 0), msg = String(b.message || '').trim().slice(0, 300);
+    if (!Number.isInteger(uid) || uid < 1) throw bad('Bad user');
+    if (Math.abs(pts) > 1000000) throw bad('Too many points');
+    if (!pts && !msg) throw bad('Write a message or choose points');
+    const t = await sql`select id from users where id = ${uid}`; if (!t.length) throw bad('Not found', 404);
+    const body = msg || (pts > 0 ? 'Thank you for being great! Here are some points.' : 'Your points were adjusted.');
+    const n = await sql`insert into notices (user_id, body, points) values (${uid}, ${body}, ${pts}) returning id`;
+    if (pts) await addPoints(sql, uid, pts, 'gift', String(n[0].id));
+    await pushUsers(sql, [uid], '🎁 A message from the ADate team', pts > 0 ? `${body} (+${pts} points)` : body, '/#/');
+    return out({ ok: true, balance: await balanceOf(sql, uid) });
+  }
   if (action === 'admin_reports') {
     const t = await sql`select u.id, u.nick, u.name, u.phone, u.muted_until, u.blocked,
         count(distinct r.reporter) filter (where r.created_at > now() - interval '24 hours')::int as today, count(distinct r.reporter)::int as week, max(r.created_at) as last_at,

@@ -52,11 +52,12 @@ window.CommunityInit = function (ui) {
   /* ---------------------------------------------------------------- hub */
   async function hub() {
     page('#/', h('p', { class: 'hint spark' }, 'Loading…'));
-    const d = await load(), rs = (await API.rooms()).rooms;
+    const d = await load(), rs = (await API.rooms()).rooms, notices = ((await API.notices().catch(() => ({ notices: [] }))).notices) || [];
     const mine = rs.filter((r) => r.member), suggest = rs.filter((r) => !r.member && (r.score || 0) > 0).slice(0, 5);
     const roomRow = (r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, `${r.members} here · ${r.msgs24} messages today`)), r.member ? h('span', { class: 'badge ok' }, 'Joined') : h('span', { class: 'badge' }, r.price ? '⭐ ' + r.price : 'Free'));
     const nickBox = ME.nick ? null : (() => { const inp = h('input', { type: 'text', maxlength: 20, placeholder: 'Your nickname', 'aria-label': 'Nickname' }), msg = h('div'); return h('div', { class: 'note' }, h('b', null, 'Choose your nickname'), h('p', { class: 'hint' }, 'This is the name people see in rooms. Not your real name.'), inp, h('button', { class: 'btn pri block', onclick: async () => { try { await API.nickSet('*', inp.value); hub(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Save nickname'), msg); })();
     page('#/', h('div', { class: 'hello' }, avatar(ME.avatar, ME.nick, 52, ME.frame), h('div', null, h('b', null, 'Hi ' + (ME.nick || 'there') + ' ' + (FLAG[ME.country] || '')), h('small', { class: 'hint' }, 'Age circles: ' + ME.circles.join(' · ')))), nickBox,
+      ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, '📩 ADate Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }),
       d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null,
       h('div', { class: 'h2' }, 'Games'),
       h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, '💌 Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, '🎲 Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))),
@@ -329,7 +330,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     const d = await API.points(); ME.points = d.balance;
     const link = location.origin + '/#/join/' + ME.ref_code, text = 'Come play on ADate with me: ' + link;
-    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', tod: 'Truth or Dare' };
+    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', gift: 'Gift from the ADate team', tod: 'Truth or Dare' };
     page('#/points', h('div', { class: 'bigpts' }, h('small', null, 'Your points'), h('b', null, '⭐ ' + d.balance)),
       h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open ADate (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Invite a friend: +5 points'), h('p', { class: 'hint' }, 'You earn 5 when your friend joins and sends their first message. Up to 10 friends a day.'), h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your invite link' }),

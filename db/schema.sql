@@ -313,3 +313,7 @@ create table if not exists match_votes (match_id bigint not null references matc
 create table if not exists swipes (from_user bigint not null references users(id) on delete cascade, to_user bigint not null references users(id) on delete cascade, act text not null, created_at timestamptz not null default now(), primary key (from_user, to_user));
 
 create table if not exists match_games (match_id bigint not null references matches(id) on delete cascade, round int not null, type text not null, state jsonb not null, primary key (match_id, round));
+
+-- ===== Messages from the ADate team (with optional gift points) =====
+create table if not exists notices (id bigserial primary key, user_id bigint not null references users(id) on delete cascade, body text not null, points int not null default 0, read boolean not null default false, created_at timestamptz not null default now());
+create index if not exists notices_user_idx on notices (user_id, read, id);
