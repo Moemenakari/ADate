@@ -1,6 +1,7 @@
 // Buying points. The person pays with Whish (a link the owner shares), tells us the reference, and the owner approves it.
 // Nothing here touches a card or a bank: we only record a claim and, once the owner confirms the payment, add the points.
 // 5 points = $1, 25 points = $5
+const FIRST_BUY_BONUS = 10; // free points on a person's first paid order
 const PRODUCTS = { points5: { cents: 100, points: 5, label: '5 points' }, points25: { cents: 500, points: 25, label: '25 points' } };
 
 async function handle(action, ctx) {
@@ -11,7 +12,7 @@ async function handle(action, ctx) {
     const u = await need();
     const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note')`;
     const orders = await sql`select id, kind, cents, status, created_at as at from orders where user_id = ${u.id} order by id desc limit 20`;
-    return out({ products: Object.entries(PRODUCTS).map(([kind, p]) => ({ kind, cents: p.cents, points: p.points, label: p.label })), settings: Object.fromEntries(s.map((x) => [x.key, x.value])), orders });
+    return out({ first_bonus: orders.some((x) => x.status === 'paid') ? 0 : FIRST_BUY_BONUS, products: Object.entries(PRODUCTS).map(([kind, p]) => ({ kind, cents: p.cents, points: p.points, label: p.label })), settings: Object.fromEntries(s.map((x) => [x.key, x.value])), orders });
   }
   if (action === 'order_create') {
     const u = await need(), p = PRODUCTS[b.kind];
@@ -48,7 +49,9 @@ async function handleAdmin(action, ctx) {
     if (!b.approve) { await sql`update orders set status = 'rejected', decided_at = now() where id = ${id}`; return out({ ok: true }); }
     const done = await sql`update orders set status = 'paid', decided_at = now() where id = ${id} and status in ('pending', 'claimed') returning id`; // claim the order first so two taps can never pay twice
     if (!done.length) throw bad('Order already decided', 409);
+    const first = !(await sql`select 1 from points_ledger where user_id = ${o[0].user_id} and reason = 'buy' limit 1`).length;
     await sql`insert into points_ledger (user_id, delta, reason, ref) values (${o[0].user_id}, ${p.points}, 'buy', ${String(id)})`;
+    if (first) await sql`insert into points_ledger (user_id, delta, reason, ref) select ${o[0].user_id}, ${FIRST_BUY_BONUS}, 'first_buy', ${String(id)} where not exists (select 1 from points_ledger where user_id = ${o[0].user_id} and reason = 'first_buy')`;
     return out({ ok: true });
   }
   return false;

@@ -314,7 +314,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     const d = await API.points(); ME.points = d.balance;
     const link = location.origin + '/#/join/' + ME.ref_code, text = 'Come play on ADate with me: ' + link;
-    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', tod: 'Truth or Dare' };
+    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', tod: 'Truth or Dare' };
     page('#/points', h('div', { class: 'bigpts' }, h('small', null, 'Your points'), h('b', null, '⭐ ' + d.balance)),
       h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open ADate (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Invite a friend: +5 points'), h('p', { class: 'hint' }, 'You earn 5 when your friend joins and sends their first message. Up to 10 friends a day.'), h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your invite link' }),
@@ -415,7 +415,7 @@ window.CommunityInit = function (ui) {
     const note = h('input', { type: 'text', maxlength: 120, placeholder: 'Whish transaction reference', 'aria-label': 'Whish reference' });
     const buy = (p) => async () => { try { await API.orderCreate(p.kind); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } };
     const pk = (kind) => d.products.find((x) => x.kind === kind) || {};
-    page('#/points', h('div', { class: 'h2' }, '🛒 Get more points'), h('div', { class: 'note' }, h('b', null, '5 points = $1 · 25 points = $5'), h('p', { class: 'hint' }, 'Pay with Whish, then tell us your reference. We check it and add the points, usually within a day.')),
+    page('#/points', h('div', { class: 'h2' }, '🛒 Get more points'), h('div', { class: 'note' }, h('b', null, '5 points = $1 · 25 points = $5'), d.first_bonus ? h('p', null, '🎁 Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null, h('p', { class: 'hint' }, 'Pay with Whish, then tell us your reference. We check it and add the points, usually within a day.')),
       waiting ? h('div', { class: 'stack' }, h('b', null, `Order AD-${waiting.id}: ${pk(waiting.kind).label || ''} · ${money(waiting.cents)}`), h('p', { class: 'hint' }, `Write AD-${waiting.id} in the Whish note when you pay.` + (d.settings.whish_note ? ' ' + d.settings.whish_note : '')), pay, note,
         h('button', { class: 'btn block', onclick: async () => { try { await API.orderPaid(waiting.id, note.value); toast('Thank you. We will check it.'); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'I paid'))
         : h('div', { class: 'stack' }, ...d.products.map((p) => h('button', { class: 'btn pri block', onclick: buy(p) }, `Buy ${p.label} · ${money(p.cents)}`))),
