@@ -420,3 +420,11 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .setrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.setrow:last-child{border-bottom:0}.setrow span{color:var(--muted)}.setrow b{text-align:right;overflow-wrap:anywhere}
 .setlink{display:flex;gap:12px;align-items:center;padding:10px 4px;text-decoration:none;color:var(--ink)}.setlink span{font-size:1.5rem}.setlink div{flex:1;display:flex;flex-direction:column}.setlink small{color:var(--muted)}.setlink i{font-style:normal;font-size:1.6rem;color:var(--muted)}
 .dangerbox summary{cursor:pointer;font-weight:700;color:#ff4d6a}
+
+/* ---------- games inside the chat ---------- */
+.gamepick{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px 12px}
+.gamepanel{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:10px;align-items:center;margin:8px 0}
+.xogrid{display:grid;grid-template-columns:repeat(3,76px);gap:8px}
+.xocell{width:76px;height:76px;border-radius:16px;border:2px solid var(--line);background:var(--bg2);font-size:2.2rem;cursor:pointer;color:var(--ink)}.xocell.win{border-color:var(--yel,#ffd60a);box-shadow:0 0 0 2px var(--yel,#ffd60a) inset}.xocell:disabled{cursor:default}
+.drawcv{width:100%;max-width:300px;aspect-ratio:1;border-radius:16px;background:#1b1b2a;border:1px solid var(--line);touch-action:none}
+.drawtools{justify-content:center}.dot{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);cursor:pointer}

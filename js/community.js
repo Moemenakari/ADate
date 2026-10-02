@@ -209,8 +209,44 @@ window.CommunityInit = function (ui) {
         if (st.state !== 'chat') return;
         if (st.round >= 1 && !st.voted) ctl.append(h('div', { class: 'votebar' }, h('span', null, 'Do you want to be friends? (' + st.round + '/' + st.rounds + ')'), h('button', { class: 'btn pri', onclick: () => vote(true) }, '✅ Yes'), h('button', { class: 'btn', onclick: () => vote(false) }, '❌ No')));
         else if (st.round >= 1 && st.voted && !st.their_voted) ctl.append(h('p', { class: 'hint' }, 'Waiting for their answer…'));
-        if (st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) ctl.append(h('button', { class: 'btn', onclick: async () => { try { await API.matchGame(m.id); poll(); } catch (e) { toast(err(e), 'bad'); } } }, '🎲 ' + (st.round === 0 ? 'Start a game' : 'Next game')));
+        if (st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('tod') }, '🎲 Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, '🎨 Draw')))); }
+        drawGame(st);
       };
+      let panel = null, panelKey = '';
+      function drawGame(st) {
+        const g = st.game; if (!g || g.type === 'tod' || st.state !== 'chat') { if (panel) { panel.remove(); panel = null; panelKey = ''; } return; }
+        const key = JSON.stringify(g); if (key === panelKey && panel) return; panelKey = key;
+        if (panel && panel.update && g.type === 'draw' && !g.i_draw && !g.solved) { panel.update(g); return; }
+        const keepDrawer = panel && panel.dataset.keep && g.type === 'draw' && g.i_draw && !g.solved; if (keepDrawer) { panel.redraw && panel.redraw(g); return; }
+        const el = g.type === 'xo' ? xoPanel(g) : drawPanel(g); if (panel) panel.replaceWith(el); else ctl.before(el); panel = el;
+      }
+      function xoPanel(g) {
+        const cells = g.board.map((c, i) => h('button', { class: 'xocell' + (g.line && g.line.includes(i) ? ' win' : ''), disabled: !!c || !g.my_turn || g.winner, onclick: async () => { try { const r = await API.matchMove(m.id, i); draw(r.match); } catch (e) { toast(err(e), 'bad'); } } }, c === 'X' ? '❌' : c === 'O' ? '⭕' : ''));
+        const status = g.winner === 'me' ? '🎉 You won!' : g.winner === 'them' ? '😅 They won' : g.winner === 'draw' ? '🤝 Draw' : g.my_turn ? 'Your turn (you are ' + (g.mark === 'X' ? '❌' : '⭕') + ')' : 'Their turn…';
+        return h('div', { class: 'gamepanel' }, h('b', null, status), h('div', { class: 'xogrid' }, cells));
+      }
+      function drawPanel(g) {
+        const cv = h('canvas', { class: 'drawcv', width: 600, height: 600 }), ctx2 = cv.getContext('2d'); let color = '#ffffff', width = 8, cur = null, local = g.strokes.slice();
+        const paint = () => { ctx2.fillStyle = '#1b1b2a'; ctx2.fillRect(0, 0, 600, 600); local.concat(cur ? [cur] : []).forEach((k) => { ctx2.strokeStyle = k.c; ctx2.lineWidth = k.w * 0.6; ctx2.lineCap = ctx2.lineJoin = 'round'; ctx2.beginPath(); k.p.forEach(([x, y], i) => { const px = x * 0.6, py = y * 0.6; if (i) ctx2.lineTo(px, py); else ctx2.moveTo(px, py); }); if (k.p.length === 1) ctx2.lineTo(k.p[0][0] * 0.6 + 0.1, k.p[0][1] * 0.6); ctx2.stroke(); }); };
+        paint();
+        const title = g.solved ? '🎉 Guessed! It was: ' + g.word : g.i_draw ? 'Draw: ' + g.word : 'Guess the word (' + g.letters + ' letters)';
+        const wrap = h('div', { class: 'gamepanel', 'data-keep': g.i_draw && !g.solved ? '1' : '' }, h('b', null, title), cv);
+        if (g.i_draw && !g.solved) {
+          const pos = (e) => { const r = cv.getBoundingClientRect(), t = e.touches ? e.touches[0] : e; return [Math.max(0, Math.min(1000, Math.round((t.clientX - r.left) / r.width * 1000))), Math.max(0, Math.min(1000, Math.round((t.clientY - r.top) / r.height * 1000)))]; };
+          const down = (e) => { e.preventDefault(); cur = { c: color, w: width, p: [pos(e)] }; paint(); }, move = (e) => { if (!cur) return; e.preventDefault(); const q = pos(e), l = cur.p[cur.p.length - 1]; if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) > 6 && cur.p.length < 400) { cur.p.push(q); paint(); } }, up = async () => { if (!cur) return; const k = cur; cur = null; local.push(k); paint(); try { await API.matchDraw(m.id, k); } catch (e) { toast(err(e), 'bad'); } };
+          cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move); window.addEventListener('pointerup', up, { once: false }); cv.style.touchAction = 'none';
+          const colors = ['#ffffff', '#ff4d6a', '#ffd60a', '#27d3a2', '#4da3ff', '#a78bff'];
+          wrap.append(h('div', { class: 'row drawtools' }, ...colors.map((c) => h('button', { class: 'dot', style: 'background:' + c, 'aria-label': 'Colour ' + c, onclick: () => { color = c; } })), h('button', { class: 'btn sm', onclick: () => { width = width === 8 ? 18 : 8; } }, 'Thick / thin'), h('button', { class: 'btn sm', onclick: async () => { local = []; paint(); try { await API.matchDraw(m.id, null, true); } catch (e) { toast(err(e), 'bad'); } } }, 'Clear')));
+          wrap.redraw = () => {};
+        } else if (!g.solved) {
+          const gi = h('input', { type: 'text', maxlength: 40, placeholder: 'Your guess', 'aria-label': 'Your guess', enterkeyhint: 'send' });
+          const guess = async () => { const t = gi.value.trim(); if (!t) return; gi.value = ''; try { const r = await API.matchGuess(m.id, t); if (r.correct) toast('🎉 Correct!'); poll(); } catch (e) { toast(err(e), 'bad'); } };
+          gi.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); guess(); } };
+          wrap.append(h('div', { class: 'row' }, gi, h('button', { class: 'btn pri sm', onclick: guess }, 'Guess')));
+          wrap.update = (g2) => { local = g2.strokes.slice(); paint(); };
+        }
+        return wrap;
+      }
       async function vote(y) { try { const r = await API.matchVote(m.id, y); draw(r.match); poll(); } catch (e) { toast(err(e), 'bad'); } }
       async function poll() { try { const r = await API.matchMsgs(m.id, lastId); r.messages.forEach((x) => { lastId = Math.max(lastId, x.id); list.append(bubble(x)); }); if (r.messages.length) list.scrollTop = list.scrollHeight; draw(r.match); if (r.match.state !== 'chat') tick(); } catch (e) { /* next tick */ } }
       async function go() { const body = inp.value.trim(); if (!body) return; try { await API.matchSend(m.id, body); inp.value = ''; msg.replaceChildren(); poll(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } }
