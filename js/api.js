@@ -120,6 +120,7 @@
     selfieSubmit: (data) => call('selfie_submit', { session: tok(), data }),
     adminSelfies: (key) => call('admin_selfies', { key }),
     adminSelfieDecide: (key, user_id, approve) => call('admin_selfie_decide', { key, user_id, approve }),
+    supportOpen: () => call('support_open', { session: tok() }),
     notices: () => call('notices_list', { session: tok() }),
     noticeRead: (id) => call('notice_read', { session: tok(), id }),
     adminGift: (key, user_id, points, message) => call('admin_gift', { key, user_id, points, message }),

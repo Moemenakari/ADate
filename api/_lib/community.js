@@ -291,6 +291,16 @@ async function handle(action, ctx) {
       await pushUsers(sql, [to], '💬 ' + (u.nick || 'Someone') + ' sent you a message', 'Open ADate to read it.', '/#/dms');
       return out({ ok: true, thread: T.id });
     }
+    case 'support_open': { // a private chat with the owner account, for help with paying; open at once, no request needed
+      const u = await need();
+      const adm = await sql`select id from users where is_admin and not blocked and id <> ${u.id} order by id limit 1`;
+      if (!adm.length) throw bad('Support is not ready yet. Use the payment options for now.', 503);
+      const a = Math.min(u.id, adm[0].id), c2 = Math.max(u.id, adm[0].id);
+      let th = await sql`select * from dm_threads where a = ${a} and b = ${c2}`;
+      if (!th.length) { th = await sql`insert into dm_threads (a, b, started_by, status) values (${a}, ${c2}, ${u.id}, 'open') returning *`; await pushUsers(sql, [adm[0].id], '💬 Someone wants help paying', (u.nick || 'A member') + ' opened the support chat.', '/#/dm/' + th[0].id); }
+      else if (th[0].status !== 'open') await sql`update dm_threads set status = 'open' where id = ${th[0].id}`;
+      return out({ thread: th[0].id });
+    }
     case 'dm_open': {
       const u = await need(), id = idNum(b.thread), after = Number(b.after) || 0;
       const t = await sql`select * from dm_threads where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!t.length) throw bad('Not found', 404);
