@@ -358,12 +358,12 @@ module.exports = async (req, res) => {
       if (action === 'admin_mark') { // block / unblock / mark as verified, per account
         const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
         const op = String(b.op || '');
-        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off', 'role_mod', 'role_agent', 'role_none'].includes(op)) throw bad('Bad action');
+        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off', 'role_mod', 'role_agent', 'role_host', 'role_bot', 'role_none'].includes(op)) throw bad('Bad action');
         const note = String(b.note || '').slice(0, 200) || null;
         const r = op === 'block' ? await sql`update users set blocked = true, blocked_note = ${note} where id = ${id} returning id`
           : op === 'unblock' ? await sql`update users set blocked = false, blocked_note = null where id = ${id} returning id`
           : op === 'photo_off' ? await sql`update users set photo = null, photo_ok = false where id = ${id} returning id`
-          : op === 'role_mod' || op === 'role_agent' || op === 'role_none' ? await sql`update users set role = ${op === 'role_none' ? null : op.slice(5)} where id = ${id} returning id`
+          : op === 'role_mod' || op === 'role_agent' || op === 'role_host' || op === 'role_bot' || op === 'role_none' ? await sql`update users set role = ${op === 'role_none' ? null : op.slice(5)} where id = ${id} returning id`
           : op === 'admin' || op === 'unadmin' ? await sql`update users set is_admin = ${op === 'admin'} where id = ${id} returning id`
           : await sql`update users set verified = ${op === 'verify'} where id = ${id} returning id`;
         if (!r.length) throw bad('No such account', 404);
