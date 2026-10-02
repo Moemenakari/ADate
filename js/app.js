@@ -972,7 +972,7 @@ function welcome() {
 }
 /** Light / dark by hand; remembered on this phone. */
 function toggleMode() {
-  const cur = document.documentElement.dataset.ui || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'), nx = cur === 'dark' ? 'light' : 'dark';
+  const cur = document.documentElement.dataset.ui || 'dark', nx = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.ui = nx; store.set('adate.ui', nx);
 }
 /** Get your account back: your email + the answers to your two questions. */
@@ -1280,6 +1280,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 async function route() {
   await API.ready;
   document.body.style.background = '';
+  document.body.classList.toggle('nx', !/^#\/(i|v|d|date|mine|make|admin|privacy)/.test(location.hash || '#/'));
   setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|recover-phone|verify|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);

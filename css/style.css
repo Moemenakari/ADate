@@ -335,3 +335,51 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .avs.wide{gap:10px;justify-content:center}.avs.wide .avbtn{width:56px;height:56px;font-size:1.9rem;padding:0;display:flex;align-items:center;justify-content:center}
 .avbtn{font-size:1.5rem;line-height:1}
 @media(prefers-reduced-motion:reduce){.wz-bar i,.wz-go{transition:none}}
+
+/* ================= New look: Yubo (bold, yellow) + Lit (purple, dark) + Snapchat (soft gradients) =================
+   Applies to the community, sign-up and welcome pages (body.nx). The old invite game keeps its own look. */
+body.nx{--yel:#ffd60a;--yel-d:#e0b800;--r:22px;
+  --bg:#0b0b10;--bg2:#14111f;--surface:#1a1a26;--ink:#fff;--muted:#a6a6bd;--line:#2b2b3d;
+  --accent:#a78bff;--accent-d:#c9b8ff;--accent-soft:#2a2150;--lav:#2a2150;--mint:#17352e;--butter:#3a3210;--sky:#18283f;
+  --shadow:0 8px 28px rgba(0,0,0,.45);background:linear-gradient(180deg,var(--bg),var(--bg2))}
+html[data-ui=light] body.nx{--bg:#f4efff;--bg2:#e7f1ff;--surface:#fff;--ink:#15131f;--muted:#6a6882;--line:#e1dcf4;
+  --accent:#6d4aff;--accent-d:#5636e6;--accent-soft:#ece6ff;--lav:#ece6ff;--mint:#d9f4ea;--butter:#fff1c9;--sky:#dff0ff;--yel-d:#c79a00;
+  --shadow:0 8px 24px rgba(90,70,160,.14)}
+body.nx .btn{background:var(--surface);color:var(--ink);box-shadow:none;border:2px solid var(--line);font-weight:700}
+body.nx .btn.pri{background:var(--yel);color:#111;border-color:var(--yel);box-shadow:none;font-size:1.05rem;min-height:52px}
+body.nx .btn.pri:active{background:var(--yel-d)}
+body.nx .btn.danger{background:#ff4d6a;color:#fff;border-color:#ff4d6a}
+body.nx a{color:var(--accent-d)}
+body.nx .panel{background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+body.nx .chip{background:var(--surface);border-color:var(--line);color:var(--ink)}
+body.nx .chip[aria-pressed=true]{background:var(--yel);border-color:var(--yel);color:#111}
+body.nx input[type=text],body.nx input[type=password],body.nx input[type=tel],body.nx input[type=date],body.nx select,body.nx textarea{background:var(--surface);border:2px solid var(--line);color:var(--ink)}
+body.nx input:focus,body.nx select:focus,body.nx textarea:focus{border-color:var(--yel)}
+body.nx .h2{font-size:1.3rem;font-weight:700}
+body.nx .note{background:var(--butter);color:var(--ink)}
+body.nx .brand{color:var(--ink)}
+body.nx .tabbar{background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line);box-shadow:none;padding-top:8px}
+body.nx .tabbar a{font-size:1.5rem;color:var(--muted);border-radius:16px}
+body.nx .tabbar a.on{color:var(--yel);background:transparent}
+body.nx .tabbar a small{font-size:.68rem}
+body.nx .roomcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:12px 14px}
+body.nx .cmsg .bub{background:var(--surface);border-color:var(--line);border-radius:20px}
+body.nx .cmsg.mine .bub{background:var(--accent);color:#fff}
+body.nx .cmsg .who{color:var(--accent-d)}
+body.nx .avatar{background:var(--accent-soft)}
+body.nx .avbtn{background:var(--accent-soft)}body.nx .avbtn.on{border-color:var(--yel)}
+body.nx .wz-h{color:var(--yel);font-size:2.3rem;font-weight:700;letter-spacing:-.5px}
+html[data-ui=light] body.nx .wz-h{color:var(--ink)}
+body.nx .wz-bar i{background:var(--yel)}
+body.nx .wz-go{background:var(--yel);color:#111;box-shadow:0 6px 20px rgba(255,214,10,.35)}
+body.nx .wz-go:active{box-shadow:none}
+body.nx .tabs2 .chip[aria-pressed=true]{background:var(--yel);color:#111}
+body.nx .pwbox{background:var(--surface);border-color:var(--line)}
+body.nx .gamecard{color:#15131f;box-shadow:none}
+body.nx .gamecard b{color:#15131f}
+body.nx .gamecard.c1{background:linear-gradient(135deg,#ffb3d9,#c9b8ff)}
+body.nx .gamecard.c2{background:linear-gradient(135deg,#ffe36e,#ffb36b)}
+body.nx .gamecard.c3{background:linear-gradient(135deg,#9df0c9,#8fd3ff)}
+body.nx .gamecard small{opacity:.85}
+body.nx .hello small{display:block}
+html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
