@@ -21,7 +21,7 @@ window.CommunityInit = function (ui) {
     if (FRAME_LOOK[frame]) box.append(h('i', { class: 'fr' }, FRAME_LOOK[frame][1]));
     return box;
   }
-  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Hub'], ['#/rooms', '🧭', 'Rooms'], ['#/dms', '💬', 'Chats'], ['#/points', '⭐', points == null ? 'Points' : String(points)], ['#/me', '👤', 'Me']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
+  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/me', '👤', 'Me']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
   function page(active, ...kids) {
     document.title = 'ADate';
     $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), ...kids), bar(active, ME && ME.points));
@@ -129,6 +129,72 @@ window.CommunityInit = function (ui) {
     }
   }
 
+
+  /* ---------------------------------------------------------------- random match (text only) */
+  const MEET = [['m', '👦', 'Guys'], ['both', '👥', 'Both'], ['f', '👧', 'Girls']], IAM = [['m', '👦', 'I am a guy'], ['f', '👧', 'I am a girl']];
+  async function match() {
+    if (!ME) await load();
+    let stop = false, shown = '', lastId = 0, cur = null, prefs = { gender: '', meet: 'both' };
+    const box = h('div', { class: 'matchbox stack' });
+    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), box), bar('#/match', ME && ME.points));
+    const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, 'Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
+    function prefsView(first) {
+      const pick = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (prefs[key] === v ? ' on' : ''), onclick: () => { prefs[key] = v; prefsView(first); } }, h('span', null, e), h('b', null, l))));
+      box.replaceChildren(h('div', { class: 'h2' }, 'Who you want to meet'), pick(IAM, 'gender'), pick(MEET, 'meet'),
+        h('p', { class: 'hint' }, 'You only meet people in your age group. Everything is text. Nobody sees your real name.'),
+        h('button', { class: 'btn pri block', onclick: async () => { if (!prefs.gender) return toast('Pick who you are', 'bad'); try { await API.matchPrefs({ gender: prefs.gender, meet: prefs.meet }); shown = ''; tick(); } catch (e) { toast(err(e), 'bad'); } } }, 'Done'));
+    }
+    function idleView(d) {
+      prefs = { gender: d.gender, meet: d.meet || 'both' };
+      box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '💜'), h('h1', { class: 'wz-h' }, 'Meet someone new'), h('p', { class: 'hint' }, 'We match you by interests, then you play 3 quick games. Two Yes out of three from both of you and you are friends.')),
+        h('button', { class: 'btn pri block', onclick: async () => { try { const r = await API.matchJoin(); if (r.state === 'matched') shown = ''; tick(); } catch (e) { toast(err(e), 'bad'); } } }, '🔍 Find someone'),
+        h('button', { class: 'btn block', onclick: () => { shown = 'prefs'; prefsView(false); } }, '⚙️ Who I want to meet'));
+    }
+    function waitView() {
+      box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji pulse' }, '💜'), h('h1', { class: 'wz-h' }, 'Looking for someone…'), h('p', { class: 'hint' }, 'Stay on this page. It can take up to 2 minutes.')),
+        h('button', { class: 'btn block', onclick: async () => { await API.matchLeave(); shown = ''; tick(); } }, 'Cancel'));
+    }
+    function chatView(d) {
+      const m = d.match, p = d.peer; lastId = 0;
+      const list = h('div', { class: 'chatlist matchlist' }), inp = h('input', { type: 'text', maxlength: 300, placeholder: 'Say something (text only)', 'aria-label': 'Message', enterkeyhint: 'send' }), msg = h('div'), ctl = h('div', { class: 'matchctl' });
+      let gameN = 0;
+      const bubble = (x) => x.kind === 'game' ? h('div', { class: 'gamebub' }, h('small', null, '🎲 Round ' + (++gameN) + ' of ' + m.rounds), h('b', null, x.body)) : h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' }, x.body));
+      const draw = (st) => {
+        cur = st; ctl.replaceChildren();
+        if (st.state !== 'chat') return;
+        if (st.round >= 1 && !st.voted) ctl.append(h('div', { class: 'votebar' }, h('span', null, 'Do you want to be friends? (' + st.round + '/' + st.rounds + ')'), h('button', { class: 'btn pri', onclick: () => vote(true) }, '✅ Yes'), h('button', { class: 'btn', onclick: () => vote(false) }, '❌ No')));
+        else if (st.round >= 1 && st.voted && !st.their_voted) ctl.append(h('p', { class: 'hint' }, 'Waiting for their answer…'));
+        if (st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) ctl.append(h('button', { class: 'btn', onclick: async () => { try { await API.matchGame(m.id); poll(); } catch (e) { toast(err(e), 'bad'); } } }, '🎲 ' + (st.round === 0 ? 'Start a game' : 'Next game')));
+      };
+      async function vote(y) { try { const r = await API.matchVote(m.id, y); draw(r.match); poll(); } catch (e) { toast(err(e), 'bad'); } }
+      async function poll() { try { const r = await API.matchMsgs(m.id, lastId); r.messages.forEach((x) => { lastId = Math.max(lastId, x.id); list.append(bubble(x)); }); if (r.messages.length) list.scrollTop = list.scrollHeight; draw(r.match); if (r.match.state !== 'chat') tick(); } catch (e) { /* next tick */ } }
+      async function go() { const body = inp.value.trim(); if (!body) return; try { await API.matchSend(m.id, body); inp.value = ''; msg.replaceChildren(); poll(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } }
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+      const menu = h('button', { class: 'btn sm', 'aria-label': 'More', onclick: () => { const ch = prompt('Type 1 to report and block this person, 2 to just leave the chat.'); if (ch === '1') API.matchReport(m.id, true).then(() => { shown = ''; tick(); }); else if (ch === '2') API.matchLeave(m.id).then(() => { shown = ''; tick(); }); } }, '⋯');
+      box.replaceChildren(h('div', { class: 'chathead' }, peerHead(p), menu), list, msg, ctl, h('div', { class: 'composer' }, inp, h('button', { class: 'btn pri', onclick: go }, 'Send')));
+      draw(m); poll(); ui.setPoll(() => { if (document.visibilityState === 'visible') poll(); }, 2500);
+    }
+    function doneView(d) {
+      const friends = d.state === 'friends';
+      box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, friends ? '🎉' : '👋'), h('h1', { class: 'wz-h' }, friends ? 'You are friends!' : 'This chat is over'), h('p', { class: 'hint' }, friends ? 'You both said Yes. Your private chat is open.' : 'You did not both say Yes enough times. Try someone new.')),
+        friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread, onclick: () => API.matchLeave(d.match.id) }, '💬 Open our chat') : null,
+        h('button', { class: friends ? 'btn block' : 'btn pri block', onclick: async () => { await API.matchLeave(d.match.id); shown = ''; tick(); } }, '🔍 Find someone new'));
+    }
+    async function tick() {
+      if (stop) return;
+      try {
+        const d = await API.matchState(); if (shown === 'prefs') return;
+        if (d.state === 'idle' && !d.gender) { if (shown !== 'prefs0') { shown = 'prefs0'; prefsView(true); } return; }
+        const key = d.state + (d.match ? ':' + d.match.id + ':' + d.state : '');
+        if (d.state === 'matched') { if (shown !== key) { shown = key; chatView(d); } else { /* chat polls itself */ } return; }
+        if (shown === key) return; shown = key;
+        if (d.state === 'idle' || d.state === 'nobody') idleView(d); else if (d.state === 'waiting') waitView(); else doneView(d);
+        if (d.state === 'nobody') box.prepend(h('div', { class: 'note' }, 'Nobody was around right now. Try again in a moment.'));
+      } catch (e) { toast(err(e), 'bad'); }
+    }
+    shell(); ui.setPoll(() => { if (document.visibilityState === 'visible') tick(); }, 3000); await tick();
+    const stopper = () => { stop = true; window.removeEventListener('hashchange', stopper); }; window.addEventListener('hashchange', stopper);
+  }
   /* ---------------------------------------------------------------- points and invites */
   async function points() {
     page('#/points', h('p', { class: 'hint spark' }, 'Loading…'));
@@ -253,6 +319,7 @@ window.CommunityInit = function (ui) {
     if (hash.startsWith('#/join/')) return () => join(hash.slice(7));
     if (!ok) return null;
     if (hash === '' || hash === '#/' || hash === '#') return wrap(hub);
+    if (hash === '#/match') return wrap(match);
     if (hash === '#/rooms') return wrap(rooms);
     if (hash.startsWith('#/room/')) return wrap(() => room(hash.slice(7)));
     if (hash === '#/dms') return wrap(dms);

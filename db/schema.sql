@@ -297,3 +297,15 @@ alter table users add column if not exists frame text;
 -- ===== Real photo is a monthly pass (25 points / 30 days) =====
 alter table users add column if not exists photo_until timestamptz;
 update users set photo_until = now() + interval '30 days' where photo_ok and photo_until is null;
+
+-- ===== Random matching (text only) =====
+alter table users add column if not exists gender text;
+alter table users add column if not exists meet text;
+alter table users add column if not exists langs text[];
+create table if not exists match_queue (user_id bigint primary key references users(id) on delete cascade, since timestamptz not null default now());
+create table if not exists matches (id bigserial primary key, a bigint not null references users(id) on delete cascade, b bigint not null references users(id) on delete cascade, state text not null default 'chat', round int not null default 0, thread_id bigint, seen_by bigint[] not null default '{}', created_at timestamptz not null default now(), ended_at timestamptz);
+create index if not exists matches_a_idx on matches (a, state);
+create index if not exists matches_b_idx on matches (b, state);
+create table if not exists match_msgs (id bigserial primary key, match_id bigint not null references matches(id) on delete cascade, from_user bigint not null references users(id) on delete cascade, body text not null, kind text not null default 'text', created_at timestamptz not null default now());
+create index if not exists match_msgs_idx on match_msgs (match_id, id);
+create table if not exists match_votes (match_id bigint not null references matches(id) on delete cascade, user_id bigint not null references users(id) on delete cascade, round int not null, yes boolean not null, primary key (match_id, user_id, round));

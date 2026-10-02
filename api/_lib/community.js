@@ -284,11 +284,25 @@ async function handle(action, ctx) {
     }
     /* ------------------------------------------------ cleanup: messages live 3 days, reports 7 days. Points and money are never touched. */
     case 'cleanup': {
+      await sql`delete from match_queue where since < now() - interval '10 minutes'`; await sql`delete from matches where created_at < now() - interval '3 days'`;
       const a = await sql`delete from messages where expires_at < now() returning id`, d = await sql`delete from dm_messages where expires_at < now() returning id`, r = await sql`delete from reports where created_at < now() - interval '7 days' returning id`;
       return out({ ok: true, messages: a.length, dms: d.length, reports: r.length });
     }
     default: return false;
   }
+}
+
+/** Record a report against a member; 3 different reporters in 24 hours mutes them for 24 hours. Used by rooms, DMs and random matches. */
+async function reportTarget(sql, reporter, target, kind, body, roomId) {
+  if (!(await sql`select 1 from reports where reporter = ${reporter} and target = ${target} and created_at > now() - interval '24 hours'`).length)
+    await sql`insert into reports (reporter, target, where_kind, room_id, body) values (${reporter}, ${target}, ${kind}, ${roomId || null}, ${String(body || '').slice(0, 500)})`;
+  const n = await sql`select count(distinct reporter)::int as n from reports where target = ${target} and created_at > now() - interval '24 hours'`;
+  let muted = false;
+  if (n[0].n >= 3) {
+    const t = (await sql`select id, nick, muted_until from users where id = ${target}`)[0];
+    if (t && (!t.muted_until || new Date(t.muted_until) < new Date())) { await sql`update users set muted_until = now() + interval '24 hours' where id = ${target}`; muted = true; await notifyAdmins(sql, '🚩 ' + (t.nick || 'A member') + ' was muted for 24 hours', '3 people reported them. Open the dashboard to review.'); }
+  }
+  return muted;
 }
 
 /** Owner-only actions (the handler already checked the owner key). */
@@ -312,4 +326,4 @@ async function handleAdmin(action, ctx) {
   return false;
 }
 
-module.exports = { handle, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };
+module.exports = { handle, reportTarget, pushUsers, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };

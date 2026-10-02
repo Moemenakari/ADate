@@ -909,7 +909,7 @@ function welcome() {
   document.title = 'ADate – Welcome';
   if (!API.session) { location.hash = '#/login'; return; }
   const U = {}, ph = phoneInputs('961'), pw1 = pwField('Create a password (6+ characters)', 'new-password', 'Create a password (6+ characters)'), pw2 = pwField('Type the password again', 'new-password', 'Type the password again');
-  const st = { step: 0, first: '', last: '', nick: '', avatar: '', d: '', m: '', y: '', interests: new Set(), email: '', q: (API.questions || [])[0] || 'What is your pet’s name?', saved: false };
+  const st = { step: 0, first: '', last: '', nick: '', avatar: '', gender: '', meet: 'both', langs: new Set(['English']), d: '', m: '', y: '', interests: new Set(), email: '', q: (API.questions || [])[0] || 'What is your pet’s name?', saved: false };
   const ansA = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }), ansB = h('input', { type: 'text', placeholder: 'Brand and model, e.g. iPhone 15', 'aria-label': 'Second answer' });
   const msg = h('div'), root = h('div', { class: 'wz' });
   const yr = new Date().getFullYear(), emailOk = (v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
@@ -930,6 +930,11 @@ function welcome() {
         return [h('div', { class: 'row' }, INTERESTS.map(([e, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': st.interests.has(l) ? 'true' : 'false', onclick: (ev) => {
           if (st.interests.has(l)) st.interests.delete(l); else if (st.interests.size < 10) st.interests.add(l); else { msg.replaceChildren(h('div', { class: 'note' }, 'Up to 10 interests.')); return; }
           ev.currentTarget.setAttribute('aria-pressed', st.interests.has(l) ? 'true' : 'false'); count.textContent = st.interests.size + ' / 10'; msg.replaceChildren(); } }, e + ' ' + l))), count]; } },
+    { title: 'Who are you, and who do you want to meet?', hint: 'We use this for random matching. You only meet people in your age group.', check: () => !st.gender ? 'Pick who you are.' : '',
+      body: () => { const row = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (st[key] === v ? ' on' : ''), onclick: () => { st[key] = v; draw(); } }, h('span', null, e), h('b', null, l))));
+        return [h('b', null, 'I am'), row([['m', '👦', 'A guy'], ['f', '👧', 'A girl']], 'gender'), h('b', null, 'I want to meet'), row([['m', '👦', 'Guys'], ['both', '👥', 'Both'], ['f', '👧', 'Girls']], 'meet')]; } },
+    { title: 'Which languages feel natural?', hint: 'Put the ones you speak best first. We try to match you with people who speak them too.', check: () => !st.langs.size ? 'Pick at least one language.' : '',
+      body: () => [h('div', { class: 'row' }, ['English', 'العربية', 'Français', 'Türkçe', 'Español', 'Deutsch', 'Italiano', 'Русский', 'Kurdî', 'Հայերեն'].map((l) => h('button', { class: 'chip', type: 'button', 'aria-pressed': st.langs.has(l) ? 'true' : 'false', onclick: (ev) => { if (st.langs.has(l)) st.langs.delete(l); else if (st.langs.size < 5) st.langs.add(l); ev.currentTarget.setAttribute('aria-pressed', st.langs.has(l) ? 'true' : 'false'); } }, l)))] },
     { title: 'How can we reach you?', hint: 'Your number is used so people can answer you on WhatsApp, and to keep your account safe. Nobody sees it.', last: true,
       check: () => !emailOk(st.email) ? 'Write your email correctly.' : !ph.value ? 'Check your WhatsApp number.' : !U.has_password && pw1.input.value.length < 6 ? 'Password needs at least 6 characters.' : !U.has_password && pw1.input.value !== pw2.input.value ? 'The two passwords are not the same.' : !U.has_recovery && (ansA.value.trim().length < 2 || ansB.value.trim().length < 2) ? 'Answer both security questions.' : '',
       body: () => [h('b', null, 'Your WhatsApp number'), phoneRow(ph.sel, ph.inp), h('b', null, 'Your email'), h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', value: st.email, readonly: U.google ? '' : null, 'aria-label': 'Email', oninput: (e) => { st.email = e.target.value; } }),
@@ -943,6 +948,7 @@ function welcome() {
       if (!st.saved) { r = await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, email: st.email.trim(), birthdate: bdate(), interests: [...st.interests], password: pw1.input.value, password2: pw2.input.value, question: st.q, answer: ansA.value, answer2: ansB.value }); st.saved = true; }
       try { await API.nickSet('*', st.nick.trim()); } catch (e) { st.step = 1; draw(); msg.replaceChildren(h('div', { class: 'note' }, e.message)); return; }
       try { await API.meSet({ avatar: st.avatar }); } catch (e) { /* the avatar can be changed later */ }
+      try { await API.matchPrefs({ gender: st.gender, meet: st.meet, langs: [...st.langs] }); } catch (e) { /* asked again in Match */ }
       let cfgS = {}; try { cfgS = await API.publicSettings(); } catch (e) { /* optional */ }
       if (cfgS.owner_whatsapp && !(r.user && r.user.verified)) { location.hash = '#/verify'; return; }
       goAfterAuth();

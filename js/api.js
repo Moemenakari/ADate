@@ -92,6 +92,15 @@
     admin: (key) => call('admin', { key }),
     adminReset: (key, phone) => call('admin_reset', { key, phone }),
     adminInvite: (key, id) => call('admin_invite', { key, id }),
+    matchPrefs: (o) => call('match_prefs', Object.assign({ session: tok() }, o)),
+    matchJoin: () => call('match_join', { session: tok() }),
+    matchState: () => call('match_state', { session: tok() }),
+    matchLeave: (match) => call('match_leave', { session: tok(), match }),
+    matchMsgs: (match, after) => call('match_msgs', { session: tok(), match, after }),
+    matchSend: (match, body) => call('match_send', { session: tok(), match, body }),
+    matchGame: (match) => call('match_game', { session: tok(), match }),
+    matchVote: (match, yes) => call('match_vote', { session: tok(), match, yes }),
+    matchReport: (match, block) => call('match_report', { session: tok(), match, block }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
