@@ -22,10 +22,25 @@ window.CommunityInit = function (ui) {
     if (FRAME_LOOK[frame]) box.append(h('i', { class: 'fr' }, FRAME_LOOK[frame][1]));
     return box;
   }
+
+  /* ---------------------------------------------------------------- add to home screen: banner and +10 points */
+  const isStandalone = () => !!(window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+  let deferredInstall = null; window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
+  function installBanner() {
+    if (isStandalone()) return null;
+    let hide = 0; try { hide = Number(localStorage.getItem('adate.installHide') || 0); } catch (e) { /* ok */ }
+    if (Date.now() < hide) return null;
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const box = h('div', { class: 'installbar' }, h('div', null, h('b', null, '📲 Add ADate to your Home Screen'), h('small', null, ios ? 'Tap the Share button, then “Add to Home Screen”. You get notifications and +10 points.' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. You get notifications and +10 points.')),
+      deferredInstall ? h('button', { class: 'btn pri sm', onclick: async () => { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch (e) { /* ignore */ } box.remove(); } }, 'Install') : null,
+      h('button', { class: 'btn sm', 'aria-label': 'Hide for 3 days', onclick: () => { try { localStorage.setItem('adate.installHide', String(Date.now() + 3 * 86400000)); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
+    return box;
+  }
+  if (isStandalone() && API.session) { let done = false; try { done = localStorage.getItem('adate.installClaimed') === '1'; } catch (e) { /* ok */ } if (!done) API.installClaim().then((r) => { try { localStorage.setItem('adate.installClaimed', '1'); } catch (e) { /* ok */ } if (r && r.claimed) setTimeout(() => toast('+10 points for adding ADate to your home screen ⭐'), 1500); }).catch(() => {}); }
   const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/me', '👤', 'Me']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
   function page(active, ...kids) {
     document.title = 'ADate';
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), installBanner(), ...kids), bar(active, ME && ME.points));
   }
   async function load() { // who am I; also earns the +1 that comes every 6 hours
     const d = await API.hub(); ME = d.me; applyTheme(ME.theme); window.__dmRequests = d.dm_requests;
@@ -314,7 +329,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     const d = await API.points(); ME.points = d.balance;
     const link = location.origin + '/#/join/' + ME.ref_code, text = 'Come play on ADate with me: ' + link;
-    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', tod: 'Truth or Dare' };
+    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', tod: 'Truth or Dare' };
     page('#/points', h('div', { class: 'bigpts' }, h('small', null, 'Your points'), h('b', null, '⭐ ' + d.balance)),
       h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open ADate (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Invite a friend: +5 points'), h('p', { class: 'hint' }, 'You earn 5 when your friend joins and sends their first message. Up to 10 friends a day.'), h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your invite link' }),

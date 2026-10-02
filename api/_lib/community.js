@@ -203,6 +203,11 @@ async function handle(action, ctx) {
       return out({ ok: true, id: r[0].id });
     }
     /* ------------------------------------------------ safety */
+    case 'install_claim': { // +10 points once, for opening ADate from the home screen
+      const u = await need();
+      const r = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 10, 'install', null where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'install') returning id`;
+      return out({ ok: true, claimed: r.length > 0, balance: await balanceOf(sql, u.id) });
+    }
     case 'blocks_list': {
       const u = await need();
       const rows = await sql`select x.blocked as id, coalesce(t.nick, 'Member') as nick, t.avatar from blocks x join users t on t.id = x.blocked where x.blocker = ${u.id} order by x.created_at desc limit 100`;

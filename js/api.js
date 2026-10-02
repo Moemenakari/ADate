@@ -16,8 +16,13 @@
   }
   const visitor = () => { try { let v = localStorage.getItem('adate.visitor'); if (!v) { v = rnd(12, 'abcdefghjkmnpqrstuvwxyz23456789'); localStorage.setItem('adate.visitor', v); } return v; } catch (e) { return 'anon'; } };
   const KEY = 'adate.session';
-  const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
-  const write = (v) => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } };
+  // The login is kept in two places (storage and a long cookie) so it survives the browser cleaning one of them.
+  const COOKIE = 'adate_s';
+  const getCookie = () => { try { const m = document.cookie.split('; ').find((c) => c.startsWith(COOKIE + '=')); return m ? JSON.parse(decodeURIComponent(m.slice(COOKIE.length + 1))) : null; } catch (e) { return null; } };
+  const setCookie = (v) => { try { document.cookie = COOKIE + '=' + (v ? encodeURIComponent(JSON.stringify(v)) : '') + '; Max-Age=' + (v ? 34560000 : 0) + '; Path=/; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : ''); } catch (e) { /* cookies blocked */ } };
+  const read = () => { let v = null; try { v = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* storage blocked */ } if (!v) { v = getCookie(); if (v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) { /* ok */ } } } return v; };
+  const write = (v) => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } setCookie(v); };
+  try { const v0 = read(); if (v0) setCookie(v0); if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* optional */ }
   const tok = () => (read() || {}).token;
   const stash = (u, token) => write({ token: token || tok(), phone: u.phone || '', name: u.name || '', profile_done: !!u.profile_done, google: !!u.google });
   const keep = (r) => { stash(r.user, r.session); return r; };
@@ -111,6 +116,7 @@
     blocksList: () => call('blocks_list', { session: tok() }),
     deleteAccount: (password, confirm) => call('account_delete', { session: tok(), password, confirm }).then(() => write(null)),
     orderCancel: (id) => call('order_cancel', { session: tok(), id }),
+    installClaim: () => call('install_claim', { session: tok() }),
     payCard: (id) => call('pay_card', { session: tok(), id }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };

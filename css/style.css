@@ -434,3 +434,7 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .pack{position:relative;display:flex;align-items:center;gap:14px;padding:18px;border-radius:22px;border:2px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;text-align:left}
 .pack .pk-n{font-size:1.8rem;font-weight:700;flex:1}.pack b{font-size:1.3rem}.pack small{color:var(--muted);flex-basis:100%}
 .pack{flex-wrap:wrap}.pack.best{border-color:var(--yel,#ffd60a);box-shadow:0 0 0 2px var(--yel,#ffd60a) inset}.pack em{position:absolute;top:-10px;right:16px;background:var(--yel,#ffd60a);color:#111;font-style:normal;font-weight:700;font-size:.75rem;padding:2px 10px;border-radius:99px}
+
+.installbar{display:flex;gap:10px;align-items:center;background:linear-gradient(135deg,#ffe36e,#ffb36b);color:#15131f;border-radius:18px;padding:10px 12px;margin:8px 0}
+.installbar div{flex:1;display:flex;flex-direction:column}.installbar small{opacity:.85;font-size:.78rem;line-height:1.25}
+.installbar .btn{min-height:36px;border-color:rgba(0,0,0,.15);background:rgba(255,255,255,.55);color:#15131f}
