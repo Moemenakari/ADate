@@ -110,6 +110,8 @@
     discoverNear: () => call('discover_near', { session: tok() }),
     blocksList: () => call('blocks_list', { session: tok() }),
     deleteAccount: (password, confirm) => call('account_delete', { session: tok(), password, confirm }).then(() => write(null)),
+    orderCancel: (id) => call('order_cancel', { session: tok(), id }),
+    payCard: (id) => call('pay_card', { session: tok(), id }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });

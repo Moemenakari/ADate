@@ -428,3 +428,9 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .xocell{width:76px;height:76px;border-radius:16px;border:2px solid var(--line);background:var(--bg2);font-size:2.2rem;cursor:pointer;color:var(--ink)}.xocell.win{border-color:var(--yel,#ffd60a);box-shadow:0 0 0 2px var(--yel,#ffd60a) inset}.xocell:disabled{cursor:default}
 .drawcv{width:100%;max-width:300px;aspect-ratio:1;border-radius:16px;background:#1b1b2a;border:1px solid var(--line);touch-action:none}
 .drawtools{justify-content:center}.dot{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);cursor:pointer}
+
+/* ---------- shop packs ---------- */
+.packs{display:grid;grid-template-columns:1fr;gap:12px;margin:10px 0}
+.pack{position:relative;display:flex;align-items:center;gap:14px;padding:18px;border-radius:22px;border:2px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;text-align:left}
+.pack .pk-n{font-size:1.8rem;font-weight:700;flex:1}.pack b{font-size:1.3rem}.pack small{color:var(--muted);flex-basis:100%}
+.pack{flex-wrap:wrap}.pack.best{border-color:var(--yel,#ffd60a);box-shadow:0 0 0 2px var(--yel,#ffd60a) inset}.pack em{position:absolute;top:-10px;right:16px;background:var(--yel,#ffd60a);color:#111;font-style:normal;font-weight:700;font-size:.75rem;padding:2px 10px;border-radius:99px}
