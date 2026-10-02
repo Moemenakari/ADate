@@ -105,6 +105,8 @@
     discoverAct: (to, act, body) => call('discover_act', { session: tok(), to, act, body }),
     discoverReport: (to) => call('discover_report', { session: tok(), to }),
     discoverNear: () => call('discover_near', { session: tok() }),
+    blocksList: () => call('blocks_list', { session: tok() }),
+    deleteAccount: (password, confirm) => call('account_delete', { session: tok(), password, confirm }).then(() => write(null)),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });

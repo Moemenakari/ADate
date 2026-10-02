@@ -203,6 +203,11 @@ async function handle(action, ctx) {
       return out({ ok: true, id: r[0].id });
     }
     /* ------------------------------------------------ safety */
+    case 'blocks_list': {
+      const u = await need();
+      const rows = await sql`select x.blocked as id, coalesce(t.nick, 'Member') as nick, t.avatar from blocks x join users t on t.id = x.blocked where x.blocker = ${u.id} order by x.created_at desc limit 100`;
+      return out({ blocked: rows });
+    }
     case 'user_block': {
       const u = await need(), id = idNum(b.user_id); if (id === u.id) throw bad('That is you');
       if (b.off) await sql`delete from blocks where blocker = ${u.id} and blocked = ${id}`; else await sql`insert into blocks (blocker, blocked) values (${u.id}, ${id}) on conflict do nothing`;

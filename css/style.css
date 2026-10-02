@@ -413,3 +413,10 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .sw-send{background:var(--accent);border-color:var(--accent);color:#fff}
 .nearhero{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0;text-align:center}
 @media(prefers-reduced-motion:no-preference){.swcard{animation:swin .25s ease-out}@keyframes swin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}}
+
+/* ---------- settings ---------- */
+.setsec{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:14px 16px;margin:12px 0;display:flex;flex-direction:column;gap:10px}
+.sethead{display:flex;gap:10px;align-items:center;font-size:1.15rem}.sethead span{font-size:1.5rem}
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.setrow:last-child{border-bottom:0}.setrow span{color:var(--muted)}.setrow b{text-align:right;overflow-wrap:anywhere}
+.setlink{display:flex;gap:12px;align-items:center;padding:10px 4px;text-decoration:none;color:var(--ink)}.setlink span{font-size:1.5rem}.setlink div{flex:1;display:flex;flex-direction:column}.setlink small{color:var(--muted)}.setlink i{font-style:normal;font-size:1.6rem;color:var(--muted)}
+.dangerbox summary{cursor:pointer;font-weight:700;color:#ff4d6a}

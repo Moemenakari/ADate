@@ -224,6 +224,14 @@ module.exports = async (req, res) => {
       await sql`delete from sessions where user_id = ${u.id}`;
       return res.status(200).json({ session: await newSession(sql, u.id), user: publicUser(u) });
     }
+    if (action === 'account_delete') { // erases the account and everything that belongs to it; the owner account cannot be erased here
+      const u = await userOf(sql, b.session);
+      if (u.is_admin) throw bad('The owner account cannot be deleted here', 403);
+      if (String(b.confirm || '').trim().toUpperCase() !== 'DELETE') throw bad('Type DELETE to confirm');
+      if (u.pass_hash && !eq(kdf(b.password || '', u.pass_salt), u.pass_hash)) throw bad('Wrong password', 401);
+      await sql`delete from users where id = ${u.id}`;
+      return res.status(200).json({ ok: true });
+    }
     if (action === 'logout') { if (SES.test(b.session || '')) await sql`delete from sessions where token_hash = ${hash(b.session)}`; return res.status(200).json({ ok: true }); }
     if (action === 'me') {
       const u = await userOf(sql, b.session);

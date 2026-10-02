@@ -233,6 +233,38 @@ window.CommunityInit = function (ui) {
     shell(); ui.setPoll(() => { if (document.visibilityState === 'visible') tick(); }, 3000); await tick();
     const stopper = () => { stop = true; window.removeEventListener('hashchange', stopper); }; window.addEventListener('hashchange', stopper);
   }
+
+  /* ---------------------------------------------------------------- settings: everything in one clear place */
+  async function settings() {
+    page('#/me', h('p', { class: 'hint spark' }, 'Loading…'));
+    if (!ME) await load();
+    const [acct, bl, mp] = await Promise.all([API.me().then((r) => r.user || {}).catch(() => ({})), API.blocksList().catch(() => ({ blocked: [] })), API.matchState().catch(() => ({}))]);
+    const pr = { gender: mp.gender || '', meet: mp.meet || 'both', langs: new Set(mp.langs || []) };
+    const LANGS = ['English', 'العربية', 'Français', 'Türkçe', 'Español', 'Deutsch', 'Italiano', 'Русский', 'Kurdî', 'Հայերեն'];
+    const sec = (icon, title, ...kids) => h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, icon), h('b', null, title)), ...kids);
+    const row = (label, val) => h('div', { class: 'setrow' }, h('span', null, label), h('b', null, val || '—'));
+    const link = (icon, label, href, hint) => h('a', { class: 'setlink', href }, h('span', null, icon), h('div', null, h('b', null, label), hint ? h('small', null, hint) : null), h('i', null, '›'));
+    const pickRow = (arr, key) => { const el = h('div', { class: 'pickrow' }); const draw = () => el.replaceChildren(...arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (pr[key] === v ? ' on' : ''), onclick: () => { pr[key] = v; draw(); } }, h('span', null, e), h('b', null, l)))); draw(); return el; };
+    const langBox = h('div', { class: 'row' }, LANGS.map((l) => h('button', { class: 'chip', type: 'button', 'aria-pressed': pr.langs.has(l) ? 'true' : 'false', onclick: (ev) => { if (pr.langs.has(l)) pr.langs.delete(l); else if (pr.langs.size < 5) pr.langs.add(l); ev.currentTarget.setAttribute('aria-pressed', pr.langs.has(l) ? 'true' : 'false'); } }, l)));
+    const blockedList = h('div', { class: 'stack' });
+    const drawBlocked = (rows) => blockedList.replaceChildren(...(rows.length ? rows.map((x) => h('div', { class: 'setrow' }, h('span', null, x.nick), h('button', { class: 'btn sm', onclick: async () => { try { await API.userBlock(x.id, true); toast('Unblocked'); drawBlocked(rows.filter((y) => y.id !== x.id)); } catch (e) { toast(err(e), 'bad'); } } }, 'Unblock'))) : [h('p', { class: 'hint' }, 'You have not blocked anyone.')]));
+    drawBlocked(bl.blocked || []);
+    const pc = ui.pushControl ? await ui.pushControl() : null;
+    const dpw = h('input', { type: 'password', placeholder: 'Your password', 'aria-label': 'Password to delete', autocomplete: 'current-password' }), dtx = h('input', { type: 'text', placeholder: 'Type DELETE', 'aria-label': 'Type DELETE', autocapitalize: 'characters' });
+    page('#/me', h('div', { class: 'wz-h', style: 'font-size:1.9rem;margin:6px 0' }, 'Settings'),
+      sec('👤', 'My account', row('Phone', acct.phone ? '+' + acct.phone : ''), row('Email', acct.email), row('Birthday', acct.birthdate ? 'Private · ' + ME.age_band : ''), row('Number check', acct.verified ? '✅ Verified' : 'Waiting for the owner'), h('p', { class: 'hint' }, 'Your real name is never shown. Only your nickname.')),
+      sec('✏️', 'My profile', link('🪪', 'Nickname, avatar, photo, frame', '#/me', 'Change how people see you')),
+      sec('💜', 'Matching', h('b', null, 'I am'), pickRow(IAM, 'gender'), h('b', null, 'I want to meet'), pickRow(MEET, 'meet'), h('b', null, 'Languages'), langBox,
+        h('button', { class: 'btn pri block', onclick: async () => { if (!pr.gender) return toast('Pick who you are', 'bad'); try { await API.matchPrefs({ gender: pr.gender, meet: pr.meet, langs: [...pr.langs] }); toast('Saved ✓'); } catch (e) { toast(err(e), 'bad'); } } }, 'Save')),
+      sec('🔔', 'Notifications', pc || h('p', { class: 'hint' }, 'Not available on this phone.')),
+      sec('🌓', 'Look', h('button', { class: 'btn block', onclick: () => { ui.toggleMode(); } }, 'Switch light / dark')),
+      sec('🛡️', 'Safety', h('p', { class: 'hint' }, 'Chats are text only. Links, phone numbers and usernames are blocked. Three people reporting someone mutes them for 24 hours.'), h('b', null, 'People I blocked'), blockedList),
+      sec('⭐', 'Points', link('⭐', 'My points: ' + ME.points, '#/points', 'History and invite links'), link('🛒', 'Get more points', '#/shop'), link('🎲', 'Truth or Dare levels', '#/tod')),
+      sec('❓', 'Help', link('🔑', 'I forgot my password', '#/recover'), link('📄', 'Privacy', '#/privacy'), link('📬', 'My invites (Truth Date)', '#/mine')),
+      h('button', { class: 'btn block', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out'),
+      h('details', { class: 'setsec dangerbox' }, h('summary', null, '🗑️ Delete my account'), h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'This erases your profile, chats, points and everything else for good. It cannot be undone.'), acct.has_password === false ? null : dpw, dtx,
+        h('button', { class: 'btn danger block', onclick: async () => { if (!confirm('Delete your account for good?')) return; try { await API.deleteAccount(dpw.value, dtx.value); location.hash = '#/'; } catch (e) { toast(err(e), 'bad'); } } }, 'Delete for good'))));
+  }
   /* ---------------------------------------------------------------- points and invites */
   async function points() {
     page('#/points', h('p', { class: 'hint spark' }, 'Loading…'));
@@ -288,6 +320,7 @@ window.CommunityInit = function (ui) {
     const frameBox = () => h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Season frames'), h('p', { class: 'hint' }, 'A frame around your picture. 5 points each, while the season lasts. You keep it.'), ...ME.frame_shop.map((f) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, f.emoji), h('span', { class: 'rc-t' }, h('b', null, f.name), h('small', null, f.own ? (ME.frame === f.key ? 'Using it' : 'You own it') : f.open ? '⭐ ' + f.price : 'Not on sale now')),
       f.own ? h('button', { class: 'btn sm' + (ME.frame === f.key ? '' : ' pri'), onclick: async () => { await API.meSet({ frame: ME.frame === f.key ? '' : f.key }); me(); } }, ME.frame === f.key ? 'Remove' : 'Use') : f.open ? h('button', { class: 'btn sm', onclick: async () => { if (!confirm(`Buy the ${f.name} frame for ${f.price} points?`)) return; try { await API.frameBuy(f.key); me(); } catch (x) { toast(err(x), 'bad'); } } }, 'Buy') : h('span', { class: 'badge' }, '🔒'))));
     page('#/me', h('div', { class: 'hello' }, avatar(ME.avatar, ME.nick, 56, ME.frame), h('div', null, h('b', null, ME.nick || 'No nickname yet'), h('small', { class: 'hint' }, 'Your public profile'))),
+      h('a', { class: 'btn pri block', href: '#/settings' }, '⚙️ Settings'),
       h('button', { class: 'btn', onclick: () => { ui.toggleMode(); me(); } }, '🌓 Light / dark'),
       h('div', { class: 'h2' }, 'Nickname'), nickIn, h('button', { class: 'btn sm pri', onclick: saveNick(() => '*', nickIn) }, 'Save'),
       h('details', null, h('summary', { class: 'hint' }, 'A different nickname for another country'), h('div', { class: 'stack' }, cSel, cIn, h('button', { class: 'btn sm', onclick: saveNick(() => cSel.value, cIn) }, 'Save for that country'),
@@ -366,6 +399,7 @@ window.CommunityInit = function (ui) {
     if (hash.startsWith('#/dm/')) return wrap(() => dm(hash.slice(5)));
     if (hash === '#/points') return wrap(points);
     if (hash === '#/me') return wrap(me);
+    if (hash === '#/settings') return wrap(settings);
     if (hash === '#/tod') return wrap(tod);
     if (hash === '#/shop') return wrap(shopPage);
     return null;
