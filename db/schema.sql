@@ -293,3 +293,7 @@ alter table users add column if not exists photo text;
 alter table users add column if not exists photo_ok boolean not null default false;
 alter table users add column if not exists frames text[];
 alter table users add column if not exists frame text;
+
+-- ===== Real photo is a monthly pass (25 points / 30 days) =====
+alter table users add column if not exists photo_until timestamptz;
+update users set photo_until = now() + interval '30 days' where photo_ok and photo_until is null;

@@ -319,3 +319,19 @@ canvas.confetti{inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
 .avatar.framed{position:relative;box-shadow:0 0 0 3px var(--ring,#ff7a00),0 0 12px var(--ring,#ff7a00)}
 .avatar .fr{position:absolute;right:-6px;top:-8px;font-style:normal;font-size:.9em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
 .avatar{overflow:visible}.avatar svg,.avatar img{border-radius:50%}
+
+/* ---------- manual light / dark ---------- */
+:root[data-ui=light]{--bg:#fff8f3;--bg2:#ffeef3;--surface:#fff;--ink:#4b3443;--muted:#7f6878;--line:#f1dde5;--accent:#d9527c;--accent-d:#b03a61;--accent-soft:#ffe6ee;--lav:#ece6ff;--mint:#d9f4ea;--butter:#fff1c9;--sky:#dff0ff;--shadow:0 2px 0 rgba(176,58,97,.10),0 10px 24px rgba(120,60,90,.10)}
+:root[data-ui=dark]{--bg:#1c1620;--bg2:#241b29;--surface:#2a2130;--ink:#f6eaf1;--muted:#bba6b4;--line:#403247;--accent:#ff7da4;--accent-d:#ff9ebb;--accent-soft:#3d2638;--lav:#2f2848;--mint:#1f3a33;--butter:#3d3520;--sky:#1f3246;--shadow:0 2px 0 rgba(0,0,0,.25),0 10px 24px rgba(0,0,0,.3)}
+/* ---------- welcome wizard: one question per screen ---------- */
+.wz{max-width:480px;margin:0 auto;min-height:100dvh;padding:16px 20px 120px;display:flex;flex-direction:column;gap:14px}
+.wz-top{display:flex;align-items:center;gap:12px}
+.wz-back,.wz-mode{width:40px;height:40px;border:0;background:none;font-size:1.4rem;color:var(--ink);cursor:pointer;border-radius:50%}
+.wz-bar{flex:1;height:8px;border-radius:99px;background:var(--line);overflow:hidden}.wz-bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+.wz-h{font-size:2.1rem;line-height:1.1;font-weight:700;margin:18px 0 0}
+.wz-body{margin-top:8px}
+.wz-go{position:fixed;right:max(20px,calc(50vw - 220px));bottom:28px;width:64px;height:64px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:1.8rem;font-weight:700;box-shadow:0 5px 0 var(--accent-d);cursor:pointer}
+.wz-go:active{transform:translateY(3px);box-shadow:0 2px 0 var(--accent-d)}
+.avs.wide{gap:10px;justify-content:center}.avs.wide .avbtn{width:56px;height:56px;font-size:1.9rem;padding:0;display:flex;align-items:center;justify-content:center}
+.avbtn{font-size:1.5rem;line-height:1}
+@media(prefers-reduced-motion:reduce){.wz-bar i,.wz-go{transition:none}}

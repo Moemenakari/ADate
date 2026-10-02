@@ -801,8 +801,8 @@ const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['�
 function goAfterAuth() {
   const s = API.session, to = store.get('adate.after', null);
   const ref = store.get('adate.ref', null); if (ref && s) { API.refJoin(ref).catch(() => {}); store.set('adate.ref', null); }
-  if (to === '#/make' && s && !s.profile_done) { location.hash = '#/profile'; return; }
-  store.set('adate.after', null); location.hash = to || (s && !s.profile_done ? '#/profile' : '#/');
+  if (to === '#/make' && s && !s.profile_done) { location.hash = '#/welcome'; return; }
+  store.set('adate.after', null); location.hash = to || (s && !s.profile_done ? '#/welcome' : '#/');
 }
 function loadGsi() {
   return new Promise((ok) => {
@@ -902,6 +902,78 @@ function profile() {
     draw();
   })();
   authShell('👤 Tell us about you', h('p', { class: 'hint' }, 'Once, before your first invite. Your number is only used so people can answer you on WhatsApp. Nobody else sees your birthday.'), host);
+}
+
+/** First-time welcome: one question per screen (name, nickname, avatar, birthday, interests, contact). */
+function welcome() {
+  document.title = 'ADate – Welcome';
+  if (!API.session) { location.hash = '#/login'; return; }
+  const U = {}, ph = phoneInputs('961'), pw1 = pwField('Create a password (6+ characters)', 'new-password', 'Create a password (6+ characters)'), pw2 = pwField('Type the password again', 'new-password', 'Type the password again');
+  const st = { step: 0, first: '', last: '', nick: '', avatar: '', d: '', m: '', y: '', interests: new Set(), email: '', q: (API.questions || [])[0] || 'What is your pet’s name?', saved: false };
+  const ansA = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }), ansB = h('input', { type: 'text', placeholder: 'Brand and model, e.g. iPhone 15', 'aria-label': 'Second answer' });
+  const msg = h('div'), root = h('div', { class: 'wz' });
+  const yr = new Date().getFullYear(), emailOk = (v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
+  const bdate = () => st.y && st.m && st.d ? `${st.y}-${String(st.m).padStart(2, '0')}-${String(st.d).padStart(2, '0')}` : '';
+  const ageNow = () => { const b = bdate(); return b ? Math.floor((Date.now() - new Date(b + 'T00:00:00Z')) / 31557600000) : 0; };
+  const steps = [
+    { title: 'What’s your name?', hint: 'Your real name is never shown. Other people only see your nickname.', check: () => !st.first.trim() ? 'Add your first name.' : !st.last.trim() ? 'Add your last name.' : '',
+      body: () => [h('input', { type: 'text', placeholder: 'First name', value: st.first, autocomplete: 'given-name', 'aria-label': 'First name', oninput: (e) => { st.first = e.target.value; } }), h('input', { type: 'text', placeholder: 'Last name', value: st.last, autocomplete: 'family-name', 'aria-label': 'Last name', oninput: (e) => { st.last = e.target.value; } })] },
+    { title: 'Pick a nickname', hint: 'This is the only name people will see. 2 to 20 letters or numbers.', check: () => !/^[\p{L}\p{N}][\p{L}\p{N} ._-]{1,19}$/u.test(st.nick.trim()) ? 'Nickname: 2 to 20 letters or numbers.' : '',
+      body: () => [h('input', { type: 'text', placeholder: 'Nickname', value: st.nick, maxlength: 20, autocomplete: 'off', 'aria-label': 'Nickname', oninput: (e) => { st.nick = e.target.value; } })] },
+    { title: 'Choose your avatar', hint: 'Pick an animal. A real photo is possible later for 25 coins a month.', check: () => !st.avatar ? 'Pick an avatar.' : '',
+      body: () => [h('div', { class: 'avs wide' }, (window.ANIMALS || []).map(([k, e]) => h('button', { type: 'button', class: 'avbtn' + (st.avatar === 'animal:' + k ? ' on' : ''), 'aria-label': k, onclick: () => { st.avatar = 'animal:' + k; draw(); } }, e)))] },
+    { title: 'When is your birthday?', hint: 'Your full birthday stays private. We use it to keep you in the right age group.', check: () => { const b = bdate(); return !b || isNaN(new Date(b)) ? 'Pick your birthday.' : ageNow() < 13 ? 'ADate is for ages 13 and up.' : ''; },
+      body: () => { const sel = (key, opts, p0) => h('select', { 'aria-label': p0, onchange: (e) => { st[key] = e.target.value; } }, h('option', { value: '' }, p0), opts.map(([v, l]) => h('option', { value: v, selected: String(st[key]) === String(v) }, l)));
+        return [h('div', { class: 'fieldrow' }, sel('d', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]), 'Day'), sel('m', MONTHS.map((n, i) => [i + 1, n]), 'Month'), sel('y', Array.from({ length: 88 }, (_, i) => [yr - 13 - i, String(yr - 13 - i)]), 'Year'))]; } },
+    { title: 'What are you into?', hint: 'Pick up to 10. We use them to match you with people.', check: () => !st.interests.size ? 'Pick at least one interest.' : '',
+      body: () => { const count = h('span', { class: 'hint' }, st.interests.size + ' / 10');
+        return [h('div', { class: 'row' }, INTERESTS.map(([e, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': st.interests.has(l) ? 'true' : 'false', onclick: (ev) => {
+          if (st.interests.has(l)) st.interests.delete(l); else if (st.interests.size < 10) st.interests.add(l); else { msg.replaceChildren(h('div', { class: 'note' }, 'Up to 10 interests.')); return; }
+          ev.currentTarget.setAttribute('aria-pressed', st.interests.has(l) ? 'true' : 'false'); count.textContent = st.interests.size + ' / 10'; msg.replaceChildren(); } }, e + ' ' + l))), count]; } },
+    { title: 'How can we reach you?', hint: 'Your number is used so people can answer you on WhatsApp, and to keep your account safe. Nobody sees it.', last: true,
+      check: () => !emailOk(st.email) ? 'Write your email correctly.' : !ph.value ? 'Check your WhatsApp number.' : !U.has_password && pw1.input.value.length < 6 ? 'Password needs at least 6 characters.' : !U.has_password && pw1.input.value !== pw2.input.value ? 'The two passwords are not the same.' : !U.has_recovery && (ansA.value.trim().length < 2 || ansB.value.trim().length < 2) ? 'Answer both security questions.' : '',
+      body: () => [h('b', null, 'Your WhatsApp number'), phoneRow(ph.sel, ph.inp), h('b', null, 'Your email'), h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', value: st.email, readonly: U.google ? '' : null, 'aria-label': 'Email', oninput: (e) => { st.email = e.target.value; } }),
+        !U.has_password ? h('div', { class: 'stack' }, h('b', null, 'Choose a password'), pw1, pw2) : null,
+        !U.has_recovery ? h('div', { class: 'stack' }, h('b', null, 'If you forget your password'), h('p', { class: 'hint' }, 'We ask you two questions. Only you should know the answers.'), h('label', { class: 'f' }, 'Question 1', h('select', { onchange: (e) => { st.q = e.target.value; } }, ((API.questions && API.questions.length) ? API.questions : [st.q]).map((q) => h('option', { value: q, selected: q === st.q }, q)))), ansA, h('b', null, 'Question 2: ' + API.q2), ansB) : null] }
+  ];
+  async function finish() {
+    msg.replaceChildren(h('p', { class: 'hint spark' }, 'Creating your profile…'));
+    try {
+      let r = { user: {} };
+      if (!st.saved) { r = await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, email: st.email.trim(), birthdate: bdate(), interests: [...st.interests], password: pw1.input.value, password2: pw2.input.value, question: st.q, answer: ansA.value, answer2: ansB.value }); st.saved = true; }
+      try { await API.nickSet('*', st.nick.trim()); } catch (e) { st.step = 1; draw(); msg.replaceChildren(h('div', { class: 'note' }, e.message)); return; }
+      try { await API.meSet({ avatar: st.avatar }); } catch (e) { /* the avatar can be changed later */ }
+      let cfgS = {}; try { cfgS = await API.publicSettings(); } catch (e) { /* optional */ }
+      if (cfgS.owner_whatsapp && !(r.user && r.user.verified)) { location.hash = '#/verify'; return; }
+      goAfterAuth();
+    } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, e.message)); }
+  }
+  function draw() {
+    const s = steps[st.step];
+    const next = () => { const bad = s.check(); if (bad) return msg.replaceChildren(h('div', { class: 'note' }, bad)); msg.replaceChildren(); if (s.last) return finish(); st.step++; draw(); };
+    root.replaceChildren(
+      h('div', { class: 'wz-top' }, st.step > 0 ? h('button', { class: 'wz-back', 'aria-label': 'Back', onclick: () => { st.step--; msg.replaceChildren(); draw(); } }, '←') : h('span', { class: 'wz-back' }), h('div', { class: 'wz-bar', role: 'progressbar', 'aria-valuenow': st.step + 1, 'aria-valuemax': steps.length }, h('i', { style: `width:${Math.round((st.step + 1) / steps.length * 100)}%` })), h('button', { class: 'wz-mode', 'aria-label': 'Light or dark', onclick: () => { toggleMode(); } }, '🌓')),
+      h('h1', { class: 'wz-h' }, s.title), h('p', { class: 'hint' }, s.hint), h('div', { class: 'stack wz-body' }, s.body()), msg,
+      h('button', { class: 'wz-go', 'aria-label': s.last ? 'Finish' : 'Continue', onclick: next }, s.last ? '✓' : '→'));
+    const first = root.querySelector('input[type=text]'); if (first && !first.readOnly) setTimeout(() => first.focus(), 30);
+  }
+  (async () => {
+    try {
+      const u = (await API.me()).user || {}; Object.assign(U, u); st.email = u.email || '';
+      st.first = u.first_name || u.name || ''; st.last = u.last_name || '';
+      if (u.birthdate) { const [y, m, d] = u.birthdate.split('-').map(Number); st.y = y; st.m = m; st.d = d; }
+      (u.interests || []).forEach((i) => st.interests.add(i));
+      if (u.phone) { const c = COUNTRIES.map((x) => x[0]).sort((a, b) => b.length - a.length).find((x) => u.phone.startsWith(x)); if (c) { ph.sel.value = c; ph.inp.value = u.phone.slice(c.length); } }
+      if (u.profile_done) return goAfterAuth();
+    } catch (e) { if (/log in/i.test(e.message)) { API.clear(); location.hash = '#/login'; return; } }
+    draw();
+  })();
+  $app.replaceChildren(root);
+}
+/** Light / dark by hand; remembered on this phone. */
+function toggleMode() {
+  const cur = document.documentElement.dataset.ui || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'), nx = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.ui = nx; store.set('adate.ui', nx);
 }
 /** Get your account back: your email + the answers to your two questions. */
 function recover() {
@@ -1226,14 +1298,15 @@ async function route() {
   if (hash === '#/verify') return verifyPage();
   if (hash === '#/privacy') return privacy();
   if (hash === '#/admin') return admin();
+  if (hash === '#/welcome') return welcome();
   if (hash === '#/profile') return profile();
   if (hash === '#/make') {
-    if (API.enabled) { const s = API.session; if (!s) { store.set('adate.after', '#/make'); location.hash = '#/login'; return; } if (!s.profile_done) { store.set('adate.after', '#/make'); location.hash = '#/profile'; return; } }
+    if (API.enabled) { const s = API.session; if (!s) { store.set('adate.after', '#/make'); location.hash = '#/login'; return; } if (!s.profile_done) { store.set('adate.after', '#/make'); location.hash = '#/welcome'; return; } }
     return editor();
   }
   return home();
 }
-window.ADATE_UI = { shrinkImage, h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
+window.ADATE_UI = { toggleMode, shrinkImage, h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
 window.CommunityRoute = window.CommunityInit ? window.CommunityInit(window.ADATE_UI) : null;
 window.addEventListener('hashchange', route);
 // A tab left open for hours keeps old code. When it comes back to the front, reload if a newer build is live.
@@ -1241,5 +1314,6 @@ document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !CFG.build) return;
   try { const j = await (await fetch('/version.json', { cache: 'no-store' })).json(); if (j && j.build && j.build !== CFG.build) location.reload(); } catch (e) { /* offline: keep going */ }
 });
+{ const m = store.get('adate.ui', null); if (m) document.documentElement.dataset.ui = m; }
 route();
 })();

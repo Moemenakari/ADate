@@ -16,8 +16,8 @@ window.CommunityInit = function (ui) {
   const FRAME_LOOK = { halloween: ['#ff7a00', '🎃'], newyear: ['#e6b422', '🎆'], ramadan: ['#6b4fbb', '🌙'] };
   function avatar(av, nick, size, frame, photo) {
     const sz = size || 40, box = h('span', { class: 'avatar' + (frame ? ' framed' : ''), style: `width:${sz}px;height:${sz}px` + (FRAME_LOOK[frame] ? `;--ring:${FRAME_LOOK[frame][0]}` : '') });
-    const k = String(av || '').replace(/^cartoon:/, '');
-    if (photo && /^data:image\//.test(photo)) box.append(h('img', { src: photo, alt: '' })); else if (av && STICKERS[k]) box.innerHTML = STICKERS[k].svg; else box.textContent = (nick || '?').trim().slice(0, 1).toUpperCase();
+    const k = String(av || '').replace(/^cartoon:/, ''), an = /^animal:/.test(av || '') ? (window.ANIMALS || []).find((x) => 'animal:' + x[0] === av) : null;
+    if (photo && /^data:image\//.test(photo)) box.append(h('img', { src: photo, alt: '' })); else if (an) { box.classList.add('animal'); box.textContent = an[1]; box.style.fontSize = Math.round(sz * 0.6) + 'px'; } else if (av && STICKERS[k]) box.innerHTML = STICKERS[k].svg; else box.textContent = (nick || '?').trim().slice(0, 1).toUpperCase();
     if (FRAME_LOOK[frame]) box.append(h('i', { class: 'fr' }, FRAME_LOOK[frame][1]));
     return box;
   }
@@ -31,7 +31,7 @@ window.CommunityInit = function (ui) {
     API.pointsClaim().then((r) => { if (r && r.claimed) { ME.points = r.balance; toast('+1 point ⭐'); } }).catch(() => {});
     return d;
   }
-  const guard = async (fn) => { try { await fn(); } catch (e) { if (/log in|blocked/i.test(err(e))) { if (/blocked/i.test(err(e))) { API.clear(); } location.hash = '#/login'; return; } if (/profile/i.test(err(e))) { location.hash = '#/profile'; return; } $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'note' }, err(e)), h('a', { class: 'btn', href: '#/' }, 'Back'))); } };
+  const guard = async (fn) => { try { await fn(); } catch (e) { if (/log in|blocked/i.test(err(e))) { if (/blocked/i.test(err(e))) { API.clear(); } location.hash = '#/login'; return; } if (/profile/i.test(err(e))) { location.hash = '#/welcome'; return; } $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'note' }, err(e)), h('a', { class: 'btn', href: '#/' }, 'Back'))); } };
 
   /* ---------------------------------------------------------------- hub */
   async function hub() {
@@ -173,12 +173,13 @@ window.CommunityInit = function (ui) {
     const saveNick = (getCountry, inp) => async () => { try { await API.nickSet(getCountry(), inp.value); msg.replaceChildren(h('div', { class: 'note' }, 'Saved ✓ (changing a nickname costs 10 points).')); me(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } };
     const cIn = h('input', { type: 'text', maxlength: 20, placeholder: 'Nickname there', 'aria-label': 'Nickname for that country' }), cSel = h('select', { 'aria-label': 'Country' }, NICK_COUNTRIES.map((c) => h('option', { value: c }, (FLAG[c] || '') + ' ' + c)));
     const themes = Object.keys(THEMES).map((k) => h('button', { class: 'themebtn' + (ME.theme === k ? ' on' : ''), style: 'background:' + THEMES[k].sky, onclick: async () => { await API.meSet({ theme: k }); ME.theme = k; applyTheme(k); me(); }, 'aria-label': THEMES[k].name, title: THEMES[k].name }, THEMES[k].emoji));
+    const animalBtns = (window.ANIMALS || []).map(([k, e]) => h('button', { class: 'avbtn' + (ME.avatar === 'animal:' + k ? ' on' : ''), 'aria-label': k, onclick: async () => { await API.meSet({ avatar: 'animal:' + k }); ME.avatar = 'animal:' + k; me(); } }, e));
     const avs = Object.keys(STICKERS).slice(0, 18).map((k) => { const b = h('button', { class: 'avbtn' + (ME.avatar === 'cartoon:' + k ? ' on' : ''), 'aria-label': k, onclick: async () => { await API.meSet({ avatar: 'cartoon:' + k }); ME.avatar = 'cartoon:' + k; me(); } }); b.innerHTML = STICKERS[k].svg; return b; });
     const pc = ui.pushControl ? await ui.pushControl() : null;
     const photoBox = () => {
-      if (!ME.photo_ok) return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, 'The cartoon is free. A real photo shows on your profile card.'), h('button', { class: 'btn', onclick: async () => { if (!confirm(`Use a real photo for ${ME.photo_price} points?`)) return; try { await API.photoBuy(); me(); } catch (e) { toast(err(e), 'bad'); } } }, `📷 Use a real photo · ⭐ ${ME.photo_price}`));
+      if (!ME.photo_ok) return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, 'The animal avatar is free. A real photo shows on your profile card for 30 days.'), h('button', { class: 'btn', onclick: async () => { if (!confirm(`Use a real photo for ${ME.photo_price} points a month?`)) return; try { await API.photoBuy(); me(); } catch (e) { toast(err(e), 'bad'); } } }, `📷 Real photo · ⭐ ${ME.photo_price} / month`));
       const f = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Choose a photo', onchange: async (e) => { const file = e.target.files[0]; if (!file) return; try { const data = await ui.shrinkImage(file, 320, 0.8, true); await API.photoSet(data); toast('Photo saved'); me(); } catch (x) { toast(err(x), 'bad'); } } });
-      return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, ME.has_photo ? 'Your photo is on your profile card.' : 'Choose a photo of yourself.'), f, ME.has_photo ? h('button', { class: 'btn sm danger', onclick: async () => { await API.photoSet('', true); me(); } }, 'Remove my photo') : null);
+      return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, ME.has_photo ? 'Your photo is on your profile card until ' + String(ME.photo_until || '').slice(0, 10) + '.' : 'Choose a photo of yourself.'), f, ME.has_photo ? h('button', { class: 'btn sm danger', onclick: async () => { await API.photoSet('', true); me(); } }, 'Remove my photo') : null);
     };
     const frameBox = () => h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Season frames'), h('p', { class: 'hint' }, 'A frame around your picture. 5 points each, while the season lasts. You keep it.'), ...ME.frame_shop.map((f) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, f.emoji), h('span', { class: 'rc-t' }, h('b', null, f.name), h('small', null, f.own ? (ME.frame === f.key ? 'Using it' : 'You own it') : f.open ? '⭐ ' + f.price : 'Not on sale now')),
       f.own ? h('button', { class: 'btn sm' + (ME.frame === f.key ? '' : ' pri'), onclick: async () => { await API.meSet({ frame: ME.frame === f.key ? '' : f.key }); me(); } }, ME.frame === f.key ? 'Remove' : 'Use') : f.open ? h('button', { class: 'btn sm', onclick: async () => { if (!confirm(`Buy the ${f.name} frame for ${f.price} points?`)) return; try { await API.frameBuy(f.key); me(); } catch (x) { toast(err(x), 'bad'); } } }, 'Buy') : h('span', { class: 'badge' }, '🔒'))));
@@ -187,7 +188,7 @@ window.CommunityInit = function (ui) {
       h('details', null, h('summary', { class: 'hint' }, 'A different nickname for another country'), h('div', { class: 'stack' }, cSel, cIn, h('button', { class: 'btn sm', onclick: saveNick(() => cSel.value, cIn) }, 'Save for that country'),
         ...(d.me.nicks || []).filter((n) => n.country !== '*').map((n) => h('div', { class: 'hint' }, (FLAG[n.country] || '') + ' ' + n.country + ': ' + n.nick)))), msg,
       h('div', { class: 'h2' }, 'My wallpaper'), h('div', { class: 'themes' }, themes),
-      h('div', { class: 'h2' }, 'My cartoon'), h('div', { class: 'avs' }, avs),
+      h('div', { class: 'h2' }, 'My avatar'), h('div', { class: 'avs' }, animalBtns, avs),
       photoBox(), frameBox(),
       pc ? h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Notifications'), pc) : null,
       h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/mine' }, '📬 My invites'), h('button', { class: 'btn danger', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')));
