@@ -337,3 +337,9 @@ create index if not exists fgames_thread_idx on fgames (thread_id, status);
 alter table dm_threads add column if not exists source text;
 alter table dm_threads add column if not exists unlock_until timestamptz;
 alter table dm_threads add column if not exists unlocked boolean not null default false;
+
+-- ===== Game invitations (3 games, the invited person decides), boosted messages =====
+alter table dm_threads add column if not exists boosted boolean not null default false;
+alter table matches add column if not exists kind text not null default 'random';
+alter table matches add column if not exists invited_by bigint;
+alter table matches add column if not exists judge bigint;

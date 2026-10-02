@@ -147,12 +147,26 @@ window.CommunityInit = function (ui) {
   async function dms() {
     page('#/dms', h('p', { class: 'hint spark' }, 'Loading…'));
     if (!ME) await load();
-    const { threads } = await API.dmList();
-    const req = threads.filter((t) => t.status === 'pending' && t.started_by !== ME.id), open = threads.filter((t) => t.status === 'open'), wait = threads.filter((t) => t.status === 'pending' && t.started_by === ME.id);
-    const row = (t) => h('a', { class: 'roomcard', href: '#/dm/' + t.id }, avatar('', t.nick, 40), h('span', { class: 'rc-t' }, h('b', null, t.nick || 'Member'), h('small', null, t.last_body || '')));
-    page('#/dms', h('div', { class: 'h2' }, 'Chats'), h('p', { class: 'hint' }, 'Private messages are only between people in the same age circles. Text only.'),
-      req.length ? [h('div', { class: 'h2' }, 'Requests'), ...req.map(row)] : null, open.length ? open.map(row) : (!req.length ? h('p', { class: 'hint' }, 'No private chats yet. Tap a nickname in a room to say hi.') : null),
-      wait.length ? [h('div', { class: 'h2' }, 'Waiting for a reply'), ...wait.map(row)] : null);
+    const [{ threads }, { invites }, mine] = await Promise.all([API.dmList(), API.inviteList().catch(() => ({ invites: [] })), API.rooms().catch(() => ({ rooms: [] }))]);
+    const rooms = (mine.rooms || []).filter((r) => r.member);
+    const req = threads.filter((t) => t.status === 'pending' && t.started_by !== ME.id).sort((x, y) => (y.boosted - x.boosted)), open = threads.filter((t) => t.status === 'open'), wait = threads.filter((t) => t.status === 'pending' && t.started_by === ME.id);
+    const row = (t, tag) => h('a', { class: 'roomcard', href: '#/dm/' + t.id }, avatar('', t.nick, 40), h('span', { class: 'rc-t' }, h('b', null, (t.boosted ? '🚀 ' : '') + (t.nick || 'Member')), h('small', null, (tag ? tag + ' · ' : '') + (t.last_body || ''))));
+    const gameRow = (i) => h('a', { class: 'roomcard', href: '#/play/' + i.id }, avatar(i.peer.avatar, i.peer.nick, 40, i.peer.frame), h('span', { class: 'rc-t' }, h('b', null, '🎮 ' + i.peer.nick + TICK(i.peer.selfie_ok, i.peer.role)), h('small', null, i.state === 'invited' ? (i.mine ? 'Waiting for them to join' : 'Invited you to play. Tap to answer') : i.state === 'chat' ? 'Game ' + Math.min(3, i.round + 0) + ' of 3 · tap to play' : i.thread ? 'Passed! Tap to open the chat' : '')), h('span', { class: 'badge' }, i.state === 'invited' && !i.mine ? 'New' : 'Open'));
+    let tab = req.length || invites.some((i) => !i.mine && i.state === 'invited') ? 'invites' : 'chats';
+    const body = h('div', { class: 'stack' });
+    const draw = () => {
+      tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tab === tab ? 'true' : 'false'));
+      const inc = invites.filter((i) => !i.mine && i.state === 'invited'), out = invites.filter((i) => i.mine && (i.state === 'invited' || i.state === 'chat')), play = invites.filter((i) => !i.mine && i.state === 'chat'), passed = invites.filter((i) => i.state === 'friends' && i.thread);
+      if (tab === 'invites') body.replaceChildren(...[
+        inc.length ? [h('div', { class: 'h2' }, 'Game invitations'), ...inc.map(gameRow)] : [], req.length ? [h('div', { class: 'h2' }, 'Messages from people'), ...req.map((t) => row(t))] : [],
+        play.length ? [h('div', { class: 'h2' }, 'Games you are playing'), ...play.map(gameRow)] : [], out.length || wait.length ? [h('div', { class: 'h2' }, 'You sent, waiting for a reply'), ...out.map(gameRow), ...wait.map((t) => row(t, 'No reply yet'))] : [],
+        passed.length ? [h('div', { class: 'h2' }, 'Games you passed'), ...passed.map(gameRow)] : [],
+        !inc.length && !req.length && !out.length && !wait.length && !play.length && !passed.length ? [h('p', { class: 'hint' }, 'Nothing waiting. Invite someone from Match.')] : []].flat());
+      else body.replaceChildren(...[open.length ? open.map((t) => row(t)) : [h('p', { class: 'hint' }, 'No private chats yet. Invite someone from Match, or tap a nickname in a group.')], rooms.length ? [h('div', { class: 'h2' }, 'Groups'), ...rooms.map((r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, r.members + ' members · ' + r.msgs24 + ' messages today'))))] : []].flat());
+    };
+    const badge = req.length + invites.filter((i) => !i.mine && i.state === 'invited').length;
+    const tabs = h('div', { class: 'seg' }, ['invites', 'chats'].map((t) => h('button', { class: 'segbtn', 'data-tab': t, onclick: () => { tab = t; draw(); } }, t === 'invites' ? 'Invites' + (badge ? ' (' + badge + ')' : '') : 'Chats & groups')));
+    page('#/dms', h('div', { class: 'h2' }, 'Chats'), tabs, body); draw();
   }
   async function dm(id) {
     if (!ME) await load();
@@ -194,7 +208,7 @@ window.CommunityInit = function (ui) {
 
   /* ---------------------------------------------------------------- random match (text only) */
   const MEET = [['m', '👦', 'Guys'], ['both', '👥', 'Both'], ['f', '👧', 'Girls']], IAM = [['m', '👦', 'I am a guy'], ['f', '👧', 'I am a girl']];
-  const seg = (on) => h('div', { class: 'seg' }, [['#/match', 'Swipe', 'swipe'], ['#/match/near', 'Near you', 'near'], ['#/match/random', 'Random', 'random']].map(([href, l, k]) => h('a', { href, class: on === k ? 'on' : '' }, l)));
+  const seg = (on) => h('div', { class: 'seg' }, [['#/match', 'Swipe', 'swipe'], ['#/match/near', 'Near you', 'near'], ['#/match/random', 'Random', 'random'], ['#/match/online', 'Online', 'online']].map(([href, l, k]) => h('a', { href, class: on === k ? 'on' : '' }, l)));
   const GRADS = ['linear-gradient(160deg,#7b4dff,#ff6bb5)', 'linear-gradient(160deg,#00b4d8,#7b4dff)', 'linear-gradient(160deg,#ff9a3c,#ff4d6a)', 'linear-gradient(160deg,#27d3a2,#2a7bff)', 'linear-gradient(160deg,#ffd60a,#ff7a00)', 'linear-gradient(160deg,#a259ff,#3a1c71)', 'linear-gradient(160deg,#ff5e98,#ffb36b)', 'linear-gradient(160deg,#2b5876,#4e4376)'];
   const gradOf = (id) => GRADS[Number(id) % GRADS.length];
   async function swipe() {
@@ -214,14 +228,28 @@ window.CommunityInit = function (ui) {
       const an = (window.ANIMALS || []).find((x) => 'animal:' + x[0] === c.avatar);
       const face = c.photo ? h('img', { class: 'sw-photo', src: c.photo, alt: '' }) : h('div', { class: 'sw-face' }, an ? an[1] : (c.nick || '?').slice(0, 1).toUpperCase());
       const more = h('button', { class: 'sw-more', 'aria-label': 'More', onclick: async () => { if (!confirm('Report and block ' + c.nick + '?')) return; try { await API.discoverReport(c.id); toast('Reported and blocked'); next(); } catch (e) { toast(err(e), 'bad'); } } }, '•••');
-      const send = async () => { try { const r = await API.discoverAct(c.id, 'invite', msg.value.trim()); toast(r.state === 'friends' ? '🎉 It is a match! Open Chats' : r.state === 'waiting' ? 'Wait until they answer' : 'Invite sent 💜'); next(); } catch (e) { toast(err(e), 'bad'); } };
+      const send = async () => { try { const r = await API.discoverAct(c.id, 'invite', msg.value.trim()); toast(r.state === 'friends' ? '🎉 It is a match! Open Chats' : r.state === 'waiting' ? 'Your message is waiting. They have to reply first.' : 'Message sent 💜'); next(); } catch (e) { toast(err(e), 'bad'); } };
+      const boost = async () => { if (!confirm('Boost this message for 5 points? They get a notification and it goes first in their list.')) return; try { const r = await API.discoverAct(c.id, 'boost', msg.value.trim()); toast(r.boosted ? '🚀 Boosted' : 'Sent'); next(); } catch (e) { toast(err(e), 'bad'); } };
       msg.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
       box.replaceChildren(h('div', { class: 'swcard', style: 'background:' + gradOf(c.id) }, more, face,
         h('div', { class: 'sw-info' }, h('div', { class: 'sw-name' }, h('b', null, c.nick + TICK(c.selfie_ok, c.role)), h('span', null, c.age_band), h('span', null, FLAG[c.country] || '')), h('div', { class: 'row' }, (c.shared.length ? c.shared : c.interests).slice(0, 5).map((x) => h('span', { class: 'sw-tag' }, (c.shared.includes(x) ? '✨ ' : '') + x))), c.langs && c.langs.length ? h('small', null, '🗣 ' + c.langs.join(' · ')) : null, c.last_seen ? h('small', null, presence(c.last_seen)) : null)),
-        h('div', { class: 'sw-actions' }, h('button', { class: 'sw-skip', 'aria-label': 'Skip', onclick: async () => { try { await API.discoverAct(c.id, 'skip'); } catch (e) { /* ignore */ } next(); } }, '✕'), msg, h('button', { class: 'sw-send', 'aria-label': 'Send invite', onclick: send }, '🚀')));
+        h('div', { class: 'sw-actions' }, msg, h('button', { class: 'sw-send', 'aria-label': 'Send one message', onclick: send }, '💬'), h('button', { class: 'sw-send boost', 'aria-label': 'Boost message, 5 points', onclick: boost }, '🚀')),
+        h('div', { class: 'sw-actions2' }, h('button', { class: 'sw-skip', 'aria-label': 'Skip', onclick: async () => { try { await API.discoverAct(c.id, 'skip'); } catch (e) { /* ignore */ } next(); } }, '✕'), h('button', { class: 'btn pri sw-play', onclick: async () => { try { const r = await API.inviteGame(c.id); location.hash = '#/play/' + r.match; } catch (e) { toast(err(e), 'bad'); } } }, '🎮 Invite to play')), h('small', { class: 'hint' }, '💬 one message, free · 🚀 boost, 5 ⭐: a notification and first in their list · 🎮 games: 2 Yes out of 3 and you can chat'));
     }
     async function next() { try { const d = await API.discoverNext(); show(d.card); } catch (e) { if (/who you are/i.test(err(e))) return prefsView(); toast(err(e), 'bad'); } }
     next();
+  }
+  async function online() {
+    if (!ME) await load();
+    const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
+    async function draw() {
+      try {
+        const d = await API.onlineList();
+        box.replaceChildren(h('p', { class: 'hint' }, 'People online now. Invite someone to play 3 games together: XO, a drawing and a question.'), ...(d.online.length ? d.online.map((p) => h('div', { class: 'roomcard' }, avatar(p.avatar, p.nick, 44, p.frame), h('span', { class: 'rc-t' }, h('b', null, p.nick + TICK(p.selfie_ok, p.role) + ' ' + (FLAG[p.country] || '')), h('small', null, (p.friend ? '💜 Friend · ' : '') + '🟢 Online · Age ' + p.age_band + (p.shared.length ? ' · ' + p.shared.slice(0, 2).join(', ') : ''))), h('button', { class: 'btn sm pri', onclick: async () => { try { const r = await API.inviteGame(p.id); location.hash = '#/play/' + r.match; } catch (e) { toast(err(e), 'bad'); } } }, '🎮 Play'))) : [h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🌙'), h('p', { class: 'hint' }, 'Nobody else is online right now.'), h('a', { class: 'btn pri block', href: '#/match' }, 'Browse in Swipe'))]));
+      } catch (e) { if (/who you are/i.test(err(e))) { box.replaceChildren(h('a', { class: 'btn pri block', href: '#/match' }, 'Tell us who you want to meet first')); return; } box.replaceChildren(h('div', { class: 'note' }, err(e))); }
+    }
+    draw(); ui.setPoll(() => { if (document.visibilityState === 'visible') draw(); }, 6000);
   }
   async function near() {
     if (!ME) await load();
@@ -232,11 +260,11 @@ window.CommunityInit = function (ui) {
     q.oninput = draw;
     box.replaceChildren(h('div', { class: 'nearhero' }, h('div', { class: 'bigemoji' }, FLAG[d.country] || '📍'), h('b', null, d.people + ' people in your country'), h('small', { class: 'hint' }, 'We only show cities and regions, never exact places.')), q, list); draw();
   }
-  async function match() {
+  async function match(fixedId) {
     if (!ME) await load();
     let stop = false, shown = '', lastId = 0, cur = null, prefs = { gender: '', meet: 'both' };
     const box = h('div', { class: 'matchbox stack' });
-    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('random'), box), bar('#/match', ME && ME.points));
+    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
     const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok, p.role) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, presence(p.last_seen) + ' · Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
     function prefsView(first) {
       const pick = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (prefs[key] === v ? ' on' : ''), onclick: () => { prefs[key] = v; prefsView(first); } }, h('span', null, e), h('b', null, l))));
@@ -262,9 +290,9 @@ window.CommunityInit = function (ui) {
       const draw = (st) => {
         cur = st; ctl.replaceChildren();
         if (st.state !== 'chat') return;
-        if (st.round >= 1 && !st.voted) ctl.append(h('div', { class: 'votebar' }, h('span', null, 'Do you want to be friends? (' + st.round + '/' + st.rounds + ')'), h('button', { class: 'btn pri', onclick: () => vote(true) }, '✅ Yes'), h('button', { class: 'btn', onclick: () => vote(false) }, '❌ No')));
+        if (st.round >= 1 && !st.voted) ctl.append(h('div', { class: 'votebar' }, h('span', null, (st.kind === 'invite' ? 'Do you want to chat with ' + p.nick + '? (' : 'Do you want to be friends? (') + st.round + '/' + st.rounds + ')'), h('button', { class: 'btn pri', onclick: () => vote(true) }, '✅ Yes'), h('button', { class: 'btn', onclick: () => vote(false) }, '❌ No')));
         else if (st.round >= 1 && st.voted && !st.their_voted) ctl.append(h('p', { class: 'hint' }, 'Waiting for their answer…'));
-        if (st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('quiz') }, '🎲 Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, '🎨 Draw')))); }
+        if (st.kind === 'invite' && st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const nxt = ['❌⭕ XO', '🎨 Drawing', '🎲 Question'][st.round]; ctl.append(h('button', { class: 'btn pri block', onclick: async () => { try { await API.matchGame(m.id); poll(); } catch (e) { toast(err(e), 'bad'); } } }, 'Game ' + (st.round + 1) + ' of ' + st.rounds + ': ' + nxt)); } else if (st.kind !== 'invite' && st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('quiz') }, '🎲 Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, '🎨 Draw')))); }
         if (board) board.set(st.game);
       };
       let board = null;
@@ -277,8 +305,18 @@ window.CommunityInit = function (ui) {
       board = window.GameBoard.mount(box, ctl, { move: async (cell) => { const r = await API.matchMove(m.id, cell); draw(r.match); }, stroke: (k) => API.matchDraw(m.id, k), clear: () => API.matchDraw(m.id, null, true), guess: async (t) => { const r = await API.matchGuess(m.id, t); if (r.correct) toast('🎉 Correct!'); poll(); }, pick: async (i) => { const r = await API.matchPick(m.id, i); draw(r.match); } });
       draw(m); poll(); ui.setPoll(() => { if (document.visibilityState === 'visible') poll(); }, 2500);
     }
+    function invitedView(d) {
+      const p = d.peer;
+      if (d.match.is_judge) return box.replaceChildren(h('div', { class: 'matchhero' }, avatar(p.avatar, p.nick, 88, p.frame), h('h1', { class: 'wz-h' }, p.nick + TICK(p.selfie_ok, p.role) + ' invited you'), h('p', { class: 'hint' }, 'Three quick games: XO, a drawing and a question. After each one you say Yes or No. Two Yes out of three and they can chat with you.')), h('button', { class: 'btn pri block', onclick: async () => { await API.inviteRespond(d.match.id, true); shown = ''; tick(); } }, '🎮 Play'), h('button', { class: 'btn block', onclick: async () => { await API.inviteRespond(d.match.id, false); location.hash = '#/dms'; } }, 'No thanks'));
+      box.replaceChildren(h('div', { class: 'matchhero' }, avatar(p.avatar, p.nick, 88, p.frame), h('h1', { class: 'wz-h' }, 'Waiting for ' + p.nick), h('p', { class: 'hint' }, 'We told them. You can leave this page: you get a notification when they join.')), h('a', { class: 'btn block', href: '#/dms' }, '← Back to chats'));
+    }
     function doneView(d) {
       const friends = d.state === 'friends';
+      if (d.match.kind === 'invite') {
+        const inviter = d.match.invited_by_me;
+        if (friends && inviter) return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🎉'), h('h1', { class: 'wz-h' }, 'They said Yes!'), h('p', { class: 'hint' }, 'You passed the games. Open the chat for 2 ⭐.')), h('button', { class: 'btn pri block', onclick: async () => { try { await API.dmUnlock(d.match.thread); location.hash = '#/dm/' + d.match.thread; } catch (e) { toast(err(e), 'bad'); } } }, 'Open the chat · 2 ⭐'), h('a', { class: 'btn block', href: '#/dm/' + d.match.thread }, 'Later'));
+        return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, friends ? '🎉' : '👋'), h('h1', { class: 'wz-h' }, friends ? 'You are friends!' : 'The games are over'), h('p', { class: 'hint' }, friends ? 'Your chat is open.' : 'It was not a match this time.')), friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread }, '💬 Open our chat') : h('a', { class: 'btn pri block', href: '#/match' }, '🔍 Find someone'));
+      }
       box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, friends ? '🎉' : '👋'), h('h1', { class: 'wz-h' }, friends ? 'You are friends!' : 'This chat is over'), h('p', { class: 'hint' }, friends ? 'You both said Yes. Your private chat is open.' : 'You did not both say Yes enough times. Try someone new.')),
         friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread, onclick: () => API.matchLeave(d.match.id) }, '💬 Open our chat') : null,
         h('button', { class: friends ? 'btn block' : 'btn pri block', onclick: async () => { await API.matchLeave(d.match.id); shown = ''; tick(); } }, '🔍 Find someone new'));
@@ -286,7 +324,8 @@ window.CommunityInit = function (ui) {
     async function tick() {
       if (stop) return;
       try {
-        const d = await API.matchState(); if (shown === 'prefs') return;
+        const d = fixedId ? await API.matchStateOf(fixedId) : await API.matchState(); if (shown === 'prefs') return;
+        if (fixedId && d.state === 'invited') { const key0 = 'invited:' + d.match.id + d.match.is_judge; if (shown !== key0) { shown = key0; invitedView(d); } return; }
         if (d.state === 'idle' && !d.gender) { if (shown !== 'prefs0') { shown = 'prefs0'; prefsView(true); } return; }
         const key = d.state + (d.match ? ':' + d.match.id + ':' + d.state : '');
         if (d.state === 'matched') { if (shown !== key) { shown = key; chatView(d); } else { /* chat polls itself */ } return; }
@@ -473,7 +512,9 @@ window.CommunityInit = function (ui) {
     if (hash === '' || hash === '#/' || hash === '#') return wrap(hub);
     if (hash === '#/match') return wrap(swipe);
     if (hash === '#/match/near') return wrap(near);
-    if (hash === '#/match/random') return wrap(match);
+    if (hash === '#/match/random') return wrap(() => match());
+    if (hash === '#/match/online') return wrap(online);
+    if (hash.startsWith('#/play/')) return wrap(() => match(hash.slice(7)));
     if (hash === '#/rooms') return wrap(rooms);
     if (hash.startsWith('#/room/')) return wrap(() => room(hash.slice(7)));
     if (hash === '#/dms') return wrap(dms);

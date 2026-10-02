@@ -33,7 +33,8 @@ const roleOf = (u) => (u.is_admin ? 'owner' : u.role || '');
 const PHOTO_PRICE = 25, SHARE_REWARD = 2, SHARE_PER_DAY = 3;
 const roomPrice = (r, msgs24) => (r.free || r.kind !== 'interest' ? 0 : 10 + 5 * Math.round(3 * Math.min(1, msgs24 / 300)));
 const UNLOCK_PRICE = 3, OPEN_PRICE = 5;
-const threadLocked = (t) => !!(t.source === 'match' && !t.unlocked && t.unlock_until && new Date(t.unlock_until) < new Date());
+const threadLocked = (t) => !!(!t.unlocked && ((t.source === 'match' && t.unlock_until && new Date(t.unlock_until) < new Date()) || t.source === 'gate'));
+const unlockPrice = (t) => (t.source === 'gate' ? 2 : UNLOCK_PRICE);
 const photoOn = (u) => !!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date();
 async function balanceOf(sql, uid) { const r = await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${uid}`; return r[0].n; }
 async function addPoints(sql, uid, delta, reason, ref) { await sql`insert into points_ledger (user_id, delta, reason, ref) values (${uid}, ${delta}, ${reason}, ${ref || null})`; }
@@ -268,7 +269,7 @@ async function handle(action, ctx) {
     /* ------------------------------------------------ private messages, only inside shared age circles */
     case 'dm_list': {
       const u = await need();
-      const rows = await sql`select t.id, t.status, t.started_by, case when t.a = ${u.id} then t.b else t.a end as other,
+      const rows = await sql`select t.id, t.status, t.started_by, t.boosted, t.source, t.unlocked, case when t.a = ${u.id} then t.b else t.a end as other,
           (select nick from users where id = case when t.a = ${u.id} then t.b else t.a end) as nick,
           (select body from dm_messages x where x.thread_id = t.id order by id desc limit 1) as last_body,
           (select max(created_at) from dm_messages x where x.thread_id = t.id) as last_at
@@ -310,15 +311,15 @@ async function handle(action, ctx) {
       const rows = after ? await sql`select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and id > ${after} and expires_at > now() order by id limit 100`
         : await sql`select * from (select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and expires_at > now() order by id desc limit 60) z order by id`;
       const o = (await sql`select id, nick, last_seen from users where id = ${other}`)[0];
-      return out({ thread: { id, status: t[0].status, started_by: t[0].started_by, locked: threadLocked(t[0]), unlock_until: t[0].unlock_until, unlocked: !!t[0].unlocked, source: t[0].source || null }, balance: await balanceOf(sql, u.id), other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
+      return out({ thread: { id, status: t[0].status, started_by: t[0].started_by, locked: threadLocked(t[0]), unlock_price: unlockPrice(t[0]), unlock_until: t[0].unlock_until, unlocked: !!t[0].unlocked, source: t[0].source || null }, balance: await balanceOf(sql, u.id), other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
     }
     case 'dm_unlock': { // after the free hour of a match chat: one of them pays 3 points and it stays open
       const u = await need(), id = idNum(b.thread);
       const t = await sql`select * from dm_threads where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!t.length) throw bad('Not found', 404);
       if (!threadLocked(t[0])) return out({ ok: true, balance: await balanceOf(sql, u.id) });
-      const bal = await balanceOf(sql, u.id); if (bal < UNLOCK_PRICE) throw bad(`Unlocking costs ${UNLOCK_PRICE} points. You have ${bal}.`, 402);
+      const price = unlockPrice(t[0]), bal = await balanceOf(sql, u.id); if (bal < price) throw bad(`Unlocking costs ${price} points. You have ${bal}.`, 402);
       const r = await sql`update dm_threads set unlocked = true where id = ${id} and not unlocked returning id`;
-      if (r.length) await addPoints(sql, u.id, -UNLOCK_PRICE, 'dm_unlock', String(id));
+      if (r.length) await addPoints(sql, u.id, -price, 'dm_unlock', String(id));
       const other = t[0].a === u.id ? t[0].b : t[0].a; await pushUsers(sql, [other], '💬 The chat is open again', (u.nick || 'Your friend') + ' unlocked it.', '/#/dm/' + id);
       return out({ ok: true, balance: await balanceOf(sql, u.id) });
     }
@@ -337,7 +338,7 @@ async function handle(action, ctx) {
       const u = await need(), id = idNum(b.thread);
       const t = await sql`select * from dm_threads where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!t.length) throw bad('Not found', 404);
       if (t[0].status !== 'open') throw bad('Wait until they accept', 403);
-      if (threadLocked(t[0])) throw bad(`The free hour is over. Unlock this chat for ${UNLOCK_PRICE} points.`, 402);
+      if (threadLocked(t[0])) throw bad(t[0].source === 'gate' ? `Open this chat for ${unlockPrice(t[0])} points first.` : `The free hour is over. Unlock this chat for ${unlockPrice(t[0])} points.`, 402);
       const other = t[0].a === u.id ? t[0].b : t[0].a;
       if (await blockedPair(u.id, other)) throw bad('You cannot message this person', 403);
       if (u.muted_until && new Date(u.muted_until) > new Date()) throw bad('You are muted for a while', 403);
