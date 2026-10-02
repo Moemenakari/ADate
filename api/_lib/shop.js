@@ -1,9 +1,9 @@
 // Buying points. The person pays with Whish (a link the owner shares), tells us the reference, and the owner approves it.
 // Nothing here touches a card or a bank: we only record a claim and, once the owner confirms the payment, add the points.
 const { pushUsers } = require('./community');
-// 5 points = $1, 25 points = $5
+// 12 points = $2.60, 29 points = $5 (the two old packs stay known so old orders can still be settled, but are not sold any more)
 const FIRST_BUY_BONUS = 10; // free points on a person's first paid order
-const PRODUCTS = { points5: { cents: 100, points: 5, label: '5 points' }, points25: { cents: 500, points: 25, label: '25 points' } };
+const PRODUCTS = { points12: { cents: 260, points: 12, label: '12 points' }, points29: { cents: 500, points: 29, label: '29 points' }, points5: { cents: 100, points: 5, label: '5 points', old: true }, points25: { cents: 500, points: 25, label: '25 points', old: true } };
 
 async function handle(action, ctx) {
   const { sql, b, res, bad, userOf } = ctx, out = (j) => { res.status(200).json(j); return true; };
@@ -11,9 +11,9 @@ async function handle(action, ctx) {
 
   if (action === 'shop') {
     const u = await need();
-    const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note', 'whish_number', 'whish_link_points5', 'whish_link_points25')`;
+    const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note', 'whish_number', 'whish_link_points12', 'whish_link_points29')`;
     const orders = await sql`select id, kind, cents, status, created_at as at from orders where user_id = ${u.id} order by id desc limit 20`;
-    return out({ first_bonus: orders.some((x) => x.status === 'paid') ? 0 : FIRST_BUY_BONUS, products: Object.entries(PRODUCTS).map(([kind, p]) => ({ kind, cents: p.cents, points: p.points, label: p.label })), settings: Object.fromEntries(s.map((x) => [x.key, x.value])), orders });
+    return out({ first_bonus: orders.some((x) => x.status === 'paid') ? 0 : FIRST_BUY_BONUS, products: Object.entries(PRODUCTS).filter(([, p]) => !p.old).map(([kind, p]) => ({ kind, cents: p.cents, points: p.points, label: p.label })), settings: Object.fromEntries(s.map((x) => [x.key, x.value])), orders });
   }
   if (action === 'order_create') {
     const u = await need(), p = PRODUCTS[b.kind];
