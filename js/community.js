@@ -39,10 +39,20 @@ window.CommunityInit = function (ui) {
     return box;
   }
   if (isStandalone() && API.session) { let done = false; try { done = localStorage.getItem('adate.installClaimed') === '1'; } catch (e) { /* ok */ } if (!done) API.installClaim().then((r) => { try { localStorage.setItem('adate.installClaimed', '1'); } catch (e) { /* ok */ } if (r && r.claimed) setTimeout(() => toast('+10 points for adding ADate to your home screen ⭐'), 1500); }).catch(() => {}); }
+  /** A "turn on notifications" button at the top, until the person has chosen. Phones that cannot yet (iPhone before Add to Home Screen) see nothing here: the install card tells them what to do. */
+  function pushPrompt() {
+    const slot = h('div');
+    try {
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (!('Notification' in window) || Notification.permission !== 'default' || !ui.pushControl || (ios && !isStandalone())) return slot;
+      ui.pushControl().then((el) => { if (el && Notification.permission === 'default') slot.append(h('div', { class: 'pushbar' }, h('small', null, '🔔 Get a message when a friend writes or invites you to play'), el)); }).catch(() => {});
+    } catch (e) { /* optional */ }
+    return slot;
+  }
   const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/me', '👤', 'Me']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
   function page(active, ...kids) {
     document.title = 'ADate';
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), installBanner(), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), installBanner(), pushPrompt(), ...kids), bar(active, ME && ME.points));
   }
   async function load() { // who am I; also earns the +1 that comes every 6 hours
     const d = await API.hub(); ME = d.me; applyTheme(ME.theme); window.__dmRequests = d.dm_requests;

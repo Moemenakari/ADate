@@ -446,3 +446,5 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .dmslot{display:flex;flex-direction:column;gap:6px}
 .gamectl{display:flex;justify-content:center}
 .chatwrap .gamepanel{margin:4px 0;max-height:46dvh;overflow:auto}
+
+.pushbar{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px 12px;margin:8px 0;display:flex;flex-direction:column;gap:6px}.pushbar small{color:var(--muted)}
