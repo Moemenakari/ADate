@@ -6,9 +6,7 @@ const { ageOf, shareCircle, circlesOf, bandOf, screenText, reportTarget, pushUse
 
 const ROUNDS = 3, NEED_YES = 2, WAIT_SECONDS = 120, COOLDOWN_HOURS = 24;
 const GENDERS = ['m', 'f'], MEETS = ['m', 'f', 'both'];
-const WORDS = ['cat', 'dog', 'house', 'pizza', 'sun', 'moon', 'tree', 'car', 'fish', 'apple', 'banana', 'phone', 'book', 'bike', 'flower', 'cake', 'star', 'heart', 'rain', 'cloud', 'boat', 'train', 'plane', 'ball', 'shoe', 'hat', 'glasses', 'clock', 'key', 'door', 'chair', 'bed', 'camera', 'guitar', 'rocket', 'robot', 'ice cream', 'burger', 'coffee', 'rainbow', 'mountain', 'beach', 'umbrella', 'snowman', 'butterfly', 'bird', 'horse', 'turtle', 'lion', 'elephant', 'pencil', 'balloon', 'crown', 'candle', 'ghost', 'pumpkin', 'island', 'bridge', 'castle', 'volcano'];
-const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
-const norm = (t) => String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const games = require('./games');
 
 async function handle(action, ctx) {
   const { sql, b, res, bad, userOf } = ctx, out = (j) => { res.status(200).json(j); return true; };
@@ -33,13 +31,7 @@ async function handle(action, ctx) {
     const mineV = votes.filter((v) => v.user_id === u.id), theirs = votes.filter((v) => v.user_id === pid);
     const round = m.round, myVote = mineV.find((v) => v.round === round), theirVote = theirs.find((v) => v.round === round);
     const g = round > 0 ? await sql`select type, state from match_games where match_id = ${m.id} and round = ${round}` : [];
-    let game = null;
-    if (g.length) {
-      const st = g[0].state;
-      if (g[0].type === 'xo') { const win = st.winner == null ? null : st.winner === 'draw' ? 'draw' : st.winner === u.id ? 'me' : 'them'; game = { type: 'xo', board: st.board, my_turn: st.turn === u.id && win == null, mark: st.x === u.id ? 'X' : 'O', winner: win, line: st.line || null }; }
-      else if (g[0].type === 'draw') { const drawer = st.drawer === u.id; game = { type: 'draw', i_draw: drawer, word: drawer || st.solved ? st.word : null, letters: st.word.length, strokes: st.strokes, solved: !!st.solved, guesses: st.guesses || 0 }; }
-      else game = { type: 'tod' };
-    }
+    const game = g.length ? (g[0].type === 'tod' ? { type: 'tod', done: true } : games.view(g[0].type, g[0].state, u.id)) : null;
     return { id: m.id, state: m.state, round, rounds: ROUNDS, game, need_yes: NEED_YES, voted: !!myVote, their_voted: !!theirVote, my_yes: mineV.filter((v) => v.yes).length, thread: m.thread_id || null };
   };
 
@@ -116,65 +108,31 @@ async function handle(action, ctx) {
     await sql`insert into match_msgs (match_id, from_user, body) values (${m.id}, ${u.id}, ${String(b.body).replace(/\s+/g, ' ').trim()})`;
     return out({ ok: true });
   }
-  if (action === 'match_game') { // starts the next round: a question, tic-tac-toe, or draw and guess
-    const u = await need(), m = await mine(u, idNum(b.match)), type = ['tod', 'xo', 'draw'].includes(b.type) ? b.type : 'tod';
+  if (action === 'match_game') { // starts the next round: a quick question, tic-tac-toe, or draw and guess
+    const u = await need(), m = await mine(u, idNum(b.match)), type = games.TYPES.includes(b.type) ? b.type : 'quiz';
     if (m.state !== 'chat') throw bad('This chat is over', 409);
     if (m.round >= ROUNDS) throw bad('That was the last round. Say Yes or No.', 409);
     if (m.round > 0) { const v = await sql`select count(*)::int as n from match_votes where match_id = ${m.id} and round = ${m.round}`; if (v[0].n < 2) throw bad('Wait until you both answer Yes or No', 409); }
     const up = await sql`update matches set round = round + 1 where id = ${m.id} and round = ${m.round} returning round`;
     if (!up.length) return out({ ok: true });
-    const other = u.id === m.a ? m.b : m.a;
-    let body, st = { v: 0 };
-    if (type === 'xo') { st = { v: 0, board: Array(9).fill(''), x: u.id, o: other, turn: u.id, winner: null }; body = '❌⭕ Tic-Tac-Toe'; }
-    else if (type === 'draw') { st = { v: 0, drawer: u.id, word: WORDS[Math.floor(Math.random() * WORDS.length)], strokes: [], solved: false, guesses: 0 }; body = '🎨 Draw and guess'; }
-    else { const q = await sql`select text from tod_questions where level = 1 and active order by random() limit 1`; body = (q[0] && q[0].text) || 'Tell me something about you.'; }
+    const st = games.init(type, u.id, u.id === m.a ? m.b : m.a);
     await sql`insert into match_games (match_id, round, type, state) values (${m.id}, ${up[0].round}, ${type}, ${JSON.stringify(st)}::jsonb)`;
-    await sql`insert into match_msgs (match_id, from_user, body, kind) values (${m.id}, ${u.id}, ${body}, 'game')`;
+    await sql`insert into match_msgs (match_id, from_user, body, kind) values (${m.id}, ${u.id}, ${type === 'quiz' ? '🎲 ' + st.q : games.LABEL[type]}, 'game')`;
     return out({ ok: true, round: up[0].round });
   }
-  const liveGame = async (u, id, type) => {
-    const m = await mine(u, id); if (m.state !== 'chat') throw bad('This chat is over', 409);
-    const g = await sql`select state from match_games where match_id = ${m.id} and round = ${m.round} and type = ${type}`; if (!g.length) throw bad('No such game right now', 409);
-    return { m, st: g[0].state };
+  const playMatch = async (kind, payload) => { // one move in the game of the current round, for any game
+    const u = await need(), m = await mine(u, idNum(b.match)); if (m.state !== 'chat') throw bad('This chat is over', 409);
+    const g = await sql`select type, state from match_games where match_id = ${m.id} and round = ${m.round}`; if (!g.length || g[0].type !== kind) throw bad('No such game right now', 409);
+    let r; try { r = games.act(kind, g[0].state, u.id, payload); } catch (e) { throw bad(e.message, e.status || 409); }
+    const st = r.st; st.v = (st.v || 0) + 1;
+    const ok = await sql`update match_games set state = ${JSON.stringify(st)}::jsonb where match_id = ${m.id} and round = ${m.round} and (state->>'v')::int = ${st.v - 1} returning match_id`; if (!ok.length) throw bad('Try again', 409);
+    if (r.text) await sql`insert into match_msgs (match_id, from_user, body, kind) values (${m.id}, ${u.id}, ${r.text}, ${r.kind || 'text'})`;
+    return out({ ok: true, correct: r.correct, match: await stateOf(u, await mine(u, m.id)) });
   };
-  const saveGame = async (m, st) => { st.v = (st.v || 0) + 1; const r = await sql`update match_games set state = ${JSON.stringify(st)}::jsonb where match_id = ${m.id} and round = ${m.round} and (state->>'v')::int = ${st.v - 1} returning match_id`; if (!r.length) throw bad('Try again', 409); };
-  if (action === 'match_move') { // Tic-Tac-Toe: put my mark on a square
-    const u = await need(), { m, st } = await liveGame(u, idNum(b.match), 'xo'), cell = Number(b.cell);
-    if (!Number.isInteger(cell) || cell < 0 || cell > 8) throw bad('Bad square');
-    if (st.winner != null) throw bad('This game is over', 409);
-    if (st.turn !== u.id) throw bad('Wait for your turn', 409);
-    if (st.board[cell]) throw bad('That square is taken', 409);
-    st.board[cell] = u.id === st.x ? 'X' : 'O';
-    const line = LINES.find((l) => l.every((i) => st.board[i] && st.board[i] === st.board[l[0]]));
-    if (line) { st.winner = u.id; st.line = line; } else if (st.board.every(Boolean)) st.winner = 'draw'; else st.turn = u.id === st.x ? st.o : st.x;
-    await saveGame(m, st); return out({ ok: true, match: await stateOf(u, await mine(u, m.id)) });
-  }
-  if (action === 'match_draw') { // the drawer sends a stroke (or clears the board)
-    const u = await need(), { m, st } = await liveGame(u, idNum(b.match), 'draw');
-    if (st.drawer !== u.id) throw bad('Only the drawer can draw', 403);
-    if (st.solved) throw bad('Already guessed', 409);
-    if (b.clear) st.strokes = [];
-    else {
-      const k = b.stroke || {}, pts = Array.isArray(k.p) ? k.p.slice(0, 400) : [];
-      if (!pts.length || !pts.every((q) => Array.isArray(q) && q.length === 2 && q.every((n) => Number.isFinite(n) && n >= 0 && n <= 1000))) throw bad('Bad stroke');
-      if (!/^#[0-9a-fA-F]{6}$/.test(String(k.c || ''))) throw bad('Bad colour');
-      if (st.strokes.length >= 150) throw bad('The board is full. Clear it.', 409);
-      st.strokes.push({ c: k.c, w: Math.max(2, Math.min(24, Number(k.w) || 6)), p: pts.map((q) => [Math.round(q[0]), Math.round(q[1])]) });
-    }
-    await saveGame(m, st); return out({ ok: true });
-  }
-  if (action === 'match_guess') { // the other person guesses the word by typing
-    const u = await need(), { m, st } = await liveGame(u, idNum(b.match), 'draw');
-    if (st.drawer === u.id) throw bad('You are drawing. Do not tell the word!', 403);
-    if (st.solved) throw bad('Already guessed', 409);
-    if ((st.guesses || 0) >= 30) throw bad('No more guesses', 409);
-    const guess = norm(b.guess).slice(0, 40); if (!guess) throw bad('Type a guess');
-    st.guesses = (st.guesses || 0) + 1;
-    const ok = guess === norm(st.word); if (ok) st.solved = true;
-    await saveGame(m, st);
-    await sql`insert into match_msgs (match_id, from_user, body, kind) values (${m.id}, ${u.id}, ${ok ? '🎉 Correct! It was: ' + st.word : '💭 ' + guess}, ${ok ? 'game' : 'text'})`;
-    return out({ ok: true, correct: ok });
-  }
+  if (action === 'match_move') return playMatch('xo', { cell: b.cell });
+  if (action === 'match_draw') return playMatch('draw', b.clear ? { clear: true } : { stroke: b.stroke });
+  if (action === 'match_guess') return playMatch('draw', { guess: String(b.guess || '') });
+  if (action === 'match_pick') return playMatch('quiz', { pick: b.pick });
   if (action === 'match_vote') { // Yes or No on this round; after the last round it is decided
     const u = await need(), m = await mine(u, idNum(b.match));
     if (m.state !== 'chat' || m.round < 1) throw bad('Start a game first', 409);
@@ -186,6 +144,7 @@ async function handle(action, ctx) {
         let th = await sql`select id from dm_threads where a = ${m.a} and b = ${m.b}`;
         if (!th.length) th = await sql`insert into dm_threads (a, b, started_by, status) values (${m.a}, ${m.b}, ${u.id}, 'open') returning id`;
         else await sql`update dm_threads set status = 'open' where id = ${th[0].id}`;
+        await sql`update dm_threads set source = coalesce(source, 'match'), unlock_until = case when source is null then now() + interval '1 hour' else unlock_until end where id = ${th[0].id}`; // a match chat is free for one hour; after that one of them unlocks it for 3 points
         await sql`update matches set state = 'friends', thread_id = ${th[0].id}, ended_at = now() where id = ${m.id} and state = 'chat'`;
         const other = u.id === m.a ? m.b : m.a; await pushUsers(sql, [other], '💜 You are now friends', 'Your match said Yes. Say hi!', '/#/dms');
       } else await sql`update matches set state = 'ended', ended_at = now() where id = ${m.id} and state = 'chat'`;

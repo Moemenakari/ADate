@@ -330,3 +330,10 @@ alter table users add column if not exists role text;
 
 -- ===== Online and last seen =====
 alter table users add column if not exists last_seen timestamptz;
+
+-- ===== Games between friends, and paid unlocks of chats =====
+create table if not exists fgames (id bigserial primary key, thread_id bigint not null references dm_threads(id) on delete cascade, type text not null, state jsonb not null, status text not null default 'invited', started_by bigint not null references users(id) on delete cascade, created_at timestamptz not null default now());
+create index if not exists fgames_thread_idx on fgames (thread_id, status);
+alter table dm_threads add column if not exists source text;
+alter table dm_threads add column if not exists unlock_until timestamptz;
+alter table dm_threads add column if not exists unlocked boolean not null default false;

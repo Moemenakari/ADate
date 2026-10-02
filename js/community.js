@@ -107,20 +107,21 @@ window.CommunityInit = function (ui) {
   }
 
   /* ---------------------------------------------------------------- chat engine (rooms and private) */
-  function chat({ title, emoji, backHref, headerExtra, fetchFirst, fetchAfter, send, mineKey, report }) {
+  function chat({ title, emoji, backHref, headerExtra, fetchFirst, fetchAfter, send, mineKey, report, extraTick, afterLayout }) {
     let last = 0, mutedUntil = null;
     const list = h('div', { class: 'chatlist' }), msg = h('div'), inp = h('input', { type: 'text', maxlength: 500, placeholder: 'Write a message (text only)', 'aria-label': 'Message', enterkeyhint: 'send' });
     const sendBtn = h('button', { class: 'btn pri', type: 'button' }, 'Send');
     const bubble = (m) => h('div', { class: 'cmsg' + (m.mine ? ' mine' : '') }, m.mine ? null : h('button', { class: 'who', onclick: () => m.user_id && card(m.user_id) }, m.nick || ''), h('div', { class: 'bub' }, m.body), h('small', null, timeShort(m.at), ' ', m.mine || !report ? '' : h('button', { class: 'flag', title: 'Report', 'aria-label': 'Report this message', onclick: async () => { if (!confirm('Report this message?')) return; try { const r = await report(m.id); toast(r.muted ? 'Reported. Thank you.' : 'Reported. Thank you.'); } catch (e) { toast(err(e), 'bad'); } } }, '🚩')));
     const add = (rows) => { if (!rows.length) return; const near = list.scrollHeight - list.scrollTop - list.clientHeight < 140; rows.forEach((m) => { last = Math.max(last, m.id); list.append(bubble(m)); }); if (near || last === rows[rows.length - 1].id && list.children.length === rows.length) list.scrollTop = list.scrollHeight; };
     async function tick(first) {
-      try { const d = first ? await fetchFirst() : await fetchAfter(last); if (first && d.room) head.querySelector('small').textContent = `${d.room.members} members`; if (d.other) { const nm = d.other.nick || 'Chat'; head.querySelector('b').textContent = nm; head.querySelector('small').textContent = presence(d.other.last_seen); } mutedUntil = d.muted_until || null; banner.textContent = mutedUntil ? '🔇 You are muted for a while. You can still read.' : ''; banner.style.display = mutedUntil ? '' : 'none'; if (first) list.replaceChildren(); add(d.messages || []); if (first && d.other) head.querySelector('b').textContent = d.other.nick; } catch (e) { if (/log in/i.test(err(e))) location.hash = '#/login'; }
+      try { const d = first ? await fetchFirst() : await fetchAfter(last); if (first && d.room) head.querySelector('small').textContent = `${d.room.members} members`; if (d.other) { const nm = d.other.nick || 'Chat'; head.querySelector('b').textContent = nm; head.querySelector('small').textContent = presence(d.other.last_seen); } if (extraTick) { try { extraTick(d, first); } catch (e) { /* the chat still works */ } } mutedUntil = d.muted_until || null; banner.textContent = mutedUntil ? '🔇 You are muted for a while. You can still read.' : ''; banner.style.display = mutedUntil ? '' : 'none'; if (first) list.replaceChildren(); add(d.messages || []); if (first && d.other) head.querySelector('b').textContent = d.other.nick; } catch (e) { if (/log in/i.test(err(e))) location.hash = '#/login'; }
     }
     async function go() { const body = inp.value.trim(); if (!body) return; sendBtn.disabled = true; try { await send(body); inp.value = ''; msg.replaceChildren(); await tick(false); list.scrollTop = list.scrollHeight; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } sendBtn.disabled = false; inp.focus(); }
     sendBtn.onclick = go; inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
     const head = h('div', { class: 'chathead' }, h('a', { class: 'btn sm', href: backHref }, '←'), h('div', { class: 'ct' }, h('b', null, (emoji ? emoji + ' ' : '') + title), h('small', null, '')), headerExtra || null);
     const banner = h('div', { class: 'note', style: 'display:none' });
     $app.replaceChildren(h('div', { class: 'wrap cm chatwrap' }, head, banner, list, msg, h('div', { class: 'composer' }, inp, sendBtn)), bar(null, ME && ME.points));
+    if (afterLayout) afterLayout({ banner, list, msg, composer: document.querySelector('.composer'), head, inp, sendBtn });
     tick(true).then(() => { list.scrollTop = list.scrollHeight; });
     ui.setPoll(() => { if (document.visibilityState === 'visible') tick(false); }, 3000);
   }
@@ -145,9 +146,35 @@ window.CommunityInit = function (ui) {
   }
   async function dm(id) {
     if (!ME) await load();
-    let t = null;
-    chat({ title: 'Chat', backHref: '#/dms', fetchFirst: async () => { const d = await API.dmOpen(id); t = d; if (d.thread.status === 'pending' && d.thread.started_by !== ME.id) showRequest(d); return { messages: d.messages.map((m) => ({ ...m, user_id: m.mine ? ME.id : d.other.id, nick: d.other.nick })), other: d.other, thread: d.thread }; },
-      fetchAfter: async (a) => { const d = await API.dmOpen(id, a); return { messages: d.messages.map((m) => ({ ...m, user_id: m.mine ? ME.id : d.other.id, nick: d.other.nick })) }; }, send: (b) => API.dmSend(id, b), report: (mid) => API.report(mid, 'dm') });
+    let t = null, board = null, ui2 = {};
+    const slot = h('div', { class: 'dmslot' }), tools = h('div', { class: 'dmtools' }), status = h('div');
+    const pack = (d) => d.messages.map((m) => ({ ...m, user_id: m.mine ? ME.id : d.other.id, nick: d.other.nick }));
+    const doAct = async (o) => { const r = await API.fgameAct(id, o); showGame(r.game); return r; };
+    const H = { move: (cell) => doAct({ cell }), stroke: (stroke) => doAct({ stroke }), clear: () => doAct({ clear: true }), guess: async (guess) => { const r = await doAct({ guess }); if (r.correct) toast('🎉 Correct!'); }, pick: (pick) => doAct({ pick }) };
+    function showGame(g) {
+      slot.querySelectorAll('.gamectl').forEach((x) => x.remove());
+      const ctl = h('div', { class: 'gamectl' });
+      if (!g) { if (board) board.clear(); tools.style.display = ''; return; }
+      tools.style.display = 'none';
+      if (g.status === 'invited') {
+        if (board) board.clear();
+        ctl.append(g.by_me ? h('div', { class: 'note' }, '🎮 Waiting for them to join ' + g.label + '…', h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, false); showGame(null); } }, 'Cancel'))
+          : h('div', { class: 'teamnote' }, h('b', null, '🎮 Invitation'), h('p', null, 'Your friend wants to play ' + g.label), h('div', { class: 'row' }, h('button', { class: 'btn pri sm', onclick: async () => { const r = await API.fgameAccept(id); showGame(r.game); } }, 'Play'), h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, true); showGame(null); } }, 'No thanks'))));
+      } else { if (!board) board = window.GameBoard.mount(slot, null, H); board.set(g.view); ctl.append(h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, false); if (board) board.clear(); showGame(null); } }, g.status === 'done' || (g.view && g.view.done) ? 'Close game' : 'End game')); }
+      slot.append(ctl);
+    }
+    const playMenu = () => { tools.replaceChildren(h('b', { class: 'hint' }, '🎮 Play together'), h('div', { class: 'row' }, [['xo', '❌⭕ XO'], ['draw', '🎨 Draw'], ['quiz', '🎲 Question']].map(([ty, l]) => h('button', { class: 'btn sm', onclick: async () => { try { const r = await API.fgameInvite(id, ty); showGame(r.game); } catch (e) { toast(err(e), 'bad'); } } }, l)), h('a', { class: 'btn sm', href: '#/date' }, '💌 Truth Date'), h('a', { class: 'btn sm', href: '#/tod' }, '🎲 Truth or Dare'))); };
+    function banners(d) {
+      const th = d.thread; status.replaceChildren();
+      if (th.status === 'pending' && th.started_by === ME.id) status.append(h('div', { class: 'note stack' }, h('span', null, 'They have not answered yet. Open the chat right now for 5 ⭐?'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.dmPayOpen(id); ME.points = r.balance; toast('Chat opened'); dm(id); } catch (e) { toast(err(e), 'bad'); } } }, 'Pay 5 ⭐ and open')));
+      if (th.locked) status.append(h('div', { class: 'note stack' }, h('span', null, '⏳ The free hour is over. One of you can unlock the chat for 3 ⭐ (you have ' + d.balance + ').'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.dmUnlock(id); ME.points = r.balance; toast('Unlocked'); dm(id); } catch (e) { toast(err(e), 'bad'); } } }, 'Unlock for 3 ⭐')));
+      else if (th.source === 'match' && !th.unlocked && th.unlock_until) { const min = Math.max(0, Math.round((new Date(th.unlock_until) - Date.now()) / 60000)); status.append(h('small', { class: 'hint' }, '⏳ Free chat: ' + min + ' min left')); }
+    }
+    chat({ title: 'Chat', backHref: '#/dms',
+      afterLayout: ({ banner }) => { banner.after(status, tools, slot); playMenu(); },
+      extraTick: (d, first) => { if (!d.thread) return; banners(d); if (d.thread.status === 'open') API.fgameState(id).then((r) => showGame(r.game)).catch(() => {}); else tools.style.display = 'none'; },
+      fetchFirst: async () => { const d = await API.dmOpen(id); t = d; if (d.thread.status === 'pending' && d.thread.started_by !== ME.id) showRequest(d); return { messages: pack(d), other: d.other, thread: d.thread, balance: d.balance }; },
+      fetchAfter: async (a) => { const d = await API.dmOpen(id, a); return { messages: pack(d), other: d.other, thread: d.thread, balance: d.balance }; }, send: (b) => API.dmSend(id, b), report: (mid) => API.report(mid, 'dm') });
     function showRequest(d) {
       const bx = h('div', { class: 'note stack' }, h('b', null, d.other.nick + ' wants to message you'), h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: async () => { await API.dmRespond(id, true); bx.remove(); toast('Accepted'); } }, 'Accept'), h('button', { class: 'btn', onclick: async () => { await API.dmRespond(id, false); location.hash = '#/dms'; } }, 'Decline'), h('button', { class: 'btn danger', onclick: async () => { await API.dmRespond(id, false, true); location.hash = '#/dms'; } }, 'Block')));
       document.querySelector('.chatwrap').insertBefore(bx, document.querySelector('.chatlist'));
@@ -227,50 +254,17 @@ window.CommunityInit = function (ui) {
         if (st.state !== 'chat') return;
         if (st.round >= 1 && !st.voted) ctl.append(h('div', { class: 'votebar' }, h('span', null, 'Do you want to be friends? (' + st.round + '/' + st.rounds + ')'), h('button', { class: 'btn pri', onclick: () => vote(true) }, '✅ Yes'), h('button', { class: 'btn', onclick: () => vote(false) }, '❌ No')));
         else if (st.round >= 1 && st.voted && !st.their_voted) ctl.append(h('p', { class: 'hint' }, 'Waiting for their answer…'));
-        if (st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('tod') }, '🎲 Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, '🎨 Draw')))); }
-        drawGame(st);
+        if (st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('quiz') }, '🎲 Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, '🎨 Draw')))); }
+        if (board) board.set(st.game);
       };
-      let panel = null, panelKey = '';
-      function drawGame(st) {
-        const g = st.game; if (!g || g.type === 'tod' || st.state !== 'chat') { if (panel) { panel.remove(); panel = null; panelKey = ''; } return; }
-        const key = JSON.stringify(g); if (key === panelKey && panel) return; panelKey = key;
-        if (panel && panel.update && g.type === 'draw' && !g.i_draw && !g.solved) { panel.update(g); return; }
-        const keepDrawer = panel && panel.dataset.keep && g.type === 'draw' && g.i_draw && !g.solved; if (keepDrawer) { panel.redraw && panel.redraw(g); return; }
-        const el = g.type === 'xo' ? xoPanel(g) : drawPanel(g); if (panel) panel.replaceWith(el); else ctl.before(el); panel = el;
-      }
-      function xoPanel(g) {
-        const cells = g.board.map((c, i) => h('button', { class: 'xocell' + (g.line && g.line.includes(i) ? ' win' : ''), disabled: !!c || !g.my_turn || g.winner, onclick: async () => { try { const r = await API.matchMove(m.id, i); draw(r.match); } catch (e) { toast(err(e), 'bad'); } } }, c === 'X' ? '❌' : c === 'O' ? '⭕' : ''));
-        const status = g.winner === 'me' ? '🎉 You won!' : g.winner === 'them' ? '😅 They won' : g.winner === 'draw' ? '🤝 Draw' : g.my_turn ? 'Your turn (you are ' + (g.mark === 'X' ? '❌' : '⭕') + ')' : 'Their turn…';
-        return h('div', { class: 'gamepanel' }, h('b', null, status), h('div', { class: 'xogrid' }, cells));
-      }
-      function drawPanel(g) {
-        const cv = h('canvas', { class: 'drawcv', width: 600, height: 600 }), ctx2 = cv.getContext('2d'); let color = '#ffffff', width = 8, cur = null, local = g.strokes.slice();
-        const paint = () => { ctx2.fillStyle = '#1b1b2a'; ctx2.fillRect(0, 0, 600, 600); local.concat(cur ? [cur] : []).forEach((k) => { ctx2.strokeStyle = k.c; ctx2.lineWidth = k.w * 0.6; ctx2.lineCap = ctx2.lineJoin = 'round'; ctx2.beginPath(); k.p.forEach(([x, y], i) => { const px = x * 0.6, py = y * 0.6; if (i) ctx2.lineTo(px, py); else ctx2.moveTo(px, py); }); if (k.p.length === 1) ctx2.lineTo(k.p[0][0] * 0.6 + 0.1, k.p[0][1] * 0.6); ctx2.stroke(); }); };
-        paint();
-        const title = g.solved ? '🎉 Guessed! It was: ' + g.word : g.i_draw ? 'Draw: ' + g.word : 'Guess the word (' + g.letters + ' letters)';
-        const wrap = h('div', { class: 'gamepanel', 'data-keep': g.i_draw && !g.solved ? '1' : '' }, h('b', null, title), cv);
-        if (g.i_draw && !g.solved) {
-          const pos = (e) => { const r = cv.getBoundingClientRect(), t = e.touches ? e.touches[0] : e; return [Math.max(0, Math.min(1000, Math.round((t.clientX - r.left) / r.width * 1000))), Math.max(0, Math.min(1000, Math.round((t.clientY - r.top) / r.height * 1000)))]; };
-          const down = (e) => { e.preventDefault(); cur = { c: color, w: width, p: [pos(e)] }; paint(); }, move = (e) => { if (!cur) return; e.preventDefault(); const q = pos(e), l = cur.p[cur.p.length - 1]; if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) > 6 && cur.p.length < 400) { cur.p.push(q); paint(); } }, up = async () => { if (!cur) return; const k = cur; cur = null; local.push(k); paint(); try { await API.matchDraw(m.id, k); } catch (e) { toast(err(e), 'bad'); } };
-          cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move); window.addEventListener('pointerup', up, { once: false }); cv.style.touchAction = 'none';
-          const colors = ['#ffffff', '#ff4d6a', '#ffd60a', '#27d3a2', '#4da3ff', '#a78bff'];
-          wrap.append(h('div', { class: 'row drawtools' }, ...colors.map((c) => h('button', { class: 'dot', style: 'background:' + c, 'aria-label': 'Colour ' + c, onclick: () => { color = c; } })), h('button', { class: 'btn sm', onclick: () => { width = width === 8 ? 18 : 8; } }, 'Thick / thin'), h('button', { class: 'btn sm', onclick: async () => { local = []; paint(); try { await API.matchDraw(m.id, null, true); } catch (e) { toast(err(e), 'bad'); } } }, 'Clear')));
-          wrap.redraw = () => {};
-        } else if (!g.solved) {
-          const gi = h('input', { type: 'text', maxlength: 40, placeholder: 'Your guess', 'aria-label': 'Your guess', enterkeyhint: 'send' });
-          const guess = async () => { const t = gi.value.trim(); if (!t) return; gi.value = ''; try { const r = await API.matchGuess(m.id, t); if (r.correct) toast('🎉 Correct!'); poll(); } catch (e) { toast(err(e), 'bad'); } };
-          gi.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); guess(); } };
-          wrap.append(h('div', { class: 'row' }, gi, h('button', { class: 'btn pri sm', onclick: guess }, 'Guess')));
-          wrap.update = (g2) => { local = g2.strokes.slice(); paint(); };
-        }
-        return wrap;
-      }
+      let board = null;
       async function vote(y) { try { const r = await API.matchVote(m.id, y); draw(r.match); poll(); } catch (e) { toast(err(e), 'bad'); } }
       async function poll() { try { const r = await API.matchMsgs(m.id, lastId); r.messages.forEach((x) => { lastId = Math.max(lastId, x.id); list.append(bubble(x)); }); if (r.messages.length) list.scrollTop = list.scrollHeight; draw(r.match); if (r.match.state !== 'chat') tick(); } catch (e) { /* next tick */ } }
       async function go() { const body = inp.value.trim(); if (!body) return; try { await API.matchSend(m.id, body); inp.value = ''; msg.replaceChildren(); poll(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } }
       inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
       const menu = h('button', { class: 'btn sm', 'aria-label': 'More', onclick: () => { const ch = prompt('Type 1 to report and block this person, 2 to just leave the chat.'); if (ch === '1') API.matchReport(m.id, true).then(() => { shown = ''; tick(); }); else if (ch === '2') API.matchLeave(m.id).then(() => { shown = ''; tick(); }); } }, '⋯');
       box.replaceChildren(h('div', { class: 'chathead' }, peerHead(p), menu), list, msg, ctl, h('div', { class: 'composer' }, inp, h('button', { class: 'btn pri', onclick: go }, 'Send')));
+      board = window.GameBoard.mount(box, ctl, { move: async (cell) => { const r = await API.matchMove(m.id, cell); draw(r.match); }, stroke: (k) => API.matchDraw(m.id, k), clear: () => API.matchDraw(m.id, null, true), guess: async (t) => { const r = await API.matchGuess(m.id, t); if (r.correct) toast('🎉 Correct!'); poll(); }, pick: async (i) => { const r = await API.matchPick(m.id, i); draw(r.match); } });
       draw(m); poll(); ui.setPoll(() => { if (document.visibilityState === 'visible') poll(); }, 2500);
     }
     function doneView(d) {

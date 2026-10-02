@@ -32,6 +32,8 @@ const tickOf = (u) => !!(u.selfie_ok || u.is_admin);
 const roleOf = (u) => (u.is_admin ? 'owner' : u.role || '');
 const PHOTO_PRICE = 25, SHARE_REWARD = 2, SHARE_PER_DAY = 3;
 const roomPrice = (r, msgs24) => (r.free || r.kind !== 'interest' ? 0 : 10 + 5 * Math.round(3 * Math.min(1, msgs24 / 300)));
+const UNLOCK_PRICE = 3, OPEN_PRICE = 5;
+const threadLocked = (t) => !!(t.source === 'match' && !t.unlocked && t.unlock_until && new Date(t.unlock_until) < new Date());
 const photoOn = (u) => !!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date();
 async function balanceOf(sql, uid) { const r = await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${uid}`; return r[0].n; }
 async function addPoints(sql, uid, delta, reason, ref) { await sql`insert into points_ledger (user_id, delta, reason, ref) values (${uid}, ${delta}, ${reason}, ${ref || null})`; }
@@ -308,12 +310,34 @@ async function handle(action, ctx) {
       const rows = after ? await sql`select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and id > ${after} and expires_at > now() order by id limit 100`
         : await sql`select * from (select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and expires_at > now() order by id desc limit 60) z order by id`;
       const o = (await sql`select id, nick, last_seen from users where id = ${other}`)[0];
-      return out({ thread: { id, status: t[0].status, started_by: t[0].started_by }, other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
+      return out({ thread: { id, status: t[0].status, started_by: t[0].started_by, locked: threadLocked(t[0]), unlock_until: t[0].unlock_until, unlocked: !!t[0].unlocked, source: t[0].source || null }, balance: await balanceOf(sql, u.id), other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
+    }
+    case 'dm_unlock': { // after the free hour of a match chat: one of them pays 3 points and it stays open
+      const u = await need(), id = idNum(b.thread);
+      const t = await sql`select * from dm_threads where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!t.length) throw bad('Not found', 404);
+      if (!threadLocked(t[0])) return out({ ok: true, balance: await balanceOf(sql, u.id) });
+      const bal = await balanceOf(sql, u.id); if (bal < UNLOCK_PRICE) throw bad(`Unlocking costs ${UNLOCK_PRICE} points. You have ${bal}.`, 402);
+      const r = await sql`update dm_threads set unlocked = true where id = ${id} and not unlocked returning id`;
+      if (r.length) await addPoints(sql, u.id, -UNLOCK_PRICE, 'dm_unlock', String(id));
+      const other = t[0].a === u.id ? t[0].b : t[0].a; await pushUsers(sql, [other], '💬 The chat is open again', (u.nick || 'Your friend') + ' unlocked it.', '/#/dm/' + id);
+      return out({ ok: true, balance: await balanceOf(sql, u.id) });
+    }
+    case 'dm_pay_open': { // you wrote first and they have not answered: pay 5 points and the chat opens at once
+      const u = await need(), id = idNum(b.thread);
+      const t = await sql`select * from dm_threads where id = ${id} and started_by = ${u.id} and (a = ${u.id} or b = ${u.id})`; if (!t.length) throw bad('Not found', 404);
+      if (t[0].status === 'open') return out({ ok: true, balance: await balanceOf(sql, u.id) });
+      if (t[0].status !== 'pending') throw bad('This person is not taking messages from you', 403);
+      const bal = await balanceOf(sql, u.id); if (bal < OPEN_PRICE) throw bad(`Opening the chat costs ${OPEN_PRICE} points. You have ${bal}.`, 402);
+      const r = await sql`update dm_threads set status = 'open' where id = ${id} and status = 'pending' returning id`;
+      if (r.length) await addPoints(sql, u.id, -OPEN_PRICE, 'dm_open', String(id));
+      const other = t[0].a === u.id ? t[0].b : t[0].a; await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' opened a chat with you', 'Open ADate to read it.', '/#/dm/' + id);
+      return out({ ok: true, balance: await balanceOf(sql, u.id) });
     }
     case 'dm_send': {
       const u = await need(), id = idNum(b.thread);
       const t = await sql`select * from dm_threads where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!t.length) throw bad('Not found', 404);
       if (t[0].status !== 'open') throw bad('Wait until they accept', 403);
+      if (threadLocked(t[0])) throw bad(`The free hour is over. Unlock this chat for ${UNLOCK_PRICE} points.`, 402);
       const other = t[0].a === u.id ? t[0].b : t[0].a;
       if (await blockedPair(u.id, other)) throw bad('You cannot message this person', 403);
       if (u.muted_until && new Date(u.muted_until) > new Date()) throw bad('You are muted for a while', 403);

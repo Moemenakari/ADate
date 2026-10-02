@@ -7,6 +7,7 @@ const community = require('./_lib/community');
 const play = require('./_lib/play');
 const shop = require('./_lib/shop');
 const match = require('./_lib/match');
+const fgames = require('./_lib/fgames');
 
 let _sql;
 const db = () => (_sql = _sql || neon(process.env.DATABASE_URL));
@@ -113,6 +114,7 @@ module.exports = async (req, res) => {
     if (await play.handle(action, { sql, b, res, bad, userOf })) return;
     if (await shop.handle(action, { sql, b, res, bad, userOf })) return;
     if (await match.handle(action, { sql, b, res, bad, userOf })) return;
+    if (await fgames.handle(action, { sql, b, res, bad, userOf })) return;
 
     /* ---------- accounts ---------- */
     if (action === 'signup') {
