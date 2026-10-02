@@ -327,3 +327,6 @@ alter table users add column if not exists selfie_at timestamptz;
 
 -- ===== Account roles shown as a badge: mod, agent (the owner is is_admin) =====
 alter table users add column if not exists role text;
+
+-- ===== Online and last seen =====
+alter table users add column if not exists last_seen timestamptz;

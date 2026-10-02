@@ -54,6 +54,7 @@ async function userOf(sql, session) {
   const r = await sql`select u.* from sessions s join users u on u.id = s.user_id where s.token_hash = ${hash(session)}`;
   if (!r.length) throw bad('Please log in', 401);
   if (r[0].blocked) throw bad('This account is blocked', 403);
+  if (!r[0].last_seen || Date.now() - new Date(r[0].last_seen).getTime() > 60000) await sql`update users set last_seen = now() where id = ${r[0].id}`; // online / last seen, at most once a minute
   return r[0];
 }
 // the owner of an invite: logged-in account that created it, or the holder of its private token

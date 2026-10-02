@@ -23,9 +23,9 @@ async function handle(action, ctx) {
   const mine = async (u, id) => { const m = await sql`select * from matches where id = ${id} and (a = ${u.id} or b = ${u.id})`; if (!m.length) throw bad('Not found', 404); return m[0]; };
   const peerCard = async (u, m) => {
     const pid = m.a === u.id ? m.b : m.a;
-    const p = (await sql`select id, nick, country, birthdate, interests, avatar, frame, langs, selfie_ok, is_admin, role from users where id = ${pid}`)[0];
+    const p = (await sql`select id, nick, country, birthdate, interests, avatar, frame, langs, selfie_ok, is_admin, role, last_seen from users where id = ${pid}`)[0];
     const mi = new Set(u.interests || []);
-    return { id: p.id, nick: p.nick, selfie_ok: tickOf(p), role: roleOf(p), country: p.country, age_band: bandOf(ageOf(p.birthdate)), avatar: p.avatar || '', frame: p.frame || '', langs: p.langs || [], shared: (p.interests || []).filter((x) => mi.has(x)) };
+    return { id: p.id, nick: p.nick, last_seen: p.last_seen, selfie_ok: tickOf(p), role: roleOf(p), country: p.country, age_band: bandOf(ageOf(p.birthdate)), avatar: p.avatar || '', frame: p.frame || '', langs: p.langs || [], shared: (p.interests || []).filter((x) => mi.has(x)) };
   };
   const stateOf = async (u, m) => {
     const pid = m.a === u.id ? m.b : m.a;
@@ -206,18 +206,18 @@ async function handle(action, ctx) {
     const u = await need();
     if (!u.gender) throw bad('Tell us who you are first', 409);
     const meet = u.meet || 'both', age = ageOf(u.birthdate), mi = new Set(u.interests || []);
-    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role from users t
+    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
       where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.muted_until is null or t.muted_until < now())
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
-        and not exists (select 1 from swipes s where s.from_user = ${u.id} and s.to_user = t.id and (s.act = 'invite' or s.created_at > now() - interval '7 days'))
+        and not exists (select 1 from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'invite')
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = t.id) or (bl.blocker = t.id and bl.blocked = ${u.id}))
       order by t.last_login_at desc nulls last limit 200`;
     const ok = rows.filter((t) => shareCircle(age, ageOf(t.birthdate)))
-      .map((t) => ({ t, score: (t.interests || []).filter((x) => mi.has(x)).length * 3 + (t.country && t.country === u.country ? 2 : 0) + Math.random() }))
-      .sort((x, y) => y.score - x.score);
+      .map((t) => ({ t, fresh: !t.skipped_at, score: (t.interests || []).filter((x) => mi.has(x)).length * 3 + (t.country && t.country === u.country ? 2 : 0) + Math.random() }))
+      .sort((x, y) => (y.fresh - x.fresh) || (x.fresh ? y.score - x.score : new Date(x.t.skipped_at) - new Date(y.t.skipped_at))); // people you skipped come back, oldest skip first, once the new ones run out
     if (!ok.length) return out({ card: null });
     const t = ok[0].t;
-    return out({ card: { id: t.id, nick: t.nick, selfie_ok: tickOf(t), role: roleOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
+    return out({ card: { id: t.id, nick: t.nick, last_seen: t.last_seen, selfie_ok: tickOf(t), role: roleOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
   }
   if (action === 'discover_act') { // Skip, or Invite with an optional first message
     const u = await need(), to = idNum(b.to); if (to === u.id) throw bad('That is you');

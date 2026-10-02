@@ -307,7 +307,7 @@ async function handle(action, ctx) {
       const other = t[0].a === u.id ? t[0].b : t[0].a;
       const rows = after ? await sql`select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and id > ${after} and expires_at > now() order by id limit 100`
         : await sql`select * from (select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and expires_at > now() order by id desc limit 60) z order by id`;
-      const o = (await sql`select id, nick from users where id = ${other}`)[0];
+      const o = (await sql`select id, nick, last_seen from users where id = ${other}`)[0];
       return out({ thread: { id, status: t[0].status, started_by: t[0].started_by }, other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
     }
     case 'dm_send': {
