@@ -65,6 +65,9 @@ async function handle(action, ctx) {
     /* ------------------------------------------------ the hub */
     case 'hub': {
       const u = await need(), age = ageOf(u.birthdate);
+      { const t0 = new Date(), md = String(t0.getMonth() + 1).padStart(2, '0') + '-' + String(t0.getDate()).padStart(2, '0'); // birthday: +10 points and a message from the team, once a year
+        if (dateStr(u.birthdate).slice(5) === md) { const gift = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 10, 'birthday', ${String(t0.getFullYear())} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'birthday' and ref = ${String(t0.getFullYear())}) returning id`;
+          if (gift.length) await sql`insert into notices (user_id, body, points) values (${u.id}, 'Happy birthday 🎂 from the ADate team! Here is a little gift.', 10)`; } }
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
@@ -96,11 +99,11 @@ async function handle(action, ctx) {
     }
     case 'profile_view': {
       const u = await need(), id = idNum(b.user_id);
-      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, selfie_ok, is_admin, role, blocked from users where id = ${id}`;
+      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, selfie_ok, is_admin, role, socials, blocked from users where id = ${id}`;
       if (!r.length || r[0].blocked) throw bad('Not found', 404);
       const t = r[0], age = ageOf(t.birthdate);
       const blockedByMe = (await sql`select 1 from blocks where blocker = ${u.id} and blocked = ${id}`).length > 0;
-      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
+      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), can_socials: ageOf(u.birthdate) >= 18 && ageOf(t.birthdate) >= 18 && !!(t.socials && Object.keys(t.socials).length), can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
       const u = await need(); if (photoOn(u)) return out({ ok: true, balance: await balanceOf(sql, u.id) });
@@ -224,6 +227,43 @@ async function handle(action, ctx) {
       await sql`update users set selfie = ${d}, selfie_state = 'pending', selfie_at = now() where id = ${u.id}`;
       await notifyAdmins(sql, '🤳 A selfie is waiting', (u.nick || 'Someone') + ' wants to be verified.');
       return out({ ok: true });
+    }
+    case 'social_get': { // my own social accounts (18+ only)
+      const u = await need();
+      return out({ allowed: ageOf(u.birthdate) >= 18, socials: u.socials || {}, reward: 5 });
+    }
+    case 'social_set': { // adding an account earns 5 points, once per account
+      const u = await need(); if (ageOf(u.birthdate) < 18) throw bad('Social accounts are for ages 18 and up', 403);
+      const cur = Object.assign({}, u.socials || {}), added = [];
+      for (const key of ['ig', 'snap', 'tiktok', 'wa']) {
+        if (b[key] === undefined) continue; const v = String(b[key] || '').trim().replace(/^@/, '');
+        if (!v) { delete cur[key]; continue; }
+        if (key === 'wa' ? !/^\d{7,15}$/.test(v) : !/^[A-Za-z0-9._]{2,30}$/.test(v)) throw bad(key === 'wa' ? 'Write the WhatsApp number with digits only' : 'That username does not look right');
+        if (cur[key] !== v) { if (!cur[key]) added.push(key); cur[key] = v; }
+      }
+      await sql`update users set socials = ${JSON.stringify(cur)}::jsonb where id = ${u.id}`;
+      for (const key of added) await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 5, 'social', ${key} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'social' and ref = ${key})`;
+      return out({ ok: true, socials: cur, balance: await balanceOf(sql, u.id) });
+    }
+    case 'social_view': { // 5 points to see someone's accounts, once per person; adults only, both sides
+      const u = await need(), id = idNum(b.user_id); if (ageOf(u.birthdate) < 18) throw bad('Social accounts are for ages 18 and up', 403);
+      const t = await sql`select id, nick, birthdate, socials, blocked from users where id = ${id}`; if (!t.length || t[0].blocked || ageOf(t[0].birthdate) < 18 || !t[0].socials || !Object.keys(t[0].socials).length) throw bad('Nothing to show', 404);
+      if (await blockedPair(u.id, id)) throw bad('Not available', 403);
+      const had = await sql`select 1 from social_unlocks where viewer = ${u.id} and target = ${id}`;
+      if (!had.length) { const bal = await balanceOf(sql, u.id); if (bal < 5) throw bad(`Seeing their accounts costs 5 points. You have ${bal}.`, 402); await addPoints(sql, u.id, -5, 'social_view', String(id)); await sql`insert into social_unlocks (viewer, target) values (${u.id}, ${id}) on conflict do nothing`; }
+      return out({ ok: true, nick: t[0].nick, socials: t[0].socials, balance: await balanceOf(sql, u.id) });
+    }
+    case 'box_state': { // a free surprise once a day: 1 to 5 points, nothing to buy
+      const u = await need();
+      const t = await sql`select 1 from points_ledger where user_id = ${u.id} and reason = 'box' and created_at >= date_trunc('day', now())`;
+      return out({ available: !t.length });
+    }
+    case 'box_open': {
+      const u = await need();
+      const prize = [1, 1, 1, 2, 2, 3, 5][Math.floor(Math.random() * 7)];
+      const r = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, ${prize}, 'box', null where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'box' and created_at >= date_trunc('day', now())) returning id`;
+      if (!r.length) throw bad('Come back tomorrow for the next one', 409);
+      return out({ ok: true, prize, balance: await balanceOf(sql, u.id) });
     }
     case 'notices_list': { // messages from the ADate team that I have not dismissed
       const u = await need();
@@ -382,6 +422,14 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  if (action === 'admin_hosts') { // the official accounts: how active they are, and their points
+    const rows = await sql`select u.id, u.nick, u.role, u.last_seen, u.photo_ok, (select coalesce(sum(delta), 0)::int from points_ledger l where l.user_id = u.id) as points,
+        (select count(*)::int from dm_messages x where x.from_user = u.id and x.created_at > now() - interval '7 days') as dm7,
+        (select count(*)::int from messages x where x.user_id = u.id and x.created_at > now() - interval '7 days') as room7,
+        (select count(*)::int from match_msgs x where x.from_user = u.id and x.created_at > now() - interval '7 days') as match7
+      from users u where u.role in ('host', 'bot') order by u.role, u.nick limit 100`;
+    return out({ hosts: rows.map((r) => ({ ...r, messages7: r.dm7 + r.room7 + r.match7 })) });
+  }
   if (action === 'admin_selfies') {
     const rows = await sql`select id, nick, name, first_name, last_name, phone, selfie as data, selfie_code as code, selfie_at as at from users where selfie_state = 'pending' and selfie is not null order by selfie_at limit 30`;
     return out({ selfies: rows });

@@ -18,6 +18,15 @@
       ...g.opts.map((o, i) => h('button', { class: 'btn block' + (g.my_pick === i ? ' pri' : ''), disabled: g.my_pick != null, onclick: () => run(() => H.pick(i)) }, (g.my_pick === i ? '✅ ' : '') + o + (g.done && g.their_pick === i ? '  · them' : ''))));
   }
 
+  function todPanel(g, H) {
+    const left = Math.max(0, Math.round((new Date(g.until) - Date.now()) / 3600000));
+    const head = h('b', null, '🎭 Truth or Dare · Level ' + g.level + ' · ' + g.name);
+    if (g.done) return h('div', { class: 'gamepanel' }, head, h('small', { class: 'hint' }, 'The 24 hours are over.'));
+    const sub = h('small', { class: 'hint' }, left + ' h left · round ' + (g.count + 1));
+    if (g.phase === 'pick') return h('div', { class: 'gamepanel' }, head, sub, g.my_turn ? h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: () => run(() => H.todPick('truth')) }, '🟣 Truth'), h('button', { class: 'btn pri', onclick: () => run(() => H.todPick('dare')) }, '🟠 Dare')) : h('small', { class: 'hint' }, 'Their turn to choose…'));
+    return h('div', { class: 'gamepanel' }, head, sub, h('div', { class: 'todq' }, g.kind === 'truth' ? '🟣 Truth' : '🟠 Dare', h('p', null, g.text)), g.my_turn ? h('div', { class: 'stack' }, h('small', { class: 'hint' }, 'Answer in the chat, then press Done.'), h('button', { class: 'btn pri', onclick: () => run(() => H.todDone()) }, '✅ Done, their turn')) : h('small', { class: 'hint' }, 'They are answering…'));
+  }
+
   function drawPanel(g, H) {
     const cv = h('canvas', { class: 'drawcv', width: 600, height: 600 }), ctx = cv.getContext('2d');
     let color = '#ffffff', width = 8, cur = null, local = g.strokes.slice();
@@ -50,11 +59,11 @@
       const drop = () => { if (panel) { panel.remove(); panel = null; key = ''; } };
       return {
         set(g) {
-          if (!g || g.type === 'tod') return drop();
+          if (!g || (g.type === 'tod' && g.level === undefined)) return drop(); // an old plain question has nothing to draw
           const k = JSON.stringify(g); if (k === key && panel) return; key = k;
           if (panel && panel.update && g.type === 'draw' && !g.i_draw && !g.solved) { panel.update(g); return; }
           if (panel && panel.dataset.keep && g.type === 'draw' && g.i_draw && !g.solved) return; // do not wipe what the drawer is drawing
-          const el = g.type === 'xo' ? xoPanel(g, H) : g.type === 'quiz' ? quizPanel(g, H) : drawPanel(g, H);
+          const el = g.type === 'xo' ? xoPanel(g, H) : g.type === 'quiz' ? quizPanel(g, H) : g.type === 'tod' ? todPanel(g, H) : drawPanel(g, H);
           if (panel) panel.replaceWith(el); else parent.insertBefore(el, before); panel = el;
         },
         clear: drop

@@ -452,3 +452,5 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .sw-send.boost{background:var(--yel,#ffd60a);border-color:var(--yel,#ffd60a)}
 .sw-actions2{display:flex;gap:10px;align-items:center;margin-top:8px}.sw-play{flex:1}
 .segbtn{flex:1;text-align:center;padding:9px 4px;border-radius:12px;border:0;background:none;color:var(--muted);font-weight:700;cursor:pointer}.segbtn[aria-pressed=true]{background:var(--bg2);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
+
+.todq{background:linear-gradient(135deg,#a78bff,#ffb36b);color:#15131f;border-radius:18px;padding:12px 14px;width:100%;font-weight:700}.todq p{margin:6px 0 0;font-weight:500;font-size:1.05rem}

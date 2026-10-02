@@ -3,11 +3,11 @@
 const { ageOf } = require('./community');
 
 const LEVELS = {
-  1: { name: 'Friendly', min: 13, price: 0 },
-  2: { name: 'Normal', min: 13, price: 10 },
-  3: { name: 'Mixed', min: 13, price: 4 },
+  1: { name: 'Friendly', min: 13, price: 2 },
+  2: { name: 'Normal', min: 13, price: 4 },
+  3: { name: 'Mixed', min: 13, price: 5 },
   4: { name: 'Flirty', min: 14, price: 10 },
-  5: { name: 'Spicy', min: 15, price: 25 }
+  5: { name: 'Spicy', min: 15, price: 15 }
 };
 
 /** The owner can change a price in the dashboard (setting tod_price_N); these are the defaults. */
@@ -71,4 +71,4 @@ async function handleAdmin(action, ctx) {
   res.status(200).json({ questions: rows });
   return true;
 }
-module.exports = { handle, handleAdmin, LEVELS };
+module.exports = { handle, handleAdmin, LEVELS, priceOf };

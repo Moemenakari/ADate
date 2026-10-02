@@ -343,3 +343,17 @@ alter table dm_threads add column if not exists boosted boolean not null default
 alter table matches add column if not exists kind text not null default 'random';
 alter table matches add column if not exists invited_by bigint;
 alter table matches add column if not exists judge bigint;
+
+-- ===== Schools in the north, social accounts (18+ only) =====
+insert into rooms (slug, title, emoji, kind, country, interest, free) values
+  ('schools-tripoli','Schools: Tripoli','🏫','school','LB',NULL,true),
+  ('schools-koura','Schools: Koura','🏫','school','LB',NULL,true),
+  ('schools-zgharta','Schools: Zgharta','🏫','school','LB',NULL,true),
+  ('schools-batroun','Schools: Batroun','🏫','school','LB',NULL,true),
+  ('schools-akkar','Schools: Akkar','🏫','school','LB',NULL,true),
+  ('schools-minieh','Schools: Minieh-Danniyeh','🏫','school','LB',NULL,true),
+  ('schools-bcharre','Schools: Bcharre','🏫','school','LB',NULL,true),
+  ('unis-north','Universities: the North','🎓','school','LB',NULL,true)
+on conflict (slug) do nothing;
+alter table users add column if not exists socials jsonb;
+create table if not exists social_unlocks (viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, created_at timestamptz not null default now(), primary key (viewer, target));

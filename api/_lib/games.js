@@ -24,7 +24,7 @@ function init(type, starter, other) {
   if (type === 'quiz') { const q = QUIZ[Math.floor(Math.random() * QUIZ.length)]; return { v: 0, q: q[0], opts: q[1], picks: {} }; }
   throw fail('Unknown game', 400);
 }
-const LABEL = { xo: '❌⭕ Tic-Tac-Toe', draw: '🎨 Draw and guess', quiz: '🎲 Quick question' };
+const LABEL = { xo: '❌⭕ Tic-Tac-Toe', draw: '🎨 Draw and guess', quiz: '🎲 Quick question', tod: '🎭 Truth or Dare' };
 
 /** What one player is allowed to see. The secret word is hidden from the guesser until it is solved. */
 function view(type, st, uid) {
