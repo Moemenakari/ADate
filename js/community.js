@@ -411,7 +411,8 @@ window.CommunityInit = function (ui) {
     const STATUS = { pending: '⏳ waiting for your payment', claimed: '🔎 being checked', paid: '✅ paid', rejected: '❌ not accepted' };
     const money = (c) => '$' + (c / 100).toFixed(2);
     const waiting = d.orders.find((o) => o.status === 'pending');
-    const pay = d.settings.whish_link ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: d.settings.whish_link }, '💳 Pay with Whish') : h('p', { class: 'hint' }, 'The Whish link is not set yet. Ask the owner on WhatsApp.');
+    const payLink = (kind) => (kind && d.settings['whish_link_' + kind]) || d.settings.whish_link || '';
+    const pay = payLink(waiting && waiting.kind) ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: payLink(waiting && waiting.kind) }, '💳 Pay with card or Whish') : h('p', { class: 'hint' }, 'The Whish link is not set yet. Ask the owner on WhatsApp.');
     const note = h('input', { type: 'text', maxlength: 120, placeholder: 'Whish transaction reference', 'aria-label': 'Whish reference' });
     const buy = (p) => async () => { try { await API.orderCreate(p.kind); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } };
     const pk = (kind) => d.products.find((x) => x.kind === kind) || {};

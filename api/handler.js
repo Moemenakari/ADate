@@ -347,7 +347,7 @@ module.exports = async (req, res) => {
       }
       if (action === 'admin_settings') { const r = await sql`select key, value from settings`; return res.status(200).json(Object.fromEntries(r.map((x) => [x.key, x.value]))); }
       if (action === 'admin_set') {
-        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_link', 'whish_note', 'whish_number', 'tod_price_2', 'tod_price_3', 'tod_price_4', 'tod_price_5'].includes(k)) throw bad('Bad setting');
+        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_link', 'whish_note', 'whish_number', 'whish_link_points5', 'whish_link_points25', 'tod_price_2', 'tod_price_3', 'tod_price_4', 'tod_price_5'].includes(k)) throw bad('Bad setting');
         const v = String(b.value || '').trim().slice(0, 300);
         await sql`insert into settings (key, value) values (${k}, ${v}) on conflict (key) do update set value = ${v}`;
         return res.status(200).json({ ok: true });

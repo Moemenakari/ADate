@@ -11,7 +11,7 @@ async function handle(action, ctx) {
 
   if (action === 'shop') {
     const u = await need();
-    const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note', 'whish_number')`;
+    const s = await sql`select key, value from settings where key in ('whish_link', 'whish_note', 'whish_number', 'whish_link_points5', 'whish_link_points25')`;
     const orders = await sql`select id, kind, cents, status, created_at as at from orders where user_id = ${u.id} order by id desc limit 20`;
     return out({ first_bonus: orders.some((x) => x.status === 'paid') ? 0 : FIRST_BUY_BONUS, products: Object.entries(PRODUCTS).map(([kind, p]) => ({ kind, cents: p.cents, points: p.points, label: p.label })), settings: Object.fromEntries(s.map((x) => [x.key, x.value])), orders });
   }
