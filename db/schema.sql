@@ -410,3 +410,10 @@ alter table orders add column if not exists txid text;
 alter table orders add column if not exists receipt text;
 alter table orders add column if not exists claimed_at timestamptz;
 create unique index if not exists orders_txid_idx on orders (lower(txid)) where txid is not null and status in ('claimed', 'paid');
+
+-- The owner is the owner dashboard only: no account is an admin. Alerts go to phones registered from the dashboard.
+create table if not exists admin_subs (endpoint text primary key, p256dh text not null, auth text not null, created_at timestamptz not null default now());
+alter table orders add column if not exists points int;
+update users set is_admin = false where is_admin;
+insert into users (phone, pass_salt, pass_hash, nick, role, profile_done, gender, meet, birthdate, country, interests, avatar, last_seen)
+  select 'team-account', 'x', 'x', 'ADate Team', 'team', true, 'm', 'both', '2008-01-01', 'LB', array['support'], 'animal:cat', now() where not exists (select 1 from users where phone = 'team-account');

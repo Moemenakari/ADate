@@ -4,6 +4,7 @@ const { neon } = require('@neondatabase/serverless');
 const webpush = require('web-push');
 const crypto = require('crypto');
 const community = require('./_lib/community');
+const owner = require('./_lib/owner');
 const play = require('./_lib/play');
 const shop = require('./_lib/shop');
 const match = require('./_lib/match');
@@ -340,6 +341,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
+    if (owner.ACTIONS.includes(action)) { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await owner.handle(action, { sql, b, res, bad })) return; }
     if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide' || action === 'admin_gift' || action === 'admin_hosts' || action === 'admin_test_push' || action === 'admin_selfies' || action === 'admin_selfie_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
     if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
@@ -361,13 +363,12 @@ module.exports = async (req, res) => {
       if (action === 'admin_mark') { // block / unblock / mark as verified, per account
         const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
         const op = String(b.op || '');
-        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off', 'role_agent', 'role_host', 'role_bot', 'role_none'].includes(op)) throw bad('Bad action');
+        if (!['block', 'unblock', 'verify', 'unverify', 'photo_off', 'role_agent', 'role_host', 'role_bot', 'role_none'].includes(op)) throw bad('Bad action');
         const note = String(b.note || '').slice(0, 200) || null;
         const r = op === 'block' ? await sql`update users set blocked = true, blocked_note = ${note} where id = ${id} returning id`
           : op === 'unblock' ? await sql`update users set blocked = false, blocked_note = null where id = ${id} returning id`
           : op === 'photo_off' ? await sql`update users set photo = null, photo_ok = false where id = ${id} returning id`
           : op === 'role_agent' || op === 'role_host' || op === 'role_bot' || op === 'role_none' ? await sql`update users set role = ${op === 'role_none' ? null : op.slice(5)} where id = ${id} returning id`
-          : op === 'admin' || op === 'unadmin' ? await sql`update users set is_admin = ${op === 'admin'} where id = ${id} returning id`
           : await sql`update users set verified = ${op === 'verify'} where id = ${id} returning id`;
         if (!r.length) throw bad('No such account', 404);
         if (op === 'block') { await sql`delete from sessions where user_id = ${id}`; await sql`delete from push_subs where user_id = ${id}`; }

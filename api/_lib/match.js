@@ -54,7 +54,7 @@ async function handle(action, ctx) {
     if (live.length) return out({ state: 'matched', match: live[0].id });
     await sql`delete from match_queue where since < now() - ${WAIT_SECONDS + ' seconds'}::interval`;
     const cand = await sql`select q.user_id, q.since, u.birthdate, u.gender, u.meet, u.interests, u.langs from match_queue q join users u on u.id = q.user_id
-      where q.user_id <> ${u.id} and not u.blocked and (u.muted_until is null or u.muted_until < now())
+      where q.user_id <> ${u.id} and u.role is distinct from 'team' and not u.blocked and (u.muted_until is null or u.muted_until < now())
         and (${meet} = 'both' or u.gender = ${meet}) and (u.meet = 'both' or u.meet = ${u.gender})
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = q.user_id) or (bl.blocker = q.user_id and bl.blocked = ${u.id}))
         and not exists (select 1 from matches mm where ((mm.a = ${u.id} and mm.b = q.user_id) or (mm.a = q.user_id and mm.b = ${u.id})) and mm.created_at > now() - ${COOLDOWN_HOURS + ' hours'}::interval)
@@ -188,7 +188,7 @@ async function handle(action, ctx) {
     if (!u.gender) throw bad('Tell us who you are first', 409);
     const meet = u.meet || 'both', age = ageOf(u.birthdate), mi = new Set(u.interests || []);
     const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, t.reply_n, t.reply_secs, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
-      where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.muted_until is null or t.muted_until < now())
+      where t.role is distinct from 'team' and t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.muted_until is null or t.muted_until < now())
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
         and not exists (select 1 from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'invite')
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = t.id) or (bl.blocker = t.id and bl.blocked = ${u.id}))
@@ -273,7 +273,7 @@ async function handle(action, ctx) {
     const meet = u.meet || 'both', age = ageOf(u.birthdate);
     const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.avatar, t.frame, t.last_seen, t.selfie_ok, t.is_admin, t.role, t.reply_n, t.reply_secs,
         exists (select 1 from dm_threads d where d.status = 'open' and ((d.a = ${u.id} and d.b = t.id) or (d.b = ${u.id} and d.a = t.id))) as friend
-      from users t where t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and t.last_seen > now() - interval '150 seconds'
+      from users t where t.role is distinct from 'team' and t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and t.last_seen > now() - interval '150 seconds'
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = t.id) or (bl.blocker = t.id and bl.blocked = ${u.id}))
       order by t.last_seen desc limit 60`;

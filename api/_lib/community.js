@@ -1,5 +1,6 @@
 // Community engine: rooms, text-only chat, private messages inside age circles, points, referrals, reports, mutes, blocks.
 // Called from api/handler.js. Every rule is enforced here on the server; the page never decides.
+const prices = require('./prices');
 const webpush = require('web-push');
 
 const CC_COUNTRY = { 961: 'LB', 966: 'SA', 971: 'AE', 974: 'QA', 965: 'KW', 973: 'BH', 968: 'OM', 962: 'JO', 963: 'SY', 964: 'IQ', 20: 'EG', 90: 'TR', 357: 'CY', 33: 'FR', 49: 'DE', 44: 'GB', 1: 'US', 55: 'BR', 61: 'AU', 46: 'SE', 39: 'IT', 34: 'ES' };
@@ -31,8 +32,9 @@ async function creditReferral(sql, uid) {
   if (!ref.length) return false;
   const today = (await sql`select count(*)::int as n from points_ledger where user_id = ${ref[0].inviter_id} and reason = 'invite' and created_at > now() - interval '24 hours'`)[0].n;
   if (today >= 10) return false;
-  await addPoints(sql, ref[0].inviter_id, 5, 'invite', String(uid));
-  await pushUsers(sql, [ref[0].inviter_id], '⭐ Your friend joined', 'You got 5 points.', '/#/points');
+  const R = (await prices.get(sql)).invite_reward;
+  await addPoints(sql, ref[0].inviter_id, R, 'invite', String(uid));
+  await pushUsers(sql, [ref[0].inviter_id], '⭐ Your friend joined', 'You got ' + R + ' points.', '/#/points');
   return true;
 }
 /** The accounts of `t` that viewer `vid` has already paid for (all of them when the whole set was opened). */
@@ -43,21 +45,20 @@ async function openSocials(sql, vid, t) {
   return out;
 }
 /** Small things a person can still do to earn points, most useful first. Social accounts are for adults only. */
-function todoOf(u, age) {
-  const t = [], so = u.socials || {};
-  if (!tickOf(u) && u.selfie_state !== 'pending') t.push({ k: 'selfie', text: 'Verify yourself with a selfie', points: SELFIE_REWARD, href: '#/settings' });
-  for (const [k, name] of [['ig', 'Instagram'], ['snap', 'Snapchat'], ['tiktok', 'TikTok']]) if (!so[k]) t.push({ k, text: 'Add your ' + name, points: SOC_EARN[k], href: '#/settings' });
-  if (age >= 18 && !so.wa) t.push({ k: 'wa', text: 'Add your WhatsApp number', points: SOC_EARN.wa, href: '#/settings' });
-  t.push({ k: 'invite', text: 'Invite a friend', points: 5, href: '#/points' });
+function todoOf(u, age, P) {
+  const t = [], so = u.socials || {}, SO = socOf(P);
+  if (!tickOf(u) && u.selfie_state !== 'pending') t.push({ k: 'selfie', text: 'Verify yourself with a selfie', points: P.selfie_reward, href: '#/settings' });
+  for (const [k, name] of [['ig', 'Instagram'], ['snap', 'Snapchat'], ['tiktok', 'TikTok']]) if (!so[k]) t.push({ k, text: 'Add your ' + name, points: SO.earn[k], href: '#/settings' });
+  if (age >= 18 && !so.wa) t.push({ k: 'wa', text: 'Add your WhatsApp number', points: SO.earn.wa, href: '#/settings' });
+  t.push({ k: 'invite', text: 'Invite a friend', points: P.invite_reward, href: '#/points' });
   return t;
 }
 
 // Seasonal frames around the profile picture: 5 points, can be bought while the season runs and are kept afterwards.
 const FRAMES = { halloween: { name: 'Halloween', emoji: '🎃', price: 5, from: '2026-10-01', to: '2026-11-05' }, newyear: { name: 'New Year', emoji: '🎆', price: 5, from: '2026-12-15', to: '2027-01-06' }, ramadan: { name: 'Ramadan', emoji: '🌙', price: 5, from: '2027-02-08', to: '2027-03-12' } };
 const frameOpen = (f) => { const t = new Date().toISOString().slice(0, 10); return t >= f.from && t <= f.to; };
-const SELFIE_REWARD = 20; // points for a checked selfie
-const SOC_EARN = { ig: 10, snap: 10, tiktok: 10, wa: 5 }; // points for adding each account to my profile (WhatsApp: adults only)
-const SOC_PRICE = { ig: 10, snap: 10, tiktok: 10, wa: 100 }, SOC_ALL = 20; // points to open one account; the three of Instagram, Snapchat and TikTok together cost 20
+/** Prices come from the owner dashboard (see prices.js). */
+const socOf = (P) => ({ earn: { ig: P.soc_earn_ig, snap: P.soc_earn_snap, tiktok: P.soc_earn_tiktok, wa: P.soc_earn_wa }, price: { ig: P.soc_price_ig, snap: P.soc_price_snap, tiktok: P.soc_price_tiktok, wa: P.soc_price_wa }, all: P.soc_price_all });
 const SOC_SET = ['ig', 'snap', 'tiktok'];
 /** Social accounts are only shown inside the same age group: under 18 with under 18, adults with adults. */
 const sameGroup = (a, b) => (a >= 18) === (b >= 18);
@@ -70,14 +71,14 @@ const streakOf = (t) => { // a streak shows while it was kept yesterday or today
   return { streak: live, streak_pending: live > 0 && sd !== today };
 };
 /** The tick: verified by selfie, or the owner. Moderators and agents get a tag, not a tick. */
-const tickOf = (u) => !!(u.selfie_ok || u.is_admin);
-const roleOf = (u) => (u.is_admin ? 'owner' : u.role || '');
-const PHOTO_PRICE = 25, SHARE_REWARD = 2, SHARE_PER_DAY = 3;
+const tickOf = (u) => !!(u.selfie_ok || u.role === 'team');
+const roleOf = (u) => u.role || '';
+const SHARE_REWARD = 2, SHARE_PER_DAY = 3;
 const roomPrice = (r, msgs24) => (r.free || r.kind !== 'interest' ? 0 : 10 + 5 * Math.round(3 * Math.min(1, msgs24 / 300)));
 const UNLOCK_PRICE = 3, OPEN_PRICE = 5;
 const threadLocked = (t) => !!(!t.unlocked && ((t.source === 'match' && t.unlock_until && new Date(t.unlock_until) < new Date()) || t.source === 'gate'));
 const unlockPrice = (t) => (t.source === 'gate' ? 2 : UNLOCK_PRICE);
-const photoOn = (u) => !!u.is_admin || (!!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date());
+const photoOn = (u) => (!!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date());
 async function balanceOf(sql, uid) { const r = await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${uid}`; return r[0].n; }
 async function addPoints(sql, uid, delta, reason, ref) { await sql`insert into points_ledger (user_id, delta, reason, ref) values (${uid}, ${delta}, ${reason}, ${ref || null})`; }
 
@@ -95,10 +96,22 @@ async function pushUsers(sql, userIds, title, body, url) {
     }));
   } catch (e) { console.error('push failed', e && e.message); }
 }
-async function notifyAdmins(sql, title, body) { const a = await sql`select id from users where is_admin and not blocked`; await pushUsers(sql, a.map((x) => x.id), title, body, '/#/admin'); }
+/** Alerts for the owner go to the phones registered from the owner dashboard (no account is an admin). */
+async function pushOwner(sql, title, body, url) {
+  const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY; if (!pub || !priv) return 0;
+  try {
+    const subs = await sql`select endpoint, p256dh, auth from admin_subs`;
+    if (!_vapid) { webpush.setVapidDetails('https://adate.vercel.app', pub, priv); _vapid = true; }
+    const payload = JSON.stringify({ title, body, url: url || '/#/admin', tag: 'adate-owner-' + Date.now() });
+    await Promise.allSettled(subs.map(async (x) => { try { await webpush.sendNotification({ endpoint: x.endpoint, keys: { p256dh: x.p256dh, auth: x.auth } }, payload, { TTL: 3600, timeout: 4000 }); } catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await sql`delete from admin_subs where endpoint = ${x.endpoint}`; } }));
+    return subs.length;
+  } catch (e) { console.error('owner push failed', e && e.message); return 0; }
+}
+const notifyAdmins = (sql, title, body) => pushOwner(sql, title, body, '/#/admin');
 
 async function handle(action, ctx) {
   const { sql, b, res, bad, userOf } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  const P = await prices.get(sql);
   const need = async () => { const u = await userOf(sql, b.session); if (!u.profile_done || !u.birthdate) throw bad('Finish your profile first', 403); return u; };
   const idNum = (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) throw bad('Bad id'); return n; };
   const blockedPair = async (x, y) => (await sql`select 1 from blocks where (blocker = ${x} and blocked = ${y}) or (blocker = ${y} and blocked = ${x}) limit 1`).length > 0;
@@ -113,7 +126,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
-      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, photo: photoOn(u) && u.photo ? u.photo : '', todo: todoOf(u, age), nudge_off: !!u.nudge_off, birthday_left: Math.max(0, 2 - (u.birthday_changes || 0)), verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
+      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, photo: photoOn(u) && u.photo ? u.photo : '', todo: todoOf(u, age, P), nudge_off: !!u.nudge_off, birthday_left: Math.max(0, 2 - (u.birthday_changes || 0)), verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: P.photo_price, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
     }
     /* ------------------------------------------------ nickname, theme, avatar */
     case 'nick_set': {
@@ -150,13 +163,13 @@ async function handle(action, ctx) {
         if (!seen.length) { const recent = await sql`select 1 from profile_views where target = ${id} and notified and created_at > now() - interval '2 hours'`; const tell = !recent.length;
           await sql`insert into profile_views (viewer, target, notified) values (${u.id}, ${id}, ${tell})`;
           if (tell) await pushUsers(sql, [id], '👀 Someone viewed your profile', 'Open Views to see who. It costs 1 star.', '/#/views'); } }
-      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && !!(t.socials && Object.keys(t.socials).length), socials_have: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { ...SOC_PRICE, all: SOC_ALL }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
+      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && !!(t.socials && Object.keys(t.socials).length), socials_have: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { ...socOf(P).price, all: P.soc_price_all }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
       const u = await need(); if (photoOn(u)) return out({ ok: true, balance: await balanceOf(sql, u.id) });
-      const bal = await balanceOf(sql, u.id); if (bal < PHOTO_PRICE) throw bad(`A real photo costs ${PHOTO_PRICE} points a month. You have ${bal}.`, 402);
+      const bal = await balanceOf(sql, u.id); if (bal < P.photo_price) throw bad(`A real photo costs ${P.photo_price} points a month. You have ${bal}.`, 402);
       const r = await sql`update users set photo_ok = true, photo_until = now() + interval '30 days' where id = ${u.id} and (photo_until is null or photo_until <= now() or not photo_ok) returning id`;
-      if (r.length) await addPoints(sql, u.id, -PHOTO_PRICE, 'photo');
+      if (r.length) await addPoints(sql, u.id, -P.photo_price, 'photo');
       return out({ ok: true, balance: await balanceOf(sql, u.id) });
     }
     case 'photo_set': {
@@ -260,7 +273,7 @@ async function handle(action, ctx) {
       const u = await need();
       let code = u.selfie_code;
       if (!u.selfie_ok && !code) { code = 1 + Math.floor(Math.random() * 5); await sql`update users set selfie_code = ${code} where id = ${u.id}`; }
-      return out({ ok: !!u.selfie_ok, state: u.selfie_ok ? 'approved' : u.selfie_state, code: u.selfie_ok ? null : code, reward: SELFIE_REWARD });
+      return out({ ok: !!u.selfie_ok, state: u.selfie_ok ? 'approved' : u.selfie_state, code: u.selfie_ok ? null : code, reward: P.selfie_reward });
     }
     case 'selfie_submit': { // the picture is only for the owner to look at once, then it is deleted
       const u = await need();
@@ -273,7 +286,7 @@ async function handle(action, ctx) {
     }
     case 'social_get': { // my own social accounts; everyone can add Instagram, Snapchat and TikTok, WhatsApp only adults
       const u = await need(), adult = ageOf(u.birthdate) >= 18;
-      return out({ allowed: true, adult, socials: u.socials || {}, earn: SOC_EARN });
+      return out({ allowed: true, adult, socials: u.socials || {}, earn: socOf(P).earn });
     }
     case 'social_set': { // adding an account earns points, once per account
       const u = await need(), adult = ageOf(u.birthdate) >= 18;
@@ -286,7 +299,7 @@ async function handle(action, ctx) {
         if (cur[key] !== v) { if (!cur[key]) added.push(key); cur[key] = v; }
       }
       await sql`update users set socials = ${JSON.stringify(cur)}::jsonb where id = ${u.id}`;
-      for (const key of added) await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, ${SOC_EARN[key]}, 'social', ${key} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'social' and ref = ${key})`;
+      for (const key of added) await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, ${socOf(P).earn[key]}, 'social', ${key} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'social' and ref = ${key})`;
       return out({ ok: true, socials: cur, balance: await balanceOf(sql, u.id) });
     }
     case 'social_view': { // open one account (10 points, WhatsApp 100) or Instagram, Snapchat and TikTok together (20); only inside the same age group
@@ -298,7 +311,7 @@ async function handle(action, ctx) {
       const open = await openSocials(sql, u.id, t), all = Object.keys(t.socials).filter((k) => SOC_SET.includes(k));
       const need2 = key === '*' ? all.filter((k) => !open[k]) : open[key] ? [] : [key];
       if (need2.length) {
-        const price = key === '*' ? SOC_ALL : SOC_PRICE[key], bal = await balanceOf(sql, u.id);
+        const price = key === '*' ? P.soc_price_all : socOf(P).price[key], bal = await balanceOf(sql, u.id);
         if (bal < price) throw bad(`${key === '*' ? 'Seeing all their accounts' : 'Seeing this account'} costs ${price} points. You have ${bal}.`, 402);
         await addPoints(sql, u.id, -price, 'social_view', String(id) + ':' + key);
         await sql`insert into social_unlocks (viewer, target, kind) values (${u.id}, ${id}, ${key}) on conflict do nothing`;
@@ -317,7 +330,7 @@ async function handle(action, ctx) {
           and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = x.id) or (bl.blocker = x.id and bl.blocked = ${u.id}))
         order by at desc limit 50`;
       const today = rows.filter((r) => Date.now() - new Date(r.at).getTime() < 86400000).length;
-      return out({ today, price: 1, views: rows.map((r) => { const base = { id: r.id, at: r.at, viewed: r.viewed, liked: r.liked, age_band: bandOf(ageOf(r.birthdate)), country: r.country || '', revealed: r.revealed };
+      return out({ today, price: P.view_reveal, views: rows.map((r) => { const base = { id: r.id, at: r.at, viewed: r.viewed, liked: r.liked, age_band: bandOf(ageOf(r.birthdate)), country: r.country || '', revealed: r.revealed };
         return r.revealed ? { ...base, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', photo: photoOn(r) ? (r.photo || '') : '', selfie_ok: tickOf(r), role: roleOf(r) } : base; }) });
     }
     case 'view_reveal': { // 1 star to see who it is; kept for good
@@ -326,9 +339,9 @@ async function handle(action, ctx) {
       if (!seen.length || await blockedPair(u.id, id)) throw bad('Not found', 404);
       const had = await sql`select 1 from view_reveals where user_id = ${u.id} and viewer = ${id}`;
       if (!had.length) {
-        const bal = await balanceOf(sql, u.id); if (bal < 1) throw bad('Seeing who it is costs 1 star. You have ' + bal + '.', 402);
+        const bal = await balanceOf(sql, u.id); if (bal < P.view_reveal) throw bad('Seeing who it is costs ' + P.view_reveal + ' star(s). You have ' + bal + '.', 402);
         const ins = await sql`insert into view_reveals (user_id, viewer) values (${u.id}, ${id}) on conflict do nothing returning viewer`;
-        if (ins.length) await addPoints(sql, u.id, -1, 'view_reveal', String(id));
+        if (ins.length) await addPoints(sql, u.id, -P.view_reveal, 'view_reveal', String(id));
       }
       const t = (await sql`select id, nick, avatar, frame, photo, photo_ok, photo_until, is_admin, birthdate, selfie_ok, role from users where id = ${id}`)[0];
       return out({ ok: true, balance: await balanceOf(sql, u.id), person: { id: t.id, nick: t.nick, avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', selfie_ok: tickOf(t), role: roleOf(t), age_band: bandOf(ageOf(t.birthdate)) } });
@@ -435,14 +448,14 @@ async function handle(action, ctx) {
       await pushUsers(sql, [to], '💬 ' + (u.nick || 'Someone') + ' sent you a message', 'Open ADate to read it.', '/#/dms');
       return out({ ok: true, thread: T.id });
     }
-    case 'support_open': { // a private chat with the owner account, for help with paying; open at once, no request needed
+    case 'support_open': { // a private chat with the ADate Team (the owner answers from the owner dashboard); open at once, no request needed
       const u = await need();
-      const adm = await sql`select id from users where is_admin and not blocked and id <> ${u.id} order by id limit 1`;
+      const adm = await sql`select id from users where phone = 'team-account' limit 1`;
       if (!adm.length) throw bad('Support is not ready yet. Use the payment options for now.', 503);
       const a = Math.min(u.id, adm[0].id), c2 = Math.max(u.id, adm[0].id);
       let th = await sql`select * from dm_threads where a = ${a} and b = ${c2}`;
-      if (!th.length) { th = await sql`insert into dm_threads (a, b, started_by, status) values (${a}, ${c2}, ${u.id}, 'open') returning *`; await pushUsers(sql, [adm[0].id], '💬 Someone wants help paying', (u.nick || 'A member') + ' opened the support chat.', '/#/dm/' + th[0].id); }
-      else if (th[0].status !== 'open') await sql`update dm_threads set status = 'open' where id = ${th[0].id}`;
+      if (!th.length) { th = await sql`insert into dm_threads (a, b, started_by, status, unlocked) values (${a}, ${c2}, ${u.id}, 'open', true) returning *`; await pushOwner(sql, '💬 Someone wants help', (u.nick || 'A member') + ' opened the support chat.', '/#/admin'); }
+      else if (th[0].status !== 'open' || !th[0].unlocked) await sql`update dm_threads set status = 'open', unlocked = true where id = ${th[0].id}`;
       return out({ thread: th[0].id });
     }
     case 'dm_open': {
@@ -494,6 +507,7 @@ async function handle(action, ctx) {
         let streak = t[0].streak || 0, newSd = sd;
         if (aDay === today && bDay === today && sd !== today) { streak = sd === yest ? streak + 1 : 1; newSd = today; }
         await sql`update dm_threads set a_day = ${aDay}, b_day = ${bDay}, streak = ${streak}, streak_day = ${newSd} where id = ${id}`; }
+      if ((await sql`select 1 from users where id = ${other} and role = 'team'`).length) { await pushOwner(sql, '💬 Message to the team', (u.nick || 'Someone') + ' wrote to the team.', '/#/admin'); return out({ ok: true }); }
       if (!(await sql`select 1 from notif_mutes where user_id = ${other} and kind = 'dm' and ref = ${id}`).length) await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open ADate to read it.', '/#/dm/' + id);
       return out({ ok: true });
     }
@@ -532,10 +546,8 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
   if (action === 'admin_test_push') { // the owner checks that alerts reach the phone
-    const a = await sql`select id from users where is_admin and not blocked`;
-    const subs = await sql`select count(*)::int as n from push_subs where user_id = any(${a.map((x) => x.id)})`;
-    await pushUsers(sql, a.map((x) => x.id), '✅ Test alert', 'If you can read this, owner alerts work on this phone.', '/#/admin');
-    return out({ ok: true, devices: subs[0].n });
+    const n = await pushOwner(sql, '✅ Test alert', 'If you can read this, owner alerts work on this phone.', '/#/admin');
+    return out({ ok: true, devices: n });
   }
   if (action === 'admin_hosts') { // the official accounts: how active they are, and their points
     const rows = await sql`select u.id, u.nick, u.role, u.last_seen, u.photo_ok, (select coalesce(sum(delta), 0)::int from points_ledger l where l.user_id = u.id) as points,
@@ -554,9 +566,9 @@ async function handleAdmin(action, ctx) {
     const t = await sql`select id from users where id = ${uid} and selfie_state = 'pending'`; if (!t.length) throw bad('Nothing waiting', 404);
     if (b.approve) {
       await sql`update users set selfie_ok = true, selfie_state = 'approved', selfie = null where id = ${uid}`;
-      await sql`insert into points_ledger (user_id, delta, reason, ref) select ${uid}, ${SELFIE_REWARD}, 'selfie', null where not exists (select 1 from points_ledger where user_id = ${uid} and reason = 'selfie')`;
-      await sql`insert into notices (user_id, body, points) values (${uid}, 'You are now verified by selfie ✓ Thank you!', ${SELFIE_REWARD})`;
-      await pushUsers(sql, [uid], '✅ You are verified', `Your selfie was accepted. +${SELFIE_REWARD} points.`, '/#/');
+      await sql`insert into points_ledger (user_id, delta, reason, ref) select ${uid}, ${(await prices.get(sql)).selfie_reward}, 'selfie', null where not exists (select 1 from points_ledger where user_id = ${uid} and reason = 'selfie')`;
+      await sql`insert into notices (user_id, body, points) values (${uid}, 'You are now verified by selfie ✓ Thank you!', ${(await prices.get(sql)).selfie_reward})`;
+      await pushUsers(sql, [uid], '✅ You are verified', `Your selfie was accepted. +${(await prices.get(sql)).selfie_reward} points.`, '/#/');
     } else {
       await sql`update users set selfie_state = 'rejected', selfie = null, selfie_code = ${1 + Math.floor(Math.random() * 5)} where id = ${uid}`;
       await sql`insert into notices (user_id, body, points) values (${uid}, 'Your selfie was not accepted. Try again: your face clear and the right number of fingers.', 0)`;
@@ -594,4 +606,4 @@ async function handleAdmin(action, ctx) {
   return false;
 }
 
-module.exports = { handle, notifyAdmins, creditReferral, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };
+module.exports = { handle, notifyAdmins, pushOwner, creditReferral, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };

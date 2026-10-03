@@ -1334,7 +1334,8 @@ async function route() {
   if (hash === '#/recover-phone') return recoverPhone();
   if (hash === '#/verify') return verifyPage();
   if (hash === '#/privacy') return privacy();
-  if (hash === '#/admin') return admin();
+  if (hash === '#/admin') return window.OwnerDash.open();
+  if (hash === '#/admin-old') return admin();
   if (hash === '#/welcome') return welcome();
   if (hash === '#/profile') return profile();
   if (hash === '#/make') {

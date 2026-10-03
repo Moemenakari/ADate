@@ -499,3 +499,13 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .numrow{align-items:center;justify-content:space-between;background:var(--accent-soft);border-radius:14px;padding:10px 12px}.bignum{font-size:1.25rem;font-weight:800;letter-spacing:.5px}
 .receiptprev img{max-width:100%;max-height:260px;border-radius:12px;border:1px solid var(--line)}
 .paycard{gap:10px}
+.topright{display:flex;align-items:center;gap:8px}
+.coinring{display:flex;flex-direction:column;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;text-decoration:none;color:#2b2140;background:radial-gradient(circle at 30% 25%,#fff3b0,#ffd60a 60%,#ffae00);box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 0 0 2px rgba(255,255,255,.55);line-height:1}
+.coinring span{font-size:.8rem}.coinring b{font-size:.82rem;font-weight:900}
+
+.backarrow{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin:2px 0 4px;padding:6px 12px 6px 8px;border-radius:999px;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);font-weight:700;font-size:.9rem}
+.backarrow span{font-size:.8rem}
+.ownc{padding-bottom:84px}.otiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.otile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;color:inherit;text-align:left}
+.otile b{font-size:1.5rem}.otile small{opacity:.8}.otile.warn{border-color:#ff7a00;box-shadow:0 0 0 2px rgba(255,122,0,.25)}
+.ownt{font-size:1.2rem}.ochips{overflow-x:auto;flex-wrap:nowrap}.ochips .chip{white-space:nowrap}.ocard summary{cursor:pointer;list-style:none}

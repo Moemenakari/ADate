@@ -75,10 +75,14 @@ window.CommunityInit = function (ui) {
     const box = h('div', { class: 'todobar slidein' }, h('a', { href: t.href }, h('b', null, '⭐ ' + t.text + ' to get ' + t.points + ' points')), h('button', { class: 'btn sm', 'aria-label': 'Hide for a day', onclick: () => { hidden[t.k] = Date.now() + 86400000; try { localStorage.setItem('adate.todoHide', JSON.stringify(hidden)); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
     return box;
   }
+  /** A back arrow on every page except Home, so nobody has to swipe out of the app. Goes one page back, or Home when there is nowhere to go back to. */
+  let navDepth = 0; window.addEventListener('hashchange', () => { navDepth++; });
+  const goBack = (e) => { e.preventDefault(); if (navDepth > 0) { navDepth = Math.max(0, navDepth - 2); history.back(); } else location.hash = '#/'; };
+  const backBar = (active) => (active === '#/' ? null : h('a', { class: 'backarrow', href: '#/', 'aria-label': 'Back', onclick: goBack }, '←', h('span', null, 'Back')));
   function page(active, ...kids) {
     document.title = 'ADate';
     const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '')))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), me), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
   /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
   window.addEventListener('adate:needpoints', (e) => {
@@ -562,7 +566,7 @@ window.CommunityInit = function (ui) {
       h('p', { class: 'hint' }, 'No receipt, no points. Each transaction ID counts once. A fake receipt means lost points and a ban.'),
       h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await API.orderCancel(open.id); } catch (e) { /* ignore */ } shopPage(); } }, 'Choose a different pack'))
       : open ? h('div', { class: 'note stack' }, h('b', null, '🔎 We are checking your payment'), h('p', { class: 'hint' }, `Order AD-${open.id} · ${money(open.cents)}. This usually takes a few minutes. You will get a notification when your points arrive.`)) : null;
-    page('#/shop', back, h('div', { class: 'h2' }, '🛒 Get more points'), !open && d.first_bonus ? h('div', { class: 'note' }, '🎁 Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null,
+    page('#/shop', h('div', { class: 'h2' }, '🛒 Get more points'), !open && d.first_bonus ? h('div', { class: 'note' }, '🎁 Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null,
       open ? payCard : h('div', { class: 'packs' }, ...packs),
       msg, h('button', { class: 'btn block', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '💬 No Whish? Chat with the team'), h('div', { class: 'h2' }, 'My orders'), ...(d.orders.length ? d.orders.map((o) => h('div', { class: 'hist' }, h('span', null, `AD-${o.id} · ${STATUS[o.status] || o.status}`), h('b', null, money(o.cents)))) : [h('p', { class: 'hint' }, 'No orders yet.')]));
     if (open && open.status === 'claimed') ui.setPoll(async () => { try { const x = await API.shop(); if (!x.orders.find((o) => o.id === open.id && (o.status === 'pending' || o.status === 'claimed'))) { const me2 = await API.points(); ME.points = me2.balance; shopPage(); toast(x.orders.find((o) => o.id === open.id && o.status === 'paid') ? '🎉 Congratulations! Your points arrived.' : 'Your payment was not accepted.'); } } catch (e) { /* next time */ } }, 4000);
