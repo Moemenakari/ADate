@@ -77,7 +77,7 @@ const roomPrice = (r, msgs24) => (r.free || r.kind !== 'interest' ? 0 : 10 + 5 *
 const UNLOCK_PRICE = 3, OPEN_PRICE = 5;
 const threadLocked = (t) => !!(!t.unlocked && ((t.source === 'match' && t.unlock_until && new Date(t.unlock_until) < new Date()) || t.source === 'gate'));
 const unlockPrice = (t) => (t.source === 'gate' ? 2 : UNLOCK_PRICE);
-const photoOn = (u) => !!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date();
+const photoOn = (u) => !!u.is_admin || (!!u.photo_ok && !!u.photo_until && new Date(u.photo_until) > new Date());
 async function balanceOf(sql, uid) { const r = await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${uid}`; return r[0].n; }
 async function addPoints(sql, uid, delta, reason, ref) { await sql`insert into points_ledger (user_id, delta, reason, ref) values (${uid}, ${delta}, ${reason}, ${ref || null})`; }
 
@@ -149,7 +149,7 @@ async function handle(action, ctx) {
         const seen = await sql`select 1 from profile_views where viewer = ${u.id} and target = ${id} and created_at > now() - interval '24 hours'`;
         if (!seen.length) { const recent = await sql`select 1 from profile_views where target = ${id} and notified and created_at > now() - interval '2 hours'`; const tell = !recent.length;
           await sql`insert into profile_views (viewer, target, notified) values (${u.id}, ${id}, ${tell})`;
-          if (tell) await pushUsers(sql, [id], '👀 ' + (u.nick || 'Someone') + ' viewed your profile', 'Open ADate to see who.', '/#/settings'); } }
+          if (tell) await pushUsers(sql, [id], '👀 Someone viewed your profile', 'Open Views to see who. It costs 1 star.', '/#/views'); } }
       return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && !!(t.socials && Object.keys(t.socials).length), socials_have: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { ...SOC_PRICE, all: SOC_ALL }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
@@ -305,10 +305,33 @@ async function handle(action, ctx) {
       }
       return out({ ok: true, nick: t.nick, socials_open: await openSocials(sql, u.id, t), balance: await balanceOf(sql, u.id) });
     }
-    case 'views_list': { // who looked at my profile lately
+    case 'views_feed': { // everybody who opened my profile or liked me lately. Names stay hidden until I open one for 1 star.
       const u = await need();
-      const rows = await sql`select distinct on (p.viewer) p.viewer as id, x.nick, x.avatar, x.frame, p.created_at as at from profile_views p join users x on x.id = p.viewer where p.target = ${u.id} and not x.blocked and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = p.viewer) or (bl.blocker = p.viewer and bl.blocked = ${u.id})) order by p.viewer, p.id desc`;
-      return out({ views: rows.sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 15) });
+      const rows = await sql`select x.id, x.nick, x.avatar, x.frame, x.photo, x.photo_ok, x.photo_until, x.is_admin, x.birthdate, x.country, x.selfie_ok, x.role,
+          greatest(coalesce(pv.at, 'epoch'), coalesce(sw.at, 'epoch')) as at, (pv.at is not null) as viewed, coalesce(sw.act, '') as liked,
+          exists (select 1 from view_reveals r where r.user_id = ${u.id} and r.viewer = x.id) as revealed
+        from users x
+        left join (select viewer, max(created_at) as at from profile_views where target = ${u.id} and created_at > now() - interval '30 days' group by viewer) pv on pv.viewer = x.id
+        left join (select from_user, act, created_at as at from swipes where to_user = ${u.id} and act in ('invite', 'boost') and created_at > now() - interval '30 days') sw on sw.from_user = x.id
+        where x.id <> ${u.id} and not x.blocked and x.nick is not null and (pv.at is not null or sw.at is not null)
+          and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = x.id) or (bl.blocker = x.id and bl.blocked = ${u.id}))
+        order by at desc limit 50`;
+      const today = rows.filter((r) => Date.now() - new Date(r.at).getTime() < 86400000).length;
+      return out({ today, price: 1, views: rows.map((r) => { const base = { id: r.id, at: r.at, viewed: r.viewed, liked: r.liked, age_band: bandOf(ageOf(r.birthdate)), country: r.country || '', revealed: r.revealed };
+        return r.revealed ? { ...base, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', photo: photoOn(r) ? (r.photo || '') : '', selfie_ok: tickOf(r), role: roleOf(r) } : base; }) });
+    }
+    case 'view_reveal': { // 1 star to see who it is; kept for good
+      const u = await need(), id = idNum(b.viewer);
+      const seen = await sql`select 1 from profile_views where viewer = ${id} and target = ${u.id} union select 1 from swipes where from_user = ${id} and to_user = ${u.id} and act in ('invite', 'boost') limit 1`;
+      if (!seen.length || await blockedPair(u.id, id)) throw bad('Not found', 404);
+      const had = await sql`select 1 from view_reveals where user_id = ${u.id} and viewer = ${id}`;
+      if (!had.length) {
+        const bal = await balanceOf(sql, u.id); if (bal < 1) throw bad('Seeing who it is costs 1 star. You have ' + bal + '.', 402);
+        const ins = await sql`insert into view_reveals (user_id, viewer) values (${u.id}, ${id}) on conflict do nothing returning viewer`;
+        if (ins.length) await addPoints(sql, u.id, -1, 'view_reveal', String(id));
+      }
+      const t = (await sql`select id, nick, avatar, frame, photo, photo_ok, photo_until, is_admin, birthdate, selfie_ok, role from users where id = ${id}`)[0];
+      return out({ ok: true, balance: await balanceOf(sql, u.id), person: { id: t.id, nick: t.nick, avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', selfie_ok: tickOf(t), role: roleOf(t), age_band: bandOf(ageOf(t.birthdate)) } });
     }
     case 'box_state': { // a free surprise once a day: 1 to 5 points, nothing to buy
       const u = await need();

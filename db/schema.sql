@@ -402,3 +402,5 @@ alter table users add column if not exists birthday_changes int not null default
 alter table social_unlocks add column if not exists kind text not null default '*';
 alter table social_unlocks drop constraint if exists social_unlocks_pkey;
 alter table social_unlocks add primary key (viewer, target, kind);
+
+create table if not exists view_reveals (user_id bigint not null references users(id) on delete cascade, viewer bigint not null references users(id) on delete cascade, created_at timestamptz not null default now(), primary key (user_id, viewer));

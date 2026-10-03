@@ -64,7 +64,7 @@ window.CommunityInit = function (ui) {
     } catch (e) { /* optional */ }
     return slot;
   }
-  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/shop', '🛒', 'Shop']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
+  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/views', '👀', 'Views'], ['#/shop', '🛒', 'Shop']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
   /** My own avatar: the real photo when I have one, otherwise the cartoon. */
   const myAvatar = (size) => avatar(ME && ME.avatar, ME && ME.nick, size, ME && ME.frame, ME && ME.photo);
   /** One reminder at the top that slides in, most important first: install, notifications, then things that earn points. Hidden for a day with the X. */
@@ -412,8 +412,7 @@ window.CommunityInit = function (ui) {
         h('label', { class: 'row', style: 'gap:8px;align-items:flex-start' }, ok, h('span', { class: 'hint' }, 'I agree that the site owner looks at this selfie once to check that I am a real person. It is deleted right after. It is never shown to anyone.')),
         h('button', { class: 'btn pri block', onclick: async () => { const file = f.files[0]; if (!file) return msg2.replaceChildren(h('div', { class: 'note' }, 'Take the selfie first.')); if (!ok.checked) return msg2.replaceChildren(h('div', { class: 'note' }, 'Please agree first.')); try { const data = await ui.shrinkImage(file, 480, 0.7, true); await API.selfieSubmit(data); toast('Sent. We will check it soon.'); settings(); } catch (e) { msg2.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Send my selfie'), msg2);
     }).catch(() => selfieBox.replaceChildren(h('p', { class: 'hint' }, 'Not available now.')));
-    const viewsSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '👀'), h('b', null, 'Who viewed my profile')), h('p', { class: 'hint spark' }, 'Loading…'));
-    API.viewsList().then((r) => viewsSec.replaceChildren(h('div', { class: 'sethead' }, h('span', null, '👀'), h('b', null, 'Who viewed my profile')), ...(r.views.length ? r.views.map((v) => h('div', { class: 'setrow' }, h('span', { class: 'row', style: 'gap:8px;align-items:center' }, avatar(v.avatar, v.nick, 28, v.frame), v.nick), h('small', { class: 'hint' }, ui.ago(v.at)))) : [h('p', { class: 'hint' }, 'Nobody yet. Be active in groups and Swipe to be seen.')]))).catch(() => viewsSec.replaceChildren(h('p', { class: 'hint' }, 'Not available now.')));
+    const viewsSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '👀'), h('b', null, 'Views')), h('a', { class: 'btn block', href: '#/views' }, 'See who looked at my profile'), h('a', { class: 'btn block', href: '#/me' }, '📷 Real photo and avatar'));
     const socialSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '🔗'), h('b', null, 'My social accounts')), h('p', { class: 'hint spark' }, 'Loading…'));
     API.socialGet().then((s) => {
       const f = (k, label, ph) => h('label', { class: 'f' }, label + ' · ' + (s.earn[k] || 0) + ' ⭐', h('input', { type: 'text', value: (s.socials || {})[k] || '', placeholder: ph, autocapitalize: 'none', 'data-k': k }));
@@ -564,6 +563,22 @@ window.CommunityInit = function (ui) {
   function join(code) { store.set('adate.ref', String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)); location.hash = API.session ? '#/' : '#/signup'; }
 
 
+
+  /** Views: everyone who opened my profile or liked me. Names are hidden until I pay 1 star; then I can write to them. */
+  async function viewsPage() {
+    if (!ME) await load();
+    page('#/views', h('p', { class: 'hint spark' }, 'Loading…'));
+    let d; try { d = await API.viewsFeed(); } catch (e) { return page('#/views', h('p', { class: 'hint' }, err(e))); }
+    const list = h('div', { class: 'stack' });
+    const write = async (p) => { const body = prompt('Say hi to ' + p.nick + ' (they will see it first and can accept)', 'Hi! 👋'); if (!body) return; try { await API.dmStart(p.id, body); toast('Sent ✓'); } catch (e) { toast(err(e), 'bad'); } };
+    const draw = () => list.replaceChildren(...(d.views.length ? d.views.map((v) => {
+      const what = (v.liked === 'boost' ? '🚀 boosted you' : v.liked === 'invite' ? '💜 liked you' : '') + (v.viewed && v.liked ? ' · ' : '') + (v.viewed ? '👀 viewed your profile' : '');
+      if (v.revealed) return h('div', { class: 'roomcard' }, avatar(v.avatar, v.nick, 44, v.frame, v.photo), h('span', { class: 'rc-t' }, h('b', null, v.nick + TICK(v.selfie_ok, v.role)), h('small', null, what + ' · ' + ui.ago(v.at))), h('button', { class: 'btn sm pri', type: 'button', onclick: () => write(v) }, '💬 Message'));
+      return h('div', { class: 'roomcard' }, h('span', { class: 'avatar blurav', style: 'width:44px;height:44px' }, '🙂'), h('span', { class: 'rc-t' }, h('b', null, 'Someone · ' + v.age_band + ' ' + (FLAG[v.country] || '')), h('small', null, what + ' · ' + ui.ago(v.at))), h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.viewReveal(v.id); ME.points = r.balance; Object.assign(v, r.person, { revealed: true }); draw(); } catch (e) { toast(err(e), 'bad'); } } }, '👁 See who · ' + d.price + ' ⭐'));
+    }) : [h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '👀'), h('p', { class: 'hint' }, 'Nobody yet. When people open your profile or like you in Swipe, they show up here.'))]));
+    draw();
+    page('#/views', h('div', { class: 'h2' }, '👀 Views'), h('p', { class: 'hint' }, d.today + ' today. Seeing who it is costs ' + d.price + ' ⭐, once. Then you can write to them.'), list);
+  }
   return function route(hash) {
     if (!API.enabled) return null;
     const s = API.session;
@@ -578,6 +593,7 @@ window.CommunityInit = function (ui) {
     if (hash === '#/match/online') return wrap(online);
     if (hash.startsWith('#/play/')) return wrap(() => match(hash.slice(7)));
     if (hash === '#/rooms') return wrap(rooms);
+    if (hash === '#/views') return wrap(viewsPage);
     if (hash.startsWith('#/room/')) return wrap(() => room(hash.slice(7)));
     if (hash === '#/dms') return wrap(dms);
     if (hash.startsWith('#/dm/')) return wrap(() => dm(hash.slice(5)));
