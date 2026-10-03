@@ -1,8 +1,8 @@
-# Oppa HUB 🐱💌
+# O HUB 🐱💌
 
 > A personal project: a small, smart idea with a lot of room to grow.
 
-Oppa HUB turns "will you go out with me?" into a little experience. Pick a vibe, add a name and a few stickers, and send a link. The other person says yes, picks a day, a time and a plan, and the answer comes back to you on WhatsApp and in your own inbox. The "No" button, of course, never wins.
+O HUB turns "will you go out with me?" into a little experience. Pick a vibe, add a name and a few stickers, and send a link. The other person says yes, picks a day, a time and a plan, and the answer comes back to you on WhatsApp and in your own inbox. The "No" button, of course, never wins.
 
 **Try it:** https://adate.vercel.app
 

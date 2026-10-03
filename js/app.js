@@ -386,7 +386,7 @@ function buildStage(cfg, opts) {
     const label = cfg.type === 'birthday' ? 'Bringing' : cfg.type === 'coffee' ? 'Order' : 'Plan';
     const when = state.date ? fmtDate(state.date) + (state.time ? ' · ' + fmtTime(state.time) : '') : '';
     if (state.sent) {
-      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(`*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${state.msg || ''}\n\n_Sent with Oppa HUB · ${location.host}_`)}` }, `Open WhatsApp again`) : null;
+      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(`*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${state.msg || ''}\n\n_Sent with O HUB · ${location.host}_`)}` }, `Open WhatsApp again`) : null;
       return [frameContent(cfg), h('h1', { class: 'title' }, 'Sent! 💌'), h('p', { class: 'sub2' }, cfg.from ? `${cfg.from} will see your answer very soon.` : 'Your answer is on its way.'), wa,
         h('a', { class: 'gbtn no', style: 'text-decoration:none;display:inline-block;margin-top:3cqw;font-size:.8em', href: location.pathname + '#/' }, 'Make your own invite')];
     }
@@ -410,7 +410,7 @@ function buildStage(cfg, opts) {
     const mine = waPicker(cfg.cc, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; capture(); });
     const contactBox = h('div', { class: 'stack cbox', style: 'margin-top:7cqw' }, h('b', null, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, needContact ? `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it. We save it as soon as you type it.` : 'Preview: she must add her own WhatsApp number here before she can send.'), mine);
     const waOn = !!(cfg.contact && cfg.waReply);
-    const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with Oppa HUB · ${location.host}_`;
+    const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with O HUB · ${location.host}_`;
     const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(waText(m))}`;
     const send = h('button', { class: 'gbtn', disabled: needContact && !me.contact }, waOn ? 'Send on WhatsApp' : 'Send to ' + (cfg.from || 'them') + ' 💌');
     sendBtn = send;
@@ -480,7 +480,7 @@ async function viewer(kind, data) {
 const ICON = { romantic: 'cat-love', friends: 'cat-happy', coffee: 'cat-coffee', birthday: 'cat-party', custom: 'sparkle' };
 const TONE = { romantic: 'c-rose', friends: 'c-sky', coffee: 'c-butter', birthday: 'c-lav', custom: 'c-mint' };
 function home() {
-  document.title = 'Oppa HUB – Make a cute invite';
+  document.title = 'O HUB – Make a cute invite';
   const draft = store.get('adate.draft', null);
   const cards = PRESET_ORDER.map((k) => {
     const p = PRESETS[k], c = h('button', { class: `card ${TONE[k]}` + (k === 'custom' ? ' wide' : ''), onclick: () => { store.set('adate.draft', newConfig(k, '')); store.set('adate.draftmeta', null); store.set('adate.step', 0); location.hash = '#/make'; } },
@@ -495,7 +495,7 @@ function home() {
   const stk = (id, st) => { const d = h('div', { class: 'stk', style: st }); d.innerHTML = svgIcon(id); return d; };
   $app.replaceChildren(h('div', { class: 'wrap' },
     notif,
-    h('div', { class: 'topbar' }, h('div', { class: 'brand' }, 'Oppa ', h('b', null, 'HUB')),
+    h('div', { class: 'topbar' }, h('div', { class: 'brand' }, h('b', null, 'HUB')),
       API.enabled ? (API.session ? h('a', { class: 'btn sm pri', href: '#/mine' }, 'Inbox ', badge) : [h('a', { class: 'btn sm', href: '#/login' }, 'Log in'), h('a', { class: 'btn sm pri', href: '#/signup' }, 'Sign up')]) : null),
     h('div', { class: 'hero' }, h('div', { class: 'stks' }, stk('cat-orange', 'animation-delay:-1s'), stk('cat-love', 'width:72px'), stk('cat-white', 'animation-delay:-2s')),
       h('h1', null, 'Create your private invite'), h('p', null, 'For your girlfriend, your boyfriend, a friend or your birthday. Add their name, pick a vibe, and send a link with a sneaky “No” button.')),
@@ -516,7 +516,7 @@ const REL = [['girlfriend', 'My girlfriend'], ['boyfriend', 'My boyfriend'], ['p
 const FX = [['shrink', 'Gets smaller'], ['dodge', 'Runs away'], ['shake', 'Shakes'], ['spin', 'Spins'], ['fade', 'Fades a bit'], ['none', 'Nothing']];
 
 function editor() {
-  document.title = 'Oppa HUB – Editor';
+  document.title = 'O HUB – Editor';
   let cfg = store.get('adate.draft', null);
   if (!cfg) { location.hash = '#/'; return; }
   cfg = sanitize(cfg);
@@ -740,12 +740,12 @@ function editor() {
           priv ? h('div', { class: 'note' }, h('b', null, 'Her answer lands in your inbox. '), 'Sign in any time to read it. A big card shows up when she answers.',
             h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: '#/mine' }, 'Open my inbox'),
               h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(priv)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy backup link (no login)'),
-              cfg.contact ? h('a', { class: 'btn sm', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + cfg.contact + '?text=' + encodeURIComponent('My Oppa HUB inbox: ' + location.href.split('#')[0] + '#/mine') }, 'Save it on my WhatsApp') : null)) : null,
+              cfg.contact ? h('a', { class: 'btn sm', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + cfg.contact + '?text=' + encodeURIComponent('My O HUB inbox: ' + location.href.split('#')[0] + '#/mine') }, 'Save it on my WhatsApp') : null)) : null,
           API.enabled ? h('button', { class: 'btn sm', onclick: () => publish(true) }, 'Create a brand-new link instead') : null].filter(Boolean));
       } catch (e) { out.replaceChildren(h('div', { class: 'note' }, 'Something went wrong: ' + e.message), h('button', { class: 'btn pri', onclick: () => publish(false) }, 'Try again')); }
     }
     const m = meta();
-    const ask = () => [acctBlock(), API.enabled ? h('label', { class: 'row', style: 'gap:10px;align-items:flex-start', for: 'consent' }, consent, h('span', { class: 'hint' }, 'I agree that Oppa HUB keeps this invite, my number and their answer so it can be delivered to me. ', h('a', { href: '#/privacy' }, 'Privacy'))) : null,
+    const ask = () => [acctBlock(), API.enabled ? h('label', { class: 'row', style: 'gap:10px;align-items:flex-start', for: 'consent' }, consent, h('span', { class: 'hint' }, 'I agree that O HUB keeps this invite, my number and their answer so it can be delivered to me. ', h('a', { href: '#/privacy' }, 'Privacy'))) : null,
       h('div', { class: 'note' }, 'On the last page ' + (cfg.to || 'they') + ' must add their own WhatsApp number (picked from their contacts when the phone allows it) before sending. You will see it in your inbox. Their Instagram is optional.'),
       h('p', { class: 'hint' }, 'Happy with it? Try the whole thing once, then create the link.'),
       h('button', { class: 'btn block', onclick: openPreview }, '▶ Try it like they will'),
@@ -774,7 +774,7 @@ function editor() {
   }
   const pv = h('div', { class: 'pvside' }, h('div', { class: 'row', style: 'justify-content:center' }, modeBtns.edit, modeBtns.play), screenRow, pvSide);
   $app.replaceChildren(h('div', { class: 'wiz' },
-    h('div', { class: 'head' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')),
+    h('div', { class: 'head' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, h('b', null, 'HUB')),
       h('button', { class: 'btn sm', onclick: () => { if (confirm('Start over? Your current invite will be cleared.')) { store.set('adate.draft', null); store.set('adate.draftmeta', null); location.hash = '#/'; } } }, 'Start over')), dots, title),
     h('div', { class: 'bodycol' }, body), pv),
     h('div', { class: 'bar' }, prev, pvBtn, next));
@@ -794,7 +794,7 @@ function phoneInputs(cc0) {
 }
 function authShell(title, ...kids) {
   $app.replaceChildren(h('div', { class: 'authwall' }, h('div', { class: 'wrap authwrap' },
-    h('div', { class: 'authlogo' }, window.OppaLogo ? window.OppaLogo(96) : null, h('b', null, 'Oppa ', h('i', null, 'HUB'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
+    h('div', { class: 'authlogo' }, window.OppaLogo ? window.OppaLogo(96) : null, h('b', null, h('i', null, 'HUB'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
     h('div', { class: 'panel stack authcard' }, h('h2', { style: 'margin:0' }, title), ...kids), footer())));
 }
 const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['🎬', 'Movies & series'], ['⚽', 'Football'], ['💪', 'Gym & fitness'], ['✈️', 'Travel'], ['🍳', 'Cooking'], ['🐶', 'Animals'], ['🎨', 'Art & drawing'], ['📷', 'Photography'], ['💻', 'Tech & coding'],
@@ -829,7 +829,7 @@ function pwField(placeholder, autocomplete, label) {
 }
 function login(mode) {
   mode = mode === 'signup' ? 'signup' : 'login';
-  document.title = 'Oppa HUB – ' + (mode === 'signup' ? 'Sign up' : 'Log in');
+  document.title = 'O HUB – ' + (mode === 'signup' ? 'Sign up' : 'Log in');
   const ph = phoneInputs('961'), msg = h('div'), pw = pwField(mode === 'signup' ? 'Create a password (6+ characters)' : 'Password', mode === 'signup' ? 'new-password' : 'current-password', mode === 'signup' ? 'Create a password (6+ characters)' : 'Your password');
   const pw2 = pwField('Type the password again', 'new-password', 'Type the password again');
   const Q = (API.questions && API.questions.length) ? API.questions : ['What is your pet’s name?'], qa = { q: Q[0], a: h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }), a2: h('input', { type: 'text', placeholder: 'Brand and model, e.g. iPhone 15', 'aria-label': 'Second answer' }), email: h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@gmail.com', 'aria-label': 'Email' }) };
@@ -856,9 +856,9 @@ function login(mode) {
   authShell(mode === 'signup' ? 'Create your account' : 'Welcome back', tabs,
     API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, msg, h('a', { href: '#/' }, '← Back'));
 }
-/** After signing in: name, number, birthday and interests. Needed once, before the Oppa HUB game. */
+/** After signing in: name, number, birthday and interests. Needed once, before the O HUB game. */
 function profile() {
-  document.title = 'Oppa HUB – Your profile';
+  document.title = 'O HUB – Your profile';
   if (!API.session) { location.hash = '#/login'; return; }
   const st = { first: '', last: '', d: '', m: '', y: '', interests: new Set(), email: '', q: (API.questions || [])[0] || 'What is your pet’s name?' }, U = {}, ph = phoneInputs('961'), pwP = pwField('Create a password (6+ characters)', 'new-password', 'Create a password (6+ characters)'), pwP2 = pwField('Type the password again', 'new-password', 'Type the password again'), ansA = h('input', { type: 'text', placeholder: 'Your answer', 'aria-label': 'Security answer' }), ansB = h('input', { type: 'text', placeholder: 'Brand and model, e.g. iPhone 15', 'aria-label': 'Second answer' }), msg = h('div'), host = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
   const draw = () => {
@@ -872,7 +872,7 @@ function profile() {
       const bd = st.y && st.m && st.d ? `${st.y}-${String(st.m).padStart(2, '0')}-${String(st.d).padStart(2, '0')}` : '';
       const age = bd ? Math.floor((Date.now() - new Date(bd + 'T00:00:00Z')) / 31557600000) : 0;
       const em = st.email.trim(), badEmail = !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em), needPw = !U.has_password, needRec = !U.has_recovery;
-      const bad = !st.first.trim() ? 'Add your first name.' : badEmail ? 'Write your email correctly.' : needPw && pwP.input.value.length < 6 ? 'Password needs at least 6 characters.' : needPw && pwP.input.value !== pwP2.input.value ? 'The two passwords are not the same.' : needRec && (ansA.value.trim().length < 2 || ansB.value.trim().length < 2) ? 'Answer both security questions.' : !st.last.trim() ? 'Add your last name.' : !ph.value ? 'Check your WhatsApp number.' : !bd || isNaN(new Date(bd)) ? 'Pick your birthday.' : age < 13 ? 'Oppa HUB is for ages 13 and up.' : !st.interests.size ? 'Pick at least one interest.' : '';
+      const bad = !st.first.trim() ? 'Add your first name.' : badEmail ? 'Write your email correctly.' : needPw && pwP.input.value.length < 6 ? 'Password needs at least 6 characters.' : needPw && pwP.input.value !== pwP2.input.value ? 'The two passwords are not the same.' : needRec && (ansA.value.trim().length < 2 || ansB.value.trim().length < 2) ? 'Answer both security questions.' : !st.last.trim() ? 'Add your last name.' : !ph.value ? 'Check your WhatsApp number.' : !bd || isNaN(new Date(bd)) ? 'Pick your birthday.' : age < 13 ? 'O HUB is for ages 13 and up.' : !st.interests.size ? 'Pick at least one interest.' : '';
       if (bad) return msg.replaceChildren(h('div', { class: 'note' }, bad));
       msg.replaceChildren(h('p', { class: 'hint spark' }, 'Saving…'));
       try { const r = await API.profileSet({ first_name: st.first.trim(), last_name: st.last.trim(), phone: ph.value, email: em, birthdate: bd, interests: [...st.interests], password: pwP.input.value, password2: pwP2.input.value, question: st.q, answer: ansA.value, answer2: ansB.value }); let cfgS = {}; try { cfgS = await API.publicSettings(); } catch (e) { /* optional */ } if (cfgS.owner_whatsapp && !(r.user && r.user.verified)) { location.hash = '#/verify'; return; } goAfterAuth(); }
@@ -907,7 +907,7 @@ function profile() {
 
 /** First-time welcome: one question per screen (name, nickname, avatar, birthday, interests, contact). */
 function welcome() {
-  document.title = 'Oppa HUB – Welcome';
+  document.title = 'O HUB – Welcome';
   if (!API.session) { location.hash = '#/login'; return; }
   const U = {}, ph = phoneInputs('961'), pw1 = pwField('Create a password (6+ characters)', 'new-password', 'Create a password (6+ characters)'), pw2 = pwField('Type the password again', 'new-password', 'Type the password again');
   const st = { step: 0, first: '', last: '', nick: '', avatar: '', gender: '', meet: 'both', langs: new Set(['English']), d: '', m: '', y: '', interests: new Set(), email: '', q: (API.questions || [])[0] || 'What is your pet’s name?', saved: false };
@@ -923,7 +923,7 @@ function welcome() {
       body: () => [h('input', { type: 'text', placeholder: 'Nickname', value: st.nick, maxlength: 20, autocomplete: 'off', 'aria-label': 'Nickname', oninput: (e) => { st.nick = e.target.value; } })] },
     { title: 'Choose your avatar', hint: 'Pick an animal. A real photo is possible later for 25 coins a month.', check: () => !st.avatar ? 'Pick an avatar.' : '',
       body: () => [h('div', { class: 'avs wide' }, (window.ANIMALS || []).map(([k, e]) => h('button', { type: 'button', class: 'avbtn' + (st.avatar === 'animal:' + k ? ' on' : ''), 'aria-label': k, onclick: () => { st.avatar = 'animal:' + k; draw(); } }, e)))] },
-    { title: 'When is your birthday?', hint: 'Your full birthday stays private. We use it to keep you in the right age group.', check: () => { const b = bdate(); return !b || isNaN(new Date(b)) ? 'Pick your birthday.' : ageNow() < 13 ? 'Oppa HUB is for ages 13 and up.' : ''; },
+    { title: 'When is your birthday?', hint: 'Your full birthday stays private. We use it to keep you in the right age group.', check: () => { const b = bdate(); return !b || isNaN(new Date(b)) ? 'Pick your birthday.' : ageNow() < 13 ? 'O HUB is for ages 13 and up.' : ''; },
       body: () => { const sel = (key, opts, p0) => h('select', { 'aria-label': p0, onchange: (e) => { st[key] = e.target.value; } }, h('option', { value: '' }, p0), opts.map(([v, l]) => h('option', { value: v, selected: String(st[key]) === String(v) }, l)));
         return [h('div', { class: 'fieldrow' }, sel('d', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]), 'Day'), sel('m', MONTHS.map((n, i) => [i + 1, n]), 'Month'), sel('y', Array.from({ length: 88 }, (_, i) => [yr - 13 - i, String(yr - 13 - i)]), 'Year'))]; } },
     { title: 'What are you into?', hint: 'Pick up to 10. We use them to match you with people.', check: () => !st.interests.size ? 'Pick at least one interest.' : '',
@@ -984,7 +984,7 @@ function toggleMode() { const order = ['auto', 'light', 'dark'], nx = order[(ord
 if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (modePref() === 'auto') applyMode(); }); } catch (e) { /* old browser */ } }
 /** Get your account back: your email + the answers to your two questions. */
 function recover() {
-  document.title = 'Oppa HUB – Get your account back';
+  document.title = 'O HUB – Get your account back';
   const em = h('input', { type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@gmail.com', 'aria-label': 'Email' }), box = h('div', { class: 'stack' });
   async function start() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em.value.trim())) return box.replaceChildren(h('div', { class: 'note' }, 'Write your email correctly.'));
@@ -1002,20 +1002,20 @@ function recover() {
 }
 /** After the profile: send a code on WhatsApp so the owner can check the number is real. */
 async function verifyPage() {
-  document.title = 'Oppa HUB – Verify your number';
+  document.title = 'O HUB – Verify your number';
   if (!API.session) { location.hash = '#/login'; return; }
   const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
   authShell('✅ Verify your number', box);
   let u = {}, st = {};
   try { u = (await API.me()).user || {}; st = await API.publicSettings(); } catch (e) { /* show what we can */ }
   const code = u.verify_code || '';
-  box.replaceChildren(h('p', null, 'To prove this number is yours, send this code to us on WhatsApp. The owner checks it personally within a few days. You can use Oppa HUB while you wait.'),
+  box.replaceChildren(h('p', null, 'To prove this number is yours, send this code to us on WhatsApp. The owner checks it personally within a few days. You can use O HUB while you wait.'),
     h('div', { class: 'note', style: 'font-size:1.5rem;text-align:center;letter-spacing:.25em;font-weight:700' }, code || '…'),
-    st.owner_whatsapp && code ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + st.owner_whatsapp + '?text=' + encodeURIComponent('Oppa HUB verify ' + code) }, 'Send the code on WhatsApp') : null,
+    st.owner_whatsapp && code ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + st.owner_whatsapp + '?text=' + encodeURIComponent('O HUB verify ' + code) }, 'Send the code on WhatsApp') : null,
     h('button', { class: 'btn block', onclick: () => goAfterAuth() }, 'Continue'));
 }
 function recoverPhone() {
-  document.title = 'Oppa HUB – Reset password';
+  document.title = 'O HUB – Reset password';
   const ph = phoneInputs('961'), box = h('div', { class: 'stack' });
   async function askQuestion() {
     if (!ph.value) return box.replaceChildren(h('div', { class: 'note' }, 'Check your number first.'));
@@ -1098,7 +1098,7 @@ async function pushControl() { // "tell me on my phone when they open / answer"
   if (!API.vapid) return null;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window))
-    return h('div', { class: 'note' }, ios && !standalone ? 'To get phone notifications on iPhone: tap Share, then “Add to Home Screen”, open Oppa HUB from your home screen, and come back here.' : 'This browser can’t show phone notifications. Try Chrome on Android, or add Oppa HUB to your iPhone home screen.');
+    return h('div', { class: 'note' }, ios && !standalone ? 'To get phone notifications on iPhone: tap Share, then “Add to Home Screen”, open O HUB from your home screen, and come back here.' : 'This browser can’t show phone notifications. Try Chrome on Android, or add O HUB to your iPhone home screen.');
   const box = h('div');
   async function draw() {
     const reg = await navigator.serviceWorker.getRegistration('/'), sub = reg && await reg.pushManager.getSubscription();
@@ -1118,11 +1118,11 @@ async function pushControl() { // "tell me on my phone when they open / answer"
   await draw(); return box;
 }
 async function inbox() { // logged-in inbox: new answers first as big cards, then all invites
-  document.title = 'Oppa HUB – My inbox';
+  document.title = 'O HUB – My inbox';
   if (!API.enabled) { $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'panel' }, h('h2', null, 'Inbox is off in demo mode'), h('p', null, 'The inbox needs the backend.'), h('a', { class: 'btn', href: '#/' }, 'Back')))); return; }
   if (!API.session) { location.hash = '#/login'; return; }
   const top = h('div'), list = h('div'), who = h('span', { class: 'hint' }), push = h('div', { style: 'margin:8px 0' });
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')),
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, h('b', null, 'HUB')),
     h('button', { class: 'btn sm', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')),
     h('div', { class: 'h2' }, 'My inbox'), who, push, top, list, h('p', { class: 'hint', style: 'margin-top:14px' }, 'This page updates by itself.'), footer()));
   pushControl().then((n) => n && push.replaceChildren(n)).catch(() => {});
@@ -1143,27 +1143,27 @@ async function inbox() { // logged-in inbox: new answers first as big cards, the
 function dash(arg) { // legacy private link (works without login)
   const [id, token] = String(arg).split('.');
   if (!/^[a-z0-9]{6,16}$/.test(id || '') || !/^[a-z0-9]{16,40}$/.test(token || '')) return brokenLink();
-  document.title = 'Oppa HUB – Invite';
+  document.title = 'O HUB – Invite';
   const card = inviteCard({ id, token, to: 'your invite', type: 'custom' }, (r) => API.status(r.id, r.token));
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB'))), h('div', { class: 'h2' }, 'Your invite'), card, footer()));
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, h('b', null, 'HUB'))), h('div', { class: 'h2' }, 'Your invite'), card, footer()));
   clearInterval(pollTimer); pollTimer = setInterval(() => card.reload(), 15000);
 }
 
 /* ------------------------------------------------------------------ privacy + owner dashboard */
 function privacy() {
-  document.title = 'Oppa HUB – Privacy';
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB'))),
+  document.title = 'O HUB – Privacy';
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, h('b', null, 'HUB'))),
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
-      h('p', null, 'Oppa HUB is a free service. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
+      h('p', null, 'O HUB is a free service. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
       h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The number or Instagram typed on the last page is saved as soon as it is typed, even if the answer is never sent. The site owner can block accounts that look fake. The invite page says so.'),
       h('p', null, 'Verified by selfie: if you choose to send a selfie, only the site owner looks at it, once, to check you are a real person. It is erased as soon as the owner decides (or after 7 days). It is never shown to anyone. Only the result (a tick) is kept.'),
       h('p', null, 'In the community, chat messages are text only and are deleted after 3 days (or when a room passes 1000 messages). Reports are kept 7 days so they can be reviewed. Points are kept. You can block anyone and report any message.'),
-      h('p', null, 'Payments: you pay for points on Whish yourself. Oppa HUB never asks for, sees or stores your card or bank details. We keep only the order, its amount and the reference you type, so the owner can check it and add your points.'),
+      h('p', null, 'Payments: you pay for points on Whish yourself. O HUB never asks for, sees or stores your card or bank details. We keep only the order, its amount and the reference you type, so the owner can check it and add your points.'),
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
       h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
 }
 async function admin() {
-  document.title = 'Oppa HUB – Owner';
+  document.title = 'O HUB – Owner';
   const key0 = (() => { try { return sessionStorage.getItem('adate.key') || localStorage.getItem('adate.keyR') || ''; } catch (e) { return ''; } })();
   const rem = h('input', { type: 'checkbox', 'aria-label': 'Remember on this phone' }); try { rem.checked = !!localStorage.getItem('adate.keyR'); } catch (e) { /* ok */ }
   const out = h('div'), inp = h('input', { type: 'password', placeholder: 'Owner key', value: key0, autocomplete: 'off' });
@@ -1199,7 +1199,7 @@ async function admin() {
           });
           const act = async (u, op, ask) => { const why = op === 'block' ? prompt('Why block ' + name(u) + '? (optional note)', 'fake') : ''; if (op === 'block' && why === null) return; if (op !== 'block' && ask && !confirm(ask)) return; try { await API.adminMark(key, u.id, op, why || ''); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
           const csvP = () => { const cols = ['role', 'name', 'whatsapp', 'email', 'instagram', 'status']; const body = rows.map((x) => [x.kind, x.name, x.phone, x.email, x.ig, x.kind === 'sender' ? (x.u.blocked ? 'blocked' : x.u.verified ? 'verified' : 'unchecked') : x.note].map(q).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-people.csv' }).click(); };
-          const hello = (x) => 'Hi ' + (String(x.name).split(' ')[0] || '') + ', this is the Oppa HUB team. We are checking that your profile is real. Can you reply to confirm?';
+          const hello = (x) => 'Hi ' + (String(x.name).split(' ')[0] || '') + ', this is the O HUB team. We are checking that your profile is real. Can you reply to confirm?';
           return [h('p', { class: 'hint' }, `${rows.length} people: message each one on WhatsApp to check they are real. If someone is fake, tap Block: they can no longer sign in or send invites.`),
             h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvP }, '⬇ Export people CSV')), note,
             h('div', { class: 'tscroll' }, h('table', { class: 'ptable' }, h('thead', null, h('tr', null, ['Role', 'Name', 'WhatsApp', 'Email', 'Instagram', 'Status', ''].map((c) => h('th', null, c)))),
@@ -1210,7 +1210,7 @@ async function admin() {
                 h('td', null, x.kind === 'sender' ? (x.u.blocked ? 'blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : 'unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
                 h('td', { class: 'acts' }, x.phone ? h('a', { class: 'btn sm', href: 'https://wa.me/' + x.phone + '?text=' + encodeURIComponent(hello(x)), target: '_blank', rel: 'noopener' }, '💬') : null,
                   x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, 'Block'),
-                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : 'Real') : null, h('button', { class: 'btn sm', onclick: async () => { const r = prompt('Role for ' + name(x.u) + ': type agent, host, bot, or none', x.u.role || 'none'); if (r === null) return; const op = { mod: 'role_mod', agent: 'role_agent', host: 'role_host', bot: 'role_bot', none: 'role_none' }[r.trim().toLowerCase()]; if (!op) return alert('Type mod, agent, host, bot or none'); try { await API.adminMark(key, x.u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Role'), h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + name(x.u) + ' (use a minus to take points away; leave 0 for a message only)', '100'); if (pts === null) return; const msg = prompt('Message from the Oppa HUB team (optional)', 'You are great! Thank you for helping the community.'); if (msg === null) return; try { const r = await API.adminGift(key, x.u.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Gift'), x.u.has_photo ? h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'photo_off', 'Remove the real photo of ' + x.name + '?') }, 'remove photo') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? 'admin' : 'admin') : null] : null))))))];
+                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : 'Real') : null, h('button', { class: 'btn sm', onclick: async () => { const r = prompt('Role for ' + name(x.u) + ': type agent, host, bot, or none', x.u.role || 'none'); if (r === null) return; const op = { mod: 'role_mod', agent: 'role_agent', host: 'role_host', bot: 'role_bot', none: 'role_none' }[r.trim().toLowerCase()]; if (!op) return alert('Type mod, agent, host, bot or none'); try { await API.adminMark(key, x.u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Role'), h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + name(x.u) + ' (use a minus to take points away; leave 0 for a message only)', '100'); if (pts === null) return; const msg = prompt('Message from the O HUB team (optional)', 'You are great! Thank you for helping the community.'); if (msg === null) return; try { const r = await API.adminGift(key, x.u.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Gift'), x.u.has_photo ? h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'photo_off', 'Remove the real photo of ' + x.name + '?') }, 'remove photo') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? 'admin' : 'admin') : null] : null))))))];
         },
         reports: () => {
           const t = d.reports || [];
@@ -1218,7 +1218,7 @@ async function admin() {
           return [h('p', { class: 'hint' }, 'Three different people reporting the same member in 24 hours mutes them for 24 hours and sends you a notification. Review here: unmute, dismiss, or block the account.'), note,
             ...(t.length ? t.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🚩 ' + (u.nick || u.name || 'Member')), h('span', { class: 'badge ' + (u.muted_until && new Date(u.muted_until) > new Date() ? 'warn' : '') }, u.muted_until && new Date(u.muted_until) > new Date() ? 'muted' : u.today + ' in 24h')),
               h('div', { class: 'kv' }, h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Reports: '), u.today + ' people in 24h · ' + u.week + ' this week'), ...(u.bodies || []).map((x) => h('div', { class: 'bubble' }, x))),
-              h('div', { class: 'row' }, h('a', { class: 'btn sm', href: 'https://wa.me/' + u.phone + '?text=' + encodeURIComponent('Hi, this is the Oppa HUB team. Several people reported your messages. Can we talk?'), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+              h('div', { class: 'row' }, h('a', { class: 'btn sm', href: 'https://wa.me/' + u.phone + '?text=' + encodeURIComponent('Hi, this is the O HUB team. Several people reported your messages. Can we talk?'), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
                 h('button', { class: 'btn sm', onclick: () => act(u, 'unmute') }, 'Unmute'), h('button', { class: 'btn sm', onclick: () => act(u, 'dismiss') }, 'Dismiss reports'),
                 h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm('Block this account?')) return; try { await API.adminMark(key, u.id, 'block', 'reported'); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Block')))) : [h('p', { class: 'hint' }, 'No reports in the last 7 days. 🎉')])];
         },
@@ -1291,7 +1291,7 @@ async function admin() {
           if (perm === 'default') pushControl().then((n) => n && slot.replaceChildren(n)).catch(() => {});
           const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
           return h('div', { class: 'note stack' }, h('b', null, 'Alerts on your phone'),
-            h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : 'Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, and open Oppa HUB from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications are on.' : perm === 'denied' ? '❌ Notifications are blocked: allow them in your phone settings for this site.' : perm === 'default' ? 'Notifications are not on yet: tap the button below.' : 'This browser cannot show notifications.')),
+            h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : 'Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, and open O HUB from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications are on.' : perm === 'denied' ? '❌ Notifications are blocked: allow them in your phone settings for this site.' : perm === 'default' ? 'Notifications are not on yet: tap the button below.' : 'This browser cannot show notifications.')),
             slot, h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.adminTestPush(inp.value.trim()); res.textContent = r.devices ? 'Sent to ' + r.devices + ' device(s). Did it arrive?' : 'No phone is registered yet. Log in with your own account on this phone, turn on notifications, then try again.'; } catch (e) { res.textContent = e.message; } } }, 'Send me a test alert'), res,
             h('small', { class: 'hint' }, 'You get an alert for: a payment waiting, a selfie waiting, a new report, a new member, and messages to the team.'));
         })(),
@@ -1300,7 +1300,7 @@ async function admin() {
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
   inp.onkeydown = (e) => { if (e.key === 'Enter') load(); };
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('span', { class: 'pill' }, 'Owner')),
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, h('b', null, 'HUB')), h('span', { class: 'pill' }, 'Owner')),
     h('div', { class: 'h2' }, 'Owner dashboard'), h('div', { class: 'fieldrow' }, inp, h('button', { class: 'btn pri', onclick: load }, 'Open')), h('label', { class: 'row' }, rem, h('span', { class: 'hint' }, 'Remember the key on this phone (only on your own phone)')), h('div', { style: 'height:12px' }), out));
   if (key0) load();
 }

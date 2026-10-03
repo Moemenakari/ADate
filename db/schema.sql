@@ -1,4 +1,4 @@
--- Oppa HUB on Neon (Postgres). Applied once; the API in /api talks to it with a server-side connection string.
+-- O HUB on Neon (Postgres). Applied once; the API in /api talks to it with a server-side connection string.
 create table if not exists invites (
   id text primary key check (id ~ '^[a-z0-9]{6,16}$'),
   token_hash text not null,
@@ -59,7 +59,7 @@ alter table invites add column if not exists last_notified_at timestamptz;
 alter table invites add column if not exists to_contact text;
 alter table responses add column if not exists receiver_ig text;
 
--- Sign in with Google, then a profile (name, number, birthday, interests) before the Oppa HUB game.
+-- Sign in with Google, then a profile (name, number, birthday, interests) before the O HUB game.
 alter table users alter column phone drop not null;
 alter table users alter column pass_salt drop not null;
 alter table users alter column pass_hash drop not null;
@@ -314,7 +314,7 @@ create table if not exists swipes (from_user bigint not null references users(id
 
 create table if not exists match_games (match_id bigint not null references matches(id) on delete cascade, round int not null, type text not null, state jsonb not null, primary key (match_id, round));
 
--- ===== Messages from the Oppa HUB team (with optional gift points) =====
+-- ===== Messages from the O HUB team (with optional gift points) =====
 create table if not exists notices (id bigserial primary key, user_id bigint not null references users(id) on delete cascade, body text not null, points int not null default 0, read boolean not null default false, created_at timestamptz not null default now());
 create index if not exists notices_user_idx on notices (user_id, read, id);
 
@@ -416,7 +416,7 @@ create table if not exists admin_subs (endpoint text primary key, p256dh text no
 alter table orders add column if not exists points int;
 update users set is_admin = false where is_admin;
 insert into users (phone, pass_salt, pass_hash, nick, role, profile_done, gender, meet, birthdate, country, interests, avatar, last_seen)
-  select 'team-account', 'x', 'x', 'Oppa Team', 'team', false, 'm', 'both', '2008-01-01', 'LB', array['support'], 'animal:cat', now() where not exists (select 1 from users where phone = 'team-account');
+  select 'team-account', 'x', 'x', 'O HUB Team', 'team', false, 'm', 'both', '2008-01-01', 'LB', array['support'], 'animal:cat', now() where not exists (select 1 from users where phone = 'team-account');
 update users set profile_done = false where phone = 'team-account';
 
 create table if not exists swipe_views (viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, day date not null, primary key (viewer, target, day));

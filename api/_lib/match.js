@@ -232,7 +232,7 @@ async function handle(action, ctx) {
       const bal = (await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${u.id}`)[0].n; if (bal < 5) throw bad(`A boost costs 5 points. You have ${bal}.`, 402);
       await sql`insert into points_ledger (user_id, delta, reason, ref) values (${u.id}, -5, 'boost', ${String(T.id)})`; await sql`update dm_threads set boosted = true where id = ${T.id}`; boosted = true;
     }
-    await pushUsers(sql, [to], boosted ? '🚀 ' + (u.nick || 'Someone') + ' sent you a boosted message' : '💜 ' + (u.nick || 'Someone') + ' invited you', boosted ? body.slice(0, 80) : 'Open Oppa HUB to see who it is.', '/#/dms');
+    await pushUsers(sql, [to], boosted ? '🚀 ' + (u.nick || 'Someone') + ' sent you a boosted message' : '💜 ' + (u.nick || 'Someone') + ' invited you', boosted ? body.slice(0, 80) : 'Open O HUB to see who it is.', '/#/dms');
     return out({ ok: true, state: T.status === 'open' || theyInvited ? 'friends' : 'sent', thread: T.id, boosted });
   }
   if (action === 'discover_report') {
