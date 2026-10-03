@@ -381,3 +381,9 @@ insert into places (name, kind, lat, lng) select v.n, v.k, v.a, v.b from (values
   ('Schools of Batroun','area',34.2553,35.6586), ('Schools of Akkar','area',34.5481,36.0783), ('Schools of Minieh-Danniyeh','area',34.4592,35.9433),
   ('Schools of Bcharre','area',34.2500,36.0097), ('Universities of the North','area',34.3667,35.7333)) as v(n,k,a,b)
   where not exists (select 1 from places p where p.name = v.n);
+
+-- ===== Check-ins, reviews and place suggestions =====
+alter table places add column if not exists suggested_by bigint references users(id) on delete set null;
+create table if not exists place_checkins (id bigserial primary key, user_id bigint not null references users(id) on delete cascade, place_id bigint not null references places(id) on delete cascade, created_at timestamptz not null default now());
+create index if not exists place_checkins_idx on place_checkins (place_id, user_id, created_at desc);
+create table if not exists place_reviews (place_id bigint not null references places(id) on delete cascade, user_id bigint not null references users(id) on delete cascade, rating int not null check (rating between 1 and 5), body text not null default '', created_at timestamptz not null default now(), primary key (place_id, user_id));

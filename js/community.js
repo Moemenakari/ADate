@@ -75,7 +75,7 @@ window.CommunityInit = function (ui) {
       d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null,
       h('div', { class: 'h2' }, 'Games'),
       h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, '💌 Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, '🎲 Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))),
-      h('a', { class: 'gamecard c2', href: '#/map' }, h('b', null, '🗺️ Schools map'), h('small', null, 'Find your school, see who is most active')),
+      h('a', { class: 'gamecard c2', href: '#/map' }, h('b', null, '🗺️ Places map'), h('small', null, 'Check in, earn points, invite friends')),
       mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : null,
       h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms'),
       h('a', { class: 'gamecard c3', href: '#/points' }, h('b', null, '🎁 Invite a friend, get 5 points'), h('small', null, 'Share your link. You earn when they send their first message.')));
@@ -538,25 +538,44 @@ window.CommunityInit = function (ui) {
     const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.append(css);
     const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; sc.onload = ok; sc.onerror = () => no(new Error('The map could not load. Check your connection.')); document.head.append(sc);
   });
+  const KIND = { school: ['🏫', 'School'], uni: ['🎓', 'University'], area: ['🏫', 'Area'], resort: ['🏖️', 'Resort'], shop: ['🛍️', 'Shop'], food: ['🍔', 'Restaurant'], cafe: ['☕', 'Café'], park: ['🌳', 'Park'], place: ['📍', 'Place'] };
+  const stars = (n) => '★★★★★'.slice(0, Math.round(n)) + '☆☆☆☆☆'.slice(0, 5 - Math.round(n));
+  const whereAmI = () => new Promise((ok, no) => { if (!navigator.geolocation) return no(new Error('Your phone cannot share its location')); navigator.geolocation.getCurrentPosition((p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude }), () => no(new Error('Turn on location for this site to do that. We never save where you are.')), { enableHighAccuracy: true, timeout: 12000 }); });
   async function mapPage() {
     if (!ME) await load();
-    const sheet = h('div', { class: 'mapsheet' }), mapEl = h('div', { class: 'mapbox', role: 'application', 'aria-label': 'Schools map' });
-    page('#/map', h('div', { class: 'h2' }, '🗺️ Schools map'), h('p', { class: 'hint' }, 'Tap a school to see who is most active there and to join it. We show only schools and areas, never where a person is.'), mapEl, sheet);
+    const sheet = h('div', { class: 'mapsheet' }), mapEl = h('div', { class: 'mapbox', role: 'application', 'aria-label': 'Places map' });
+    const suggestBtn = h('button', { class: 'btn block', type: 'button' }, '➕ Suggest a place');
+    page('#/map', h('div', { class: 'h2' }, '🗺️ Places map'), h('p', { class: 'hint' }, 'Schools, resorts, shops, cafés. Tap a place, check in when you are there to earn a point, rate it and invite your friends. We never save or show where you are.'), mapEl, suggestBtn, sheet);
     let d; try { [d] = await Promise.all([API.placesList(), loadLeaflet()]); } catch (e) { return mapEl.replaceChildren(h('p', { class: 'hint' }, err(e))); }
     const L = window.L, map = L.map(mapEl, { zoomControl: true }).setView([34.40, 35.88], 9);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
-    const icon = (p) => L.divIcon({ className: 'pin' + (String(p.id) === d.mine ? ' mine' : ''), html: '<span>' + (p.kind === 'uni' ? '🎓' : p.kind === 'place' ? '📍' : '🏫') + '</span><b>' + p.members + '</b>', iconSize: [44, 44], iconAnchor: [22, 22] });
+    const icon = (p) => L.divIcon({ className: 'pin' + (String(p.id) === d.mine ? ' mine' : ''), html: '<span>' + (KIND[p.kind] || KIND.place)[0] + '</span><b>' + p.members + '</b>', iconSize: [44, 44], iconAnchor: [22, 22] });
     const open = async (p) => {
       sheet.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
       try {
-        const v = await API.placeView(p.id);
-        sheet.replaceChildren(h('div', { class: 'h2' }, (v.place.kind === 'uni' ? '🎓 ' : '🏫 ') + v.place.name), h('small', { class: 'hint' }, v.members + ' members'),
-          h('button', { class: 'btn block ' + (v.mine ? '' : 'pri'), onclick: async () => { try { await API.placeJoin(v.mine ? null : p.id); d.mine = v.mine ? null : String(p.id); toast(v.mine ? 'You left ' + v.place.name : 'You joined ' + v.place.name + ' ✓'); open(p); } catch (e) { toast(err(e), 'bad'); } } }, v.mine ? 'Leave' : '➕ This is my school'),
-          h('b', null, '🏆 Most active this week'), ...(v.top.length ? v.top.map((t) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, '#' + t.rank), avatar(t.avatar, t.nick, 36, t.frame), h('span', { class: 'rc-t' }, h('b', null, t.nick + (t.me ? ' (you)' : '')), h('small', null, t.score + ' messages')))) : [h('p', { class: 'hint' }, 'Nobody yet. Be the first!')]));
+        const v = await API.placeView(p.id), k = KIND[v.place.kind] || KIND.place;
+        const rev = { r: v.my_review ? v.my_review.rating : 0 }, rtxt = h('input', { type: 'text', maxlength: 200, placeholder: 'Say something about it (optional)', 'aria-label': 'Your feedback', value: v.my_review ? v.my_review.body : '' });
+        const starRow = h('div', { class: 'row' }, [1, 2, 3, 4, 5].map((n) => h('button', { class: 'btn sm' + (rev.r >= n ? ' pri' : ''), type: 'button', 'aria-label': n + ' stars', onclick: (e) => { rev.r = n; [...e.target.parentNode.children].forEach((x, i) => x.classList.toggle('pri', i < n)); } }, '★')));
+        const friendBox = h('div', { class: 'stack' });
+        const invite = h('button', { class: 'btn block', type: 'button', onclick: async () => { try { const f = (await API.placeFriends()).friends; if (!f.length) return toast('Add friends in chats first', 'bad'); const sel = new Set(); friendBox.replaceChildren(h('b', null, 'Pick up to 5 friends'), ...f.slice(0, 30).map((x) => h('label', { class: 'row' }, h('input', { type: 'checkbox', onchange: (e) => { if (e.target.checked) sel.add(x.thread); else sel.delete(x.thread); } }), h('span', null, x.nick))), h('button', { class: 'btn pri block', onclick: async () => { try { const r = await API.placeInvite(p.id, [...sel].slice(0, 5)); toast(r.sent ? 'Invitation sent ✓' : 'Already invited today'); friendBox.replaceChildren(); } catch (e) { toast(err(e), 'bad'); } } }, '📨 Send invitation')); } catch (e) { toast(err(e), 'bad'); } } }, '📨 Invite friends here');
+        sheet.replaceChildren(h('div', { class: 'h2' }, k[0] + ' ' + v.place.name), h('small', { class: 'hint' }, k[1] + ' · ' + v.visits + ' visited · ' + v.members + ' members' + (v.rating ? ' · ' + stars(v.rating) + ' ' + v.rating + ' (' + v.rating_n + ')' : '')),
+          h('button', { class: 'btn pri block', type: 'button', onclick: async () => { try { const g = await whereAmI(), r = await API.placeCheckin(p.id, g.lat, g.lng); toast(r.points ? "You're here! +1 point ⭐" : (r.message || 'Checked in')); open(p); } catch (e) { toast(err(e), 'bad'); } } }, '📍 I am here (+1 ⭐)'),
+          invite, friendBox,
+          h('button', { class: 'btn block ' + (v.mine ? '' : ''), type: 'button', onclick: async () => { try { await API.placeJoin(v.mine ? null : p.id); d.mine = v.mine ? null : String(p.id); toast(v.mine ? 'Done' : 'Saved as my place ✓'); open(p); } catch (e) { toast(err(e), 'bad'); } } }, v.mine ? '✖ Not my place' : '⭐ This is my place'),
+          v.been ? h('div', { class: 'stack' }, h('b', null, 'Your feedback'), starRow, rtxt, h('button', { class: 'btn block', type: 'button', onclick: async () => { try { await API.placeReview(p.id, rev.r, rtxt.value); toast('Thanks for your feedback ✓'); open(p); } catch (e) { toast(err(e), 'bad'); } } }, 'Send feedback')) : h('small', { class: 'hint' }, 'Check in here to leave feedback.'),
+          h('b', null, '💬 Feedback'), ...(v.reviews.length ? v.reviews.map((r) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-t' }, h('b', null, stars(r.rating) + '  ' + r.nick), h('small', null, r.body || '')))) : [h('p', { class: 'hint' }, 'No feedback yet.')]),
+          h('b', null, '🏆 Most active here this week'), ...(v.top.length ? v.top.map((t) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, '#' + t.rank), avatar(t.avatar, t.nick, 36, t.frame), h('span', { class: 'rc-t' }, h('b', null, t.nick + (t.me ? ' (you)' : '')), h('small', null, t.score + ' messages')))) : [h('p', { class: 'hint' }, 'Nobody yet.')]));
         sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } catch (e) { sheet.replaceChildren(h('p', { class: 'hint' }, err(e))); }
     };
     d.places.forEach((p) => L.marker([p.lat, p.lng], { icon: icon(p), title: p.name }).addTo(map).on('click', () => open(p)));
+    suggestBtn.onclick = async () => {
+      try {
+        const g = await whereAmI(); const name = prompt('Name of the place you are at'); if (!name) return;
+        const kind = (prompt('Type: school, uni, resort, shop, food, cafe, park or place', 'place') || 'place').trim().toLowerCase();
+        await API.placeSuggest({ name, kind, lat: g.lat, lng: g.lng }); toast('Thanks! It will show up once the team approves it ✓');
+      } catch (e) { toast(err(e), 'bad'); }
+    };
     if (d.mine) { const m = d.places.find((p) => String(p.id) === d.mine); if (m) { map.setView([m.lat, m.lng], 11); open(m); } }
   }
   return function route(hash) {

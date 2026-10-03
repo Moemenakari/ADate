@@ -283,6 +283,58 @@ async function handle(action, ctx) {
       if (!r.length) throw bad('Come back tomorrow for the next one', 409);
       return out({ ok: true, prize, balance: await balanceOf(sql, u.id) });
     }
+    case 'place_checkin': { // "I am here": 1 point, only when the phone really is close. Where the person is is never stored.
+      const u = await need(), id = idNum(b.id), la = Number(b.lat), lo = Number(b.lng);
+      const p = (await sql`select id, name, lat, lng from places where id = ${id} and active`)[0]; if (!p) throw bad('Not found', 404);
+      if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) throw bad('Turn on your location to check in', 400);
+      const R = 6371000, rad = (x) => x * Math.PI / 180, dLa = rad(p.lat - la), dLo = rad(p.lng - lo), a = Math.sin(dLa / 2) ** 2 + Math.cos(rad(la)) * Math.cos(rad(p.lat)) * Math.sin(dLo / 2) ** 2, dist = 2 * R * Math.asin(Math.sqrt(a));
+      if (dist > 500) throw bad('You are too far from ' + p.name + '. Check in when you get there.', 403);
+      const again = await sql`select 1 from place_checkins where user_id = ${u.id} and place_id = ${id} and created_at > now() - interval '24 hours' limit 1`;
+      if (again.length) return out({ ok: true, points: 0, message: 'Already checked in today' });
+      await sql`insert into place_checkins (user_id, place_id) values (${u.id}, ${id})`;
+      const day = (await sql`select count(*)::int as n from points_ledger where user_id = ${u.id} and reason = 'checkin' and created_at >= date_trunc('day', now())`)[0].n;
+      if (day >= 3) return out({ ok: true, points: 0, message: 'Checked in. You earn points for 3 places a day.' });
+      await sql`insert into points_ledger (user_id, delta, reason, ref) values (${u.id}, 1, 'checkin', ${String(id)})`;
+      return out({ ok: true, points: 1, balance: await balanceOf(sql, u.id) });
+    }
+    case 'place_review': { // only people who checked in can rate
+      const u = await need(), id = idNum(b.id), rating = Math.round(Number(b.rating));
+      if (!(rating >= 1 && rating <= 5)) throw bad('Pick 1 to 5 stars');
+      if (!(await sql`select 1 from place_checkins where place_id = ${id} and user_id = ${u.id} limit 1`).length) throw bad('Check in at this place first', 403);
+      const text = String(b.body || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (text) { const why = screenText(text, 200); if (why) throw bad(why); }
+      await sql`insert into place_reviews (place_id, user_id, rating, body) values (${id}, ${u.id}, ${rating}, ${text}) on conflict (place_id, user_id) do update set rating = excluded.rating, body = excluded.body, created_at = now()`;
+      return out({ ok: true });
+    }
+    case 'place_friends': { // my open chats, so I can invite them
+      const u = await need();
+      const rows = await sql`select t.id, t.source, t.unlocked, t.unlock_until, case when t.a = ${u.id} then t.b else t.a end as other, (select nick from users where id = case when t.a = ${u.id} then t.b else t.a end) as nick
+        from dm_threads t where (t.a = ${u.id} or t.b = ${u.id}) and t.status = 'open' order by t.id desc limit 60`;
+      return out({ friends: rows.filter((r) => r.nick && !threadLocked(r)).map((r) => ({ thread: r.id, user: r.other, nick: r.nick })) });
+    }
+    case 'place_invite': { // tell friends I am going there
+      const u = await need(), id = idNum(b.id), ids = (Array.isArray(b.threads) ? b.threads : []).slice(0, 5).map(Number).filter((n) => Number.isInteger(n) && n > 0);
+      const p = (await sql`select id, name from places where id = ${id} and active`)[0]; if (!p) throw bad('Not found', 404);
+      if (!ids.length) throw bad('Pick a friend first');
+      const text = '📍 Join me at ' + p.name + '!'; let sent = 0;
+      for (const tid of ids) {
+        const t = (await sql`select * from dm_threads where id = ${tid} and (a = ${u.id} or b = ${u.id}) and status = 'open'`)[0]; if (!t || threadLocked(t)) continue;
+        const other = t.a === u.id ? t.b : t.a; if (await blockedPair(u.id, other)) continue;
+        if ((await sql`select 1 from dm_messages where thread_id = ${tid} and from_user = ${u.id} and body = ${text} and created_at > now() - interval '24 hours'`).length) continue;
+        await sql`insert into dm_messages (thread_id, from_user, body) values (${tid}, ${u.id}, ${text})`; sent++;
+        await pushUsers(sql, [other], '📍 ' + (u.nick || 'A friend') + ' invites you', 'Join them at ' + p.name + '.', '/#/dm/' + tid);
+      }
+      return out({ ok: true, sent });
+    }
+    case 'place_suggest': { // a new place for the map; the owner approves it before anyone sees it
+      const u = await need(), name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 60), lat = Number(b.lat), lng = Number(b.lng), kind = ['school', 'uni', 'resort', 'shop', 'food', 'cafe', 'park', 'place'].includes(b.kind) ? b.kind : 'place';
+      if (name.length < 3) throw bad('Give the place a name'); const why = screenText(name, 60); if (why) throw bad(why);
+      if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180)) throw bad('Pick the place on the map');
+      const n = (await sql`select count(*)::int as n from places where suggested_by = ${u.id} and created_at > now() - interval '24 hours'`)[0].n; if (n >= 3) throw bad('You can suggest 3 places a day', 429);
+      await sql`insert into places (name, kind, lat, lng, active, suggested_by) values (${name}, ${kind}, ${lat}, ${lng}, false, ${u.id})`;
+      await notifyAdmins(sql, '📍 New place suggested', name);
+      return out({ ok: true });
+    }
     case 'places_list': {
       const u = await need();
       const rows = await sql`select p.id, p.name, p.kind, p.lat, p.lng, (select count(*) from users x where x.place_id = p.id)::int as members from places p where p.active order by p.name`;
@@ -290,12 +342,17 @@ async function handle(action, ctx) {
     }
     case 'place_view': { // one place: who is the most active this week (nicknames only)
       const u = await need(), id = idNum(b.id);
-      const p = (await sql`select id, name, kind from places where id = ${id} and active`)[0]; if (!p) throw bad('Not found', 404);
+      const p = (await sql`select id, name, kind, lat, lng from places where id = ${id} and active`)[0]; if (!p) throw bad('Not found', 404);
       const rows = await sql`select x.id, x.nick, x.avatar, x.frame,
           ((select count(*) from messages m where m.user_id = x.id and m.created_at > now() - interval '7 days') + (select count(*) from dm_messages d where d.from_user = x.id and d.created_at > now() - interval '7 days'))::int as score
         from users x where x.place_id = ${id} and x.profile_done and x.nick is not null and not x.blocked order by score desc, x.id limit 10`;
       const members = (await sql`select count(*)::int as n from users where place_id = ${id}`)[0].n;
-      return out({ place: p, members, mine: String(u.place_id || '') === String(id), top: rows.map((r, i) => ({ rank: i + 1, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', score: r.score, me: r.id === u.id })) });
+      const visits = (await sql`select count(distinct user_id)::int as n from place_checkins where place_id = ${id}`)[0].n;
+      const rv = await sql`select r.rating, r.body, r.created_at as at, x.nick from place_reviews r join users x on x.id = r.user_id where r.place_id = ${id} and not x.blocked order by r.created_at desc limit 10`;
+      const avg = (await sql`select round(avg(rating)::numeric, 1)::float as a, count(*)::int as n from place_reviews where place_id = ${id}`)[0];
+      const been = (await sql`select 1 from place_checkins where place_id = ${id} and user_id = ${u.id} limit 1`).length > 0;
+      const myrv = (await sql`select rating, body from place_reviews where place_id = ${id} and user_id = ${u.id}`)[0] || null;
+      return out({ visits, rating: avg.n ? avg.a : null, rating_n: avg.n, reviews: rv, been, my_review: myrv, place: p, members, mine: String(u.place_id || '') === String(id), top: rows.map((r, i) => ({ rank: i + 1, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', score: r.score, me: r.id === u.id })) });
     }
     case 'place_join': { // pick my school or area, or leave with id = null
       const u = await need();
@@ -485,11 +542,11 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
-  if (action === 'admin_places') { return out({ places: await sql`select p.id, p.name, p.kind, p.lat, p.lng, p.active, (select count(*) from users x where x.place_id = p.id)::int as members from places p order by p.id` }); }
+  if (action === 'admin_places') { return out({ places: await sql`select p.id, p.name, p.kind, p.lat, p.lng, p.active, p.suggested_by, (select count(*) from users x where x.place_id = p.id)::int as members from places p order by p.active, p.id` }); }
   if (action === 'admin_place_save') {
-    const lat = Number(b.lat), lng = Number(b.lng), name = String(b.name || '').trim().slice(0, 80), kind = ['school', 'uni', 'area', 'place'].includes(b.kind) ? b.kind : 'school';
+    const lat = Number(b.lat), lng = Number(b.lng), name = String(b.name || '').trim().slice(0, 80), kind = ['school', 'uni', 'area', 'place', 'resort', 'shop', 'food', 'cafe', 'park'].includes(b.kind) ? b.kind : 'school';
     if (!name || !(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180)) throw bad('Name and a real position, please');
-    if (b.id) await sql`update places set name = ${name}, kind = ${kind}, lat = ${lat}, lng = ${lng}, active = ${b.active !== false} where id = ${idNum(b.id)}`;
+    if (b.id) { const pid = Number(b.id); if (!Number.isInteger(pid) || pid < 1) throw bad('Bad id'); await sql`update places set name = ${name}, kind = ${kind}, lat = ${lat}, lng = ${lng}, active = ${b.active !== false} where id = ${pid}`; }
     else await sql`insert into places (name, kind, lat, lng) values (${name}, ${kind}, ${lat}, ${lng})`;
     return out({ ok: true });
   }
