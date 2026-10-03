@@ -92,7 +92,7 @@ window.CommunityInit = function (ui) {
   function page(active, ...kids) {
     document.title = 'O HUB';
     const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '')))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, h('b', null, 'HUB')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, h('b', null, 'HUB')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, ME.points >= 10000 ? (ME.points >= 100000 ? Math.round(ME.points / 1000) + 'k' : (ME.points / 1000).toFixed(1).replace('.0', '') + 'k') : String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
   /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
   window.addEventListener('adate:needpoints', (e) => {
