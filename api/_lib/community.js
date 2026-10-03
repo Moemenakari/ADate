@@ -518,6 +518,7 @@ async function handle(action, ctx) {
 async function reportTarget(sql, reporter, target, kind, body, roomId) {
   if (!(await sql`select 1 from reports where reporter = ${reporter} and target = ${target} and created_at > now() - interval '24 hours'`).length)
     await sql`insert into reports (reporter, target, where_kind, room_id, body) values (${reporter}, ${target}, ${kind}, ${roomId || null}, ${String(body || '').slice(0, 500)})`;
+  await notifyAdmins(sql, '🚩 New report', 'Someone reported a member. Open Reports to review.');
   const n = await sql`select count(distinct reporter)::int as n from reports where target = ${target} and created_at > now() - interval '24 hours'`;
   let muted = false;
   if (n[0].n >= 3) {
@@ -530,6 +531,12 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  if (action === 'admin_test_push') { // the owner checks that alerts reach the phone
+    const a = await sql`select id from users where is_admin and not blocked`;
+    const subs = await sql`select count(*)::int as n from push_subs where user_id = any(${a.map((x) => x.id)})`;
+    await pushUsers(sql, a.map((x) => x.id), '✅ Test alert', 'If you can read this, owner alerts work on this phone.', '/#/admin');
+    return out({ ok: true, devices: subs[0].n });
+  }
   if (action === 'admin_hosts') { // the official accounts: how active they are, and their points
     const rows = await sql`select u.id, u.nick, u.role, u.last_seen, u.photo_ok, (select coalesce(sum(delta), 0)::int from points_ledger l where l.user_id = u.id) as points,
         (select count(*)::int from dm_messages x where x.from_user = u.id and x.created_at > now() - interval '7 days') as dm7,
@@ -587,4 +594,4 @@ async function handleAdmin(action, ctx) {
   return false;
 }
 
-module.exports = { handle, creditReferral, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };
+module.exports = { handle, notifyAdmins, creditReferral, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };

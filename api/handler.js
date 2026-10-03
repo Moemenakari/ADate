@@ -176,6 +176,7 @@ module.exports = async (req, res) => {
       const refc = u.ref_code || crypto.randomBytes(5).toString('hex').slice(0, 8).toUpperCase();
       await sql`update users set ref_code = ${refc}, country = coalesce(country, ${community.countryOf(phone)}) where id = ${u.id}`;
       if (!(await sql`select 1 from points_ledger where user_id = ${u.id} and reason = 'profile'`).length) await sql`insert into points_ledger (user_id, delta, reason) values (${u.id}, 15, 'profile')`; // completing the profile earns 15 points, once
+      if (!u.profile_done) community.notifyAdmins(sql, '🆕 New member', (first || 'Someone') + ' just joined.').catch(() => {});
       await community.creditReferral(sql, u.id).catch(() => {}); // the friend who invited this person is rewarded now that the account is set up
       const fresh = await sql`select * from users where id = ${u.id}`; r[0] = fresh[0];
       return res.status(200).json({ user: publicUser(r[0]) });
@@ -339,7 +340,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
-    if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide' || action === 'admin_gift' || action === 'admin_hosts' || action === 'admin_selfies' || action === 'admin_selfie_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
+    if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide' || action === 'admin_gift' || action === 'admin_hosts' || action === 'admin_test_push' || action === 'admin_selfies' || action === 'admin_selfie_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
     if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
       if (action === 'admin_invite') {
@@ -360,12 +361,12 @@ module.exports = async (req, res) => {
       if (action === 'admin_mark') { // block / unblock / mark as verified, per account
         const id = Number(b.id); if (!Number.isInteger(id)) throw bad('Bad id');
         const op = String(b.op || '');
-        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off', 'role_mod', 'role_agent', 'role_host', 'role_bot', 'role_none'].includes(op)) throw bad('Bad action');
+        if (!['block', 'unblock', 'verify', 'unverify', 'admin', 'unadmin', 'photo_off', 'role_agent', 'role_host', 'role_bot', 'role_none'].includes(op)) throw bad('Bad action');
         const note = String(b.note || '').slice(0, 200) || null;
         const r = op === 'block' ? await sql`update users set blocked = true, blocked_note = ${note} where id = ${id} returning id`
           : op === 'unblock' ? await sql`update users set blocked = false, blocked_note = null where id = ${id} returning id`
           : op === 'photo_off' ? await sql`update users set photo = null, photo_ok = false where id = ${id} returning id`
-          : op === 'role_mod' || op === 'role_agent' || op === 'role_host' || op === 'role_bot' || op === 'role_none' ? await sql`update users set role = ${op === 'role_none' ? null : op.slice(5)} where id = ${id} returning id`
+          : op === 'role_agent' || op === 'role_host' || op === 'role_bot' || op === 'role_none' ? await sql`update users set role = ${op === 'role_none' ? null : op.slice(5)} where id = ${id} returning id`
           : op === 'admin' || op === 'unadmin' ? await sql`update users set is_admin = ${op === 'admin'} where id = ${id} returning id`
           : await sql`update users set verified = ${op === 'verify'} where id = ${id} returning id`;
         if (!r.length) throw bad('No such account', 404);

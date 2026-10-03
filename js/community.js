@@ -16,7 +16,7 @@ window.CommunityInit = function (ui) {
 
   const FRAME_LOOK = { halloween: ['#ff7a00', '🎃'], newyear: ['#e6b422', '🎆'], ramadan: ['#6b4fbb', '🌙'] };
   const presence = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 150) return '🟢 Online'; if (s < 3600) return 'Last seen ' + Math.round(s / 60) + ' min ago'; if (s < 86400) return 'Last seen ' + Math.round(s / 3600) + ' h ago'; return 'Last seen ' + Math.round(s / 86400) + ' d ago'; };
-  const TICK = (ok, role, fast) => (ok ? ' ✅' : '') + ({ owner: ' 👑', mod: ' 🛡️', agent: ' 💰', host: ' 🌟 Host', bot: ' 🤖 Bot' }[role] || '') + (fast ? ' ⚡' : '');
+  const TICK = (ok, role, fast) => (ok ? ' ✅' : '') + ({ owner: ' 👑', agent: ' 💰', host: ' 🌟 Host', bot: ' 🤖 Bot' }[role] || '') + (fast ? ' ⚡' : '');
   /** Their social accounts shown as logos. Locked until opened: one for 10 points, all of them for 20. */
   const SOC = { ig: ['📸', 'Instagram', (v) => 'https://instagram.com/' + v, (v) => '@' + v], snap: ['👻', 'Snapchat', (v) => 'https://www.snapchat.com/add/' + v, (v) => '@' + v], tiktok: ['🎵', 'TikTok', (v) => 'https://www.tiktok.com/@' + v, (v) => '@' + v], wa: ['💬', 'WhatsApp', (v) => 'https://wa.me/' + v, (v) => '+' + v] };
   function socialsBox(p) {

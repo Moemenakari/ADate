@@ -144,6 +144,7 @@
     notices: () => call('notices_list', { session: tok() }),
     noticeRead: (id) => call('notice_read', { session: tok(), id }),
     adminGift: (key, user_id, points, message) => call('admin_gift', { key, user_id, points, message }),
+    adminTestPush: (key) => call('admin_test_push', { key }),
     viewsFeed: () => call('views_feed', { session: tok() }),
     viewReveal: (viewer) => call('view_reveal', { session: tok(), viewer }),
     birthdaySet: (birthdate) => call('birthday_set', { session: tok(), birthdate }),
