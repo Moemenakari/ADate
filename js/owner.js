@@ -107,13 +107,13 @@
     async support(c, rerender) {
       const d = await API.adminSupportList(key), box = h('div', { class: 'stack' });
       const open = async (t) => {
-        const m = (await API.adminSupportThread(key, t.thread)).messages, inp = h('input', { type: 'text', maxlength: 500, placeholder: 'Reply as ADate Team', 'aria-label': 'Reply' });
+        const m = (await API.adminSupportThread(key, t.thread)).messages, inp = h('input', { type: 'text', maxlength: 500, placeholder: 'Reply as Oppa Team', 'aria-label': 'Reply' });
         const send = async () => { if (!inp.value.trim()) return; try { await API.adminSupportReply(key, t.thread, inp.value); open(t); } catch (e) { alert(e.message); } };
         inp.onkeydown = (e) => { if (e.key === 'Enter') send(); };
         box.replaceChildren(h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: rerender }, '← Back'), h('b', null, t.nick), h('span', { class: 'hint' }, wa(t.phone))),
           ...m.map((x) => h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' }, x.body), h('small', null, ago(x.at)))), h('div', { class: 'composer' }, inp, h('button', { class: 'btn pri', type: 'button', onclick: send }, 'Send')));
       };
-      box.replaceChildren(h('div', { class: 'h2' }, 'Support'), h('p', { class: 'hint' }, 'People who wrote to the ADate Team (for example when they cannot pay with Whish).'),
+      box.replaceChildren(h('div', { class: 'h2' }, 'Support'), h('p', { class: 'hint' }, 'People who wrote to the Oppa Team (for example when they cannot pay with Whish).'),
         ...(d.threads.length ? d.threads.map((t) => h('button', { class: 'roomcard rowbtn', type: 'button', onclick: () => open(t) }, h('span', { class: 'rc-e' }, t.waiting ? '🔴' : '✅'), h('span', { class: 'rc-t' }, h('b', null, t.nick), h('small', null, t.last_body.slice(0, 60) + ' · ' + (t.last_at ? ago(t.last_at) : ''))))) : [h('p', { class: 'hint' }, 'Nobody wrote yet.')]));
       c.replaceChildren(box);
     },

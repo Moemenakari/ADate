@@ -122,7 +122,7 @@ async function handle(action, ctx) {
       const u = await need(), age = ageOf(u.birthdate);
       { const t0 = new Date(), md = String(t0.getMonth() + 1).padStart(2, '0') + '-' + String(t0.getDate()).padStart(2, '0'); // birthday: +10 points and a message from the team, once a year
         if (dateStr(u.birthdate).slice(5) === md) { const gift = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 10, 'birthday', ${String(t0.getFullYear())} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'birthday' and ref = ${String(t0.getFullYear())}) returning id`;
-          if (gift.length) await sql`insert into notices (user_id, body, points) values (${u.id}, 'Happy birthday 🎂 from the ADate team! Here is a little gift.', 10)`; } }
+          if (gift.length) await sql`insert into notices (user_id, body, points) values (${u.id}, 'Happy birthday 🎂 from the Oppa HUB team! Here is a little gift.', 10)`; } }
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
@@ -362,7 +362,7 @@ async function handle(action, ctx) {
       const u = await need(), d = String(b.birthdate || '');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(new Date(d))) throw bad('Pick your birthday');
       const now = ageOf(u.birthdate), next = ageOf(d);
-      if (next < 13) throw bad('ADate is for ages 13 and up'); if (next > 100) throw bad('That birthday does not look right');
+      if (next < 13) throw bad('Oppa HUB is for ages 13 and up'); if (next > 100) throw bad('That birthday does not look right');
       if ((u.birthday_changes || 0) >= 2) throw bad('You already changed your birthday twice. Write to the team in the support chat if it is still wrong.', 403);
       if (now < 18 && next >= 18) throw bad('To move to the adult group, write to the team in the support chat.', 403);
       await sql`update users set birthdate = ${d}::date, birthday_changes = birthday_changes + 1 where id = ${u.id}`;
@@ -379,7 +379,7 @@ async function handle(action, ctx) {
       await sql`update users set nudge_off = ${!!b.off} where id = ${u.id}`;
       return out({ ok: true });
     }
-    case 'notices_list': { // messages from the ADate team that I have not dismissed
+    case 'notices_list': { // messages from the Oppa HUB team that I have not dismissed
       const u = await need();
       const rows = await sql`select id, body, points, created_at as at from notices where user_id = ${u.id} and not read order by id desc limit 10`;
       return out({ notices: rows });
@@ -389,7 +389,7 @@ async function handle(action, ctx) {
       await sql`update notices set read = true where id = ${idNum(b.id)} and user_id = ${u.id}`;
       return out({ ok: true });
     }
-    case 'install_claim': { // +10 points once, for opening ADate from the home screen
+    case 'install_claim': { // +10 points once, for opening Oppa HUB from the home screen
       const u = await need();
       const r = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 10, 'install', null where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'install') returning id`;
       return out({ ok: true, claimed: r.length > 0, balance: await balanceOf(sql, u.id) });
@@ -445,10 +445,10 @@ async function handle(action, ctx) {
       if (T.status === 'declined') throw bad('This person is not taking messages from you', 403);
       if (T.status === 'pending') { if (T.started_by === u.id) { const n = await sql`select count(*)::int as n from dm_messages where thread_id = ${T.id} and from_user = ${u.id}`; if (n[0].n >= 1) throw bad('Wait until they accept your message', 403); } else await sql`update dm_threads set status = 'open' where id = ${T.id}`; }
       await sql`insert into dm_messages (thread_id, from_user, body) values (${T.id}, ${u.id}, ${String(b.body).replace(/\s+/g, ' ').trim()})`;
-      await pushUsers(sql, [to], '💬 ' + (u.nick || 'Someone') + ' sent you a message', 'Open ADate to read it.', '/#/dms');
+      await pushUsers(sql, [to], '💬 ' + (u.nick || 'Someone') + ' sent you a message', 'Open Oppa HUB to read it.', '/#/dms');
       return out({ ok: true, thread: T.id });
     }
-    case 'support_open': { // a private chat with the ADate Team (the owner answers from the owner dashboard); open at once, no request needed
+    case 'support_open': { // a private chat with the Oppa Team (the owner answers from the owner dashboard); open at once, no request needed
       const u = await need();
       const adm = await sql`select id from users where phone = 'team-account' limit 1`;
       if (!adm.length) throw bad('Support is not ready yet. Use the payment options for now.', 503);
@@ -485,7 +485,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id); if (bal < OPEN_PRICE) throw bad(`Opening the chat costs ${OPEN_PRICE} points. You have ${bal}.`, 402);
       const r = await sql`update dm_threads set status = 'open' where id = ${id} and status = 'pending' returning id`;
       if (r.length) await addPoints(sql, u.id, -OPEN_PRICE, 'dm_open', String(id));
-      const other = t[0].a === u.id ? t[0].b : t[0].a; await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' opened a chat with you', 'Open ADate to read it.', '/#/dm/' + id);
+      const other = t[0].a === u.id ? t[0].b : t[0].a; await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' opened a chat with you', 'Open Oppa HUB to read it.', '/#/dm/' + id);
       return out({ ok: true, balance: await balanceOf(sql, u.id) });
     }
     case 'dm_send': {
@@ -508,7 +508,7 @@ async function handle(action, ctx) {
         if (aDay === today && bDay === today && sd !== today) { streak = sd === yest ? streak + 1 : 1; newSd = today; }
         await sql`update dm_threads set a_day = ${aDay}, b_day = ${bDay}, streak = ${streak}, streak_day = ${newSd} where id = ${id}`; }
       if ((await sql`select 1 from users where id = ${other} and role = 'team'`).length) { await pushOwner(sql, '💬 Message to the team', (u.nick || 'Someone') + ' wrote to the team.', '/#/admin'); return out({ ok: true }); }
-      if (!(await sql`select 1 from notif_mutes where user_id = ${other} and kind = 'dm' and ref = ${id}`).length) await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open ADate to read it.', '/#/dm/' + id);
+      if (!(await sql`select 1 from notif_mutes where user_id = ${other} and kind = 'dm' and ref = ${id}`).length) await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open Oppa HUB to read it.', '/#/dm/' + id);
       return out({ ok: true });
     }
     case 'dm_respond': {
@@ -585,7 +585,7 @@ async function handleAdmin(action, ctx) {
     const body = msg || (pts > 0 ? 'Thank you for being great! Here are some points.' : 'Your points were adjusted.');
     const n = await sql`insert into notices (user_id, body, points) values (${uid}, ${body}, ${pts}) returning id`;
     if (pts) await addPoints(sql, uid, pts, 'gift', String(n[0].id));
-    await pushUsers(sql, [uid], '🎁 A message from the ADate team', pts > 0 ? `${body} (+${pts} points)` : body, '/#/');
+    await pushUsers(sql, [uid], '🎁 A message from the Oppa HUB team', pts > 0 ? `${body} (+${pts} points)` : body, '/#/');
     return out({ ok: true, balance: await balanceOf(sql, uid) });
   }
   if (action === 'admin_reports') {

@@ -1,4 +1,4 @@
-/* ADate: soft, calm, phone-first. Light by default, follows the phone's dark mode. */
+/* Oppa HUB: soft, calm, phone-first. Light by default, follows the phone's dark mode. */
 :root{
   --bg:#fff8f3;--bg2:#ffeef3;--surface:#fff;--ink:#4b3443;--muted:#7f6878;--line:#f1dde5;
   --accent:#d9527c;--accent-d:#b03a61;--accent-soft:#ffe6ee;--lav:#ece6ff;--mint:#d9f4ea;--butter:#fff1c9;--sky:#dff0ff;
@@ -572,3 +572,17 @@ html[data-ui=dark] body.nx .gamecard{background:var(--surface);color:var(--ink);
 html[data-ui=dark] body.nx .gamecard.c2{background:var(--surface);color:var(--ink)}
 html[data-ui=dark] body.nx .coinring{background:var(--yel)}
 .authwall{background:#101011}
+
+/* login follows the light / dark theme */
+.authwall{background:var(--bg,#101011)}
+.authcard{background:var(--surface);color:var(--ink)}.authcard h2{color:var(--ink)}
+.authcard input{background:var(--bg);color:var(--ink)}.authcard a{color:var(--ink)}
+.authtag{color:var(--muted)}.authlogo i{background:#ffd60a;color:#0a0a0a}
+
+/* Oppa [HUB] wordmark: the name in the text colour, HUB in a yellow chip */
+body.nx .brand{display:inline-flex;align-items:center;gap:6px}
+body.nx .brand b,.authlogo i{background:#ffd60a;color:#0a0a0a;padding:0 8px;border-radius:9px;font-style:normal}
+.authlogo b{display:inline-flex;align-items:center;gap:10px;background:none;color:var(--ink)}
+.authlogo{color:var(--ink);text-shadow:none}
+html[data-ui] body.nx .tabbar a.on{color:var(--ink)}
+html[data-ui] body.nx .tabbar a.on small{color:var(--ink);font-weight:800}

@@ -159,7 +159,7 @@ module.exports = async (req, res) => {
       if (!first || !last) throw bad('Add your first and last name');
       if (phone.length < 8 || phone.length > 15) throw bad('That number does not look right');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(b.birthdate || '') || isNaN(new Date(b.birthdate))) throw bad('Pick your birthday');
-      const age = ageOn(b.birthdate); if (age < 13) throw bad('ADate is for ages 13 and up'); if (age > 100) throw bad('That birthday does not look right');
+      const age = ageOn(b.birthdate); if (age < 13) throw bad('Oppa HUB is for ages 13 and up'); if (age > 100) throw bad('That birthday does not look right');
       const interests = Array.isArray(b.interests) ? [...new Set(b.interests.map((x) => String(x).trim().slice(0, 30)).filter(Boolean))].slice(0, 10) : [];
       if (interests.length < 1) throw bad('Pick at least one interest');
       const email = String(b.email || u.email || '').trim().toLowerCase().slice(0, 120);
@@ -169,7 +169,7 @@ module.exports = async (req, res) => {
       let rec = null;
       if (!(u.answer_hash && u.answer2_hash)) { if (!QUESTIONS.includes(b.question) || norm(b.answer).length < 2 || norm(b.answer2).length < 2) throw bad('Answer both security questions'); rec = [salt(), salt()]; }
       const clash = await sql`select id from users where phone = ${phone} and id <> ${u.id}`;
-      if (clash.length) throw bad('This number is already used by another account. If it is your older ADate account, use “Link my old account”.', 409);
+      if (clash.length) throw bad('This number is already used by another account. If it is your older Oppa HUB account, use “Link my old account”.', 409);
       const code = u.verify_code || crypto.randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
       const r = await sql`update users set first_name = ${first}, last_name = ${last}, name = ${first}, phone = ${phone}, email = ${email}, birthdate = ${b.birthdate}::date, interests = ${interests}, profile_done = true, verify_code = ${code} where id = ${u.id} returning *`;
       if (pw) await sql`update users set pass_salt = ${pw}, pass_hash = ${kdf(b.password, pw)} where id = ${u.id}`;

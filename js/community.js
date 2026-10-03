@@ -1,4 +1,4 @@
-// ADate community: hub, rooms, chat, private messages, points, profile. Runs on top of app.js (it gets the shared helpers in CommunityInit).
+// Oppa HUB community: hub, rooms, chat, private messages, points, profile. Runs on top of app.js (it gets the shared helpers in CommunityInit).
 (function () {
 'use strict';
 window.CommunityInit = function (ui) {
@@ -47,12 +47,12 @@ window.CommunityInit = function (ui) {
     if (isStandalone()) return null;
     try { if (localStorage.getItem('adate.installHide')) return null; } catch (e) { /* ok */ } // shown once: after the X it never comes back (Settings still explains it)
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const box = h('div', { class: 'installbar' }, h('div', null, h('b', null, 'Add ADate to your Home Screen'), h('small', null, ios ? 'Tap the Share button, then “Add to Home Screen”. You get notifications and +10 points.' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. You get notifications and +10 points.')),
+    const box = h('div', { class: 'installbar' }, h('div', null, h('b', null, 'Add Oppa HUB to your Home Screen'), h('small', null, ios ? 'Tap the Share button, then “Add to Home Screen”. You get notifications and +10 points.' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. You get notifications and +10 points.')),
       deferredInstall ? h('button', { class: 'btn pri sm', onclick: async () => { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch (e) { /* ignore */ } box.remove(); } }, 'Install') : null,
       h('button', { class: 'btn sm', 'aria-label': 'Close', onclick: () => { try { localStorage.setItem('adate.installHide', '1'); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
     return box;
   }
-  if (isStandalone() && API.session) { let done = false; try { done = localStorage.getItem('adate.installClaimed') === '1'; } catch (e) { /* ok */ } if (!done) API.installClaim().then((r) => { try { localStorage.setItem('adate.installClaimed', '1'); } catch (e) { /* ok */ } if (r && r.claimed) setTimeout(() => toast('+10 points for adding ADate to your home screen ⭐'), 1500); }).catch(() => {}); }
+  if (isStandalone() && API.session) { let done = false; try { done = localStorage.getItem('adate.installClaimed') === '1'; } catch (e) { /* ok */ } if (!done) API.installClaim().then((r) => { try { localStorage.setItem('adate.installClaimed', '1'); } catch (e) { /* ok */ } if (r && r.claimed) setTimeout(() => toast('+10 points for adding Oppa HUB to your home screen ⭐'), 1500); }).catch(() => {}); }
   /** A "turn on notifications" button at the top, until the person has chosen. Phones that cannot yet (iPhone before Add to Home Screen) see nothing here: the install card tells them what to do. */
   function pushPrompt() {
     const slot = h('div');
@@ -90,9 +90,9 @@ window.CommunityInit = function (ui) {
   const goBack = (e) => { e.preventDefault(); if (navDepth > 0) { navDepth = Math.max(0, navDepth - 2); history.back(); } else location.hash = '#/'; };
   const backBar = (active) => (active === '#/' ? null : h('a', { class: 'backarrow', href: '#/', 'aria-label': 'Back', onclick: goBack }, '←', h('span', null, 'Back')));
   function page(active, ...kids) {
-    document.title = 'ADate';
+    document.title = 'Oppa HUB';
     const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '')))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
   /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
   window.addEventListener('adate:needpoints', (e) => {
@@ -119,7 +119,7 @@ window.CommunityInit = function (ui) {
     page('#/', h('div', { class: 'hello' }, myAvatar(52), h('div', null, h('b', null, 'Hi ' + (ME.nick || 'there') + ' ' + (FLAG[ME.country] || '')), h('small', { class: 'hint' }, 'Age circles: ' + ME.circles.join(' · ')))), nickBox,
       homeTabs(),
       ...[homeToday, homeGames, homeRooms, homeActivities].map((f) => f()));
-    function homeToday() { return h('div', { class: 'stack hsec', 'data-sec': 'today' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, 'ADate Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }), d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null, h('p', { class: 'hint' }, 'Nothing else new right now. Check Activities to earn points.')); }
+    function homeToday() { return h('div', { class: 'stack hsec', 'data-sec': 'today' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, 'Oppa Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }), d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null, h('p', { class: 'hint' }, 'Nothing else new right now. Check Activities to earn points.')); }
     function homeGames() { return h('div', { class: 'stack hsec', 'data-sec': 'games' }, h('div', { class: 'h2' }, 'Games'), h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, 'Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, 'Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))), h('a', { class: 'gamecard c3', href: '#/match' }, h('b', null, 'Meet people'), h('small', null, 'Swipe, play 3 quick games together and become friends'))); }
     function homeRooms() { return h('div', { class: 'stack hsec', 'data-sec': 'rooms' }, ...(mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : []), h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms')); }
     function homeActivities() { return h('div', { class: 'stack hsec', 'data-sec': 'act' }, h('div', { class: 'h2' }, 'Earn points'), h('p', { class: 'hint' }, 'Small things you can do now. Points open Truth or Dare, chats and more.'), ...(ME.todo || []).map((t) => h('a', { class: 'roomcard', href: t.href }, h('span', { class: 'rc-e' }, '⭐'), h('span', { class: 'rc-t' }, h('b', null, t.text), h('small', null, 'Get ' + t.points + ' points')), h('span', { class: 'badge' }, '+' + t.points))), h('a', { class: 'btn pri block', href: '#/shop' }, '⭐ Get more points')); }
@@ -276,7 +276,7 @@ window.CommunityInit = function (ui) {
   async function swipe() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }), msg = h('input', { type: 'text', maxlength: 300, placeholder: 'Send a message', 'aria-label': 'Send a message', enterkeyhint: 'send' });
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('swipe'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('swipe'), box), bar('#/match', ME && ME.points));
     let card = null;
     function prefsView() {
       const pr = { gender: '', meet: 'both' };
@@ -304,7 +304,7 @@ window.CommunityInit = function (ui) {
   async function online() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
     async function draw() {
       try {
         const d = await API.onlineList();
@@ -316,7 +316,7 @@ window.CommunityInit = function (ui) {
   async function near() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('near'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('near'), box), bar('#/match', ME && ME.points));
     const d = await API.discoverNear(), q = h('input', { type: 'text', placeholder: 'Search a place', 'aria-label': 'Search a place' }), list = h('div');
     const draw = () => { const t = q.value.trim().toLowerCase(); const rs = d.rooms.filter((r) => !t || r.title.toLowerCase().includes(t)); list.replaceChildren(...(rs.length ? rs.map((r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '📍'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, r.members + ' here')), h('span', { class: 'badge' }, 'Open'))) : [h('p', { class: 'hint' }, 'No place found.')])); };
     q.oninput = draw;
@@ -326,7 +326,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     let stop = false, shown = '', lastId = 0, cur = null, prefs = { gender: '', meet: 'both' };
     const box = h('div', { class: 'matchbox stack' });
-    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
+    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
     const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, presence(p.last_seen) + ' · Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
     function prefsView(first) {
       const pick = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (prefs[key] === v ? ' on' : ''), onclick: () => { prefs[key] = v; prefsView(first); } }, h('span', null, e), h('b', null, l))));
@@ -449,7 +449,7 @@ window.CommunityInit = function (ui) {
       sec('', 'Look', h('button', { class: 'btn block', type: 'button', onclick: (e) => { const m = ui.toggleMode(); e.currentTarget.textContent = 'Look: ' + ({ auto: 'Automatic (follows your phone)', light: 'Light', dark: 'Dark' })[m] + '. Tap to change'; } }, 'Look: ' + ({ auto: 'Automatic (follows your phone)', light: 'Light', dark: 'Dark' })[ui.modePref()] + '. Tap to change')),
       sec('🛡️', 'Safety', h('p', { class: 'hint' }, 'Chats are text only. Links, phone numbers and usernames are blocked. Three people reporting someone mutes them for 24 hours.'), h('b', null, 'People I blocked'), blockedList),
       sec('⭐', 'Points', link('⭐', 'My points: ' + ME.points, '#/points', 'History and invite links'), link('🛒', 'Get more points', '#/shop'), link('🎲', 'Truth or Dare levels', '#/tod')),
-      sec('❓', 'Help', h('button', { class: 'setrow', type: 'button', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { toast(err(e), 'bad'); } } }, h('span', null, 'Contact the ADate Team'), h('small', { class: 'hint' }, 'Questions, payments, problems')), link('🔑', 'I forgot my password', '#/recover'), link('📄', 'Privacy', '#/privacy'), link('📬', 'My invites (Truth Date)', '#/mine')),
+      sec('❓', 'Help', h('button', { class: 'setrow', type: 'button', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { toast(err(e), 'bad'); } } }, h('span', null, 'Contact the Oppa Team'), h('small', { class: 'hint' }, 'Questions, payments, problems')), link('🔑', 'I forgot my password', '#/recover'), link('📄', 'Privacy', '#/privacy'), link('📬', 'My invites (Truth Date)', '#/mine')),
       h('button', { class: 'btn block', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out'),
       h('details', { class: 'setsec dangerbox' }, h('summary', null, 'Delete my account'), h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'This erases your profile, chats, points and everything else for good. It cannot be undone.'), acct.has_password === false ? null : dpw, dtx,
         h('button', { class: 'btn danger block', onclick: async () => { if (!confirm('Delete your account for good?')) return; try { await API.deleteAccount(dpw.value, dtx.value); location.hash = '#/'; } catch (e) { toast(err(e), 'bad'); } } }, 'Delete for good'))));
@@ -459,10 +459,10 @@ window.CommunityInit = function (ui) {
     page('#/points', h('p', { class: 'hint spark' }, 'Loading…'));
     if (!ME) await load();
     const d = await API.points(); ME.points = d.balance;
-    const link = location.origin + '/#/join/' + ME.ref_code, text = 'Come play on ADate with me: ' + link;
-    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', social: 'Added a social account', social_view: 'Saw social accounts', birthday: 'Birthday gift', box: 'Daily surprise box', gift: 'Gift from the ADate team', selfie: 'Verified by selfie', tod: 'Truth or Dare' };
+    const link = location.origin + '/#/join/' + ME.ref_code, text = 'Come play on Oppa HUB with me: ' + link;
+    const reasons = { share: 'Shared your card', photo: 'Real photo', frame: 'Season frame', tick: 'Visit bonus', profile: 'Profile completed', invite: 'Friend joined', room: 'Joined a room', nick: 'Changed nickname', buy: 'Bought points', first_buy: 'First purchase bonus', install: 'Added to home screen', social: 'Added a social account', social_view: 'Saw social accounts', birthday: 'Birthday gift', box: 'Daily surprise box', gift: 'Gift from the Oppa HUB team', selfie: 'Verified by selfie', tod: 'Truth or Dare' };
     page('#/points', h('div', { class: 'bigpts' }, h('small', null, 'Your points'), h('b', null, '⭐ ' + d.balance)),
-      h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open ADate (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
+      h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open Oppa HUB (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Invite a friend: +5 points'), h('p', { class: 'hint' }, 'You earn 5 when your friend joins and sends their first message. Up to 10 friends a day.'), h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your invite link' }),
         h('div', { class: 'row' }, h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://wa.me/?text=' + encodeURIComponent(text) }, 'WhatsApp'), navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text }).catch(() => {}) }, 'Share…') : null, h('button', { class: 'btn', onclick: async (e) => { try { await navigator.clipboard.writeText(link); e.currentTarget.textContent = 'Copied ✓'; } catch (x) { /* select it */ } } }, 'Copy'))),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Share your card: +2 points'), h('p', { class: 'hint' }, 'Share a card on your Snapchat story or in any app. You earn 2 points each time, up to 3 times a day.'), h('button', { class: 'btn pri block', onclick: () => shareCard(link, text) }, 'Share my card')),
@@ -475,7 +475,7 @@ window.CommunityInit = function (ui) {
   async function shareCard(link, text) {
     const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
     const grad = g.createLinearGradient(0, 0, 0, H); const th = THEMES[ME.theme]; grad.addColorStop(0, '#ffc6ee'); grad.addColorStop(0.7, '#e57bff'); grad.addColorStop(1, '#c45cf0'); g.fillStyle = grad; g.fillRect(0, 0, W, H);
-    g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = '700 150px system-ui, sans-serif'; g.fillText('ADate', W / 2, 420);
+    g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = '700 150px system-ui, sans-serif'; g.fillText('Oppa HUB', W / 2, 420);
     g.font = '300 220px system-ui, sans-serif'; g.fillText('🐱', W / 2, 760);
     g.font = '700 84px system-ui, sans-serif'; g.fillText(((ME.nick || 'A friend') + ' invites you').slice(0, 26), W / 2, 1000);
     g.font = '500 64px system-ui, sans-serif'; g.fillText('Games, rooms and new friends', W / 2, 1110); g.fillText('Join with my link:', W / 2, 1220);
@@ -483,8 +483,8 @@ window.CommunityInit = function (ui) {
     const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
     const file = new File([blob], 'adate-card.png', { type: 'image/png' });
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text, title: 'ADate' });
-      else if (navigator.share) await navigator.share({ text, title: 'ADate' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text, title: 'Oppa HUB' });
+      else if (navigator.share) await navigator.share({ text, title: 'Oppa HUB' });
       else { const a = h('a', { href: URL.createObjectURL(blob), download: 'adate-card.png' }); a.click(); try { await navigator.clipboard.writeText(text); } catch (e) { /* fine */ } toast('Card saved. Post it on your story.'); }
     } catch (e) { return; } // closed the share sheet: nothing was shared
     try { const r = await API.shareClaim(); toast(r.earned ? `+${r.earned} points ⭐` : 'Shared! (3 rewards a day)'); ME.points = r.balance; } catch (e) { /* offline */ }

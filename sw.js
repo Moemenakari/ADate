@@ -3,8 +3,8 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', (e) => {
   let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: 'ADate', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'ADate', {
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: 'Oppa HUB', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Oppa HUB', {
     body: d.body || '', icon: '/icon-192.png', badge: '/favicon-32.png', tag: d.tag || 'adate', renotify: true, data: { url: d.url || '/#/mine' }
   }));
 });

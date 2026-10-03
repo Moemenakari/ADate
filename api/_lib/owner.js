@@ -69,13 +69,13 @@ async function handle(action, ctx) {
     const msgs = await sql`select id, from_user, body, created_at as at from dm_messages where thread_id = ${th} order by id desc limit 80`;
     return out({ messages: msgs.reverse().map((m) => ({ id: m.id, mine: m.from_user === tid, body: m.body, at: m.at })) });
   }
-  if (action === 'admin_support_reply') { // the owner answers as "ADate Team"
+  if (action === 'admin_support_reply') { // the owner answers as "Oppa Team"
     const tid = await team(), th = Number(b.thread), body = String(b.body || '').replace(/\s+/g, ' ').trim().slice(0, 500);
     if (!body) throw bad('Write a message');
     const t = (await sql`select * from dm_threads where id = ${th} and (a = ${tid} or b = ${tid})`)[0]; if (!t) throw bad('Not found', 404);
     await sql`insert into dm_messages (thread_id, from_user, body) values (${th}, ${tid}, ${body})`;
     await sql`update dm_threads set status = 'open', unlocked = true where id = ${th}`;
-    await pushUsers(sql, [t.a === tid ? t.b : t.a], '💬 ADate Team', body.slice(0, 120), '/#/dm/' + th);
+    await pushUsers(sql, [t.a === tid ? t.b : t.a], '💬 Oppa Team', body.slice(0, 120), '/#/dm/' + th);
     return out({ ok: true });
   }
 
