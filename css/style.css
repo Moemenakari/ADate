@@ -591,3 +591,4 @@ body.nx .brand{font-size:1.2rem;gap:5px}body.nx .brand b{padding:0 6px}
 .mechip{padding:3px 10px 3px 3px;gap:6px}.mechip b{max-width:64px;font-size:.8rem}.mechip small{white-space:nowrap;font-size:.64rem}
 .coinring{width:42px;height:42px}
 .h2.big{font-size:1.7rem;font-weight:900;letter-spacing:-.03em;margin-top:8px}
+.authlogo{display:flex;flex-direction:column;align-items:center;gap:14px}.authlogo i{font-size:2.4rem;padding:0 16px}
