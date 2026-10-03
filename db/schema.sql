@@ -390,3 +390,6 @@ create table if not exists place_reviews (place_id bigint not null references pl
 
 -- friends can see which place I am at (place only, never exact position), off unless I switch it on
 alter table users add column if not exists share_place boolean not null default false;
+
+alter table places add column if not exists osm_id text;
+create unique index if not exists places_osm_idx on places (osm_id) where osm_id is not null;

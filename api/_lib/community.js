@@ -561,6 +561,21 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  if (action === 'admin_places_import') { // pulls named places from OpenStreetMap (free data) for one kind at a time
+    const Q = { school: 'nwr["amenity"="school"]', uni: 'nwr["amenity"~"^(university|college)$"]', resort: 'nwr["tourism"~"^(resort|hotel|guest_house)$"];nwr["leisure"~"^(resort|beach_resort|water_park)$"]', cafe: 'nwr["amenity"="cafe"]', food: 'nwr["amenity"~"^(restaurant|fast_food)$"]', shop: 'nwr["shop"~"^(mall|supermarket|department_store|clothes)$"]', park: 'nwr["leisure"~"^(park|garden|stadium|sports_centre)$"]' };
+    const kind = String(b.kind || ''); if (!Q[kind]) throw bad('Unknown kind');
+    const bb = Array.isArray(b.bbox) && b.bbox.length === 4 && b.bbox.every(Number.isFinite) ? b.bbox : [34.05, 35.55, 34.70, 36.45]; // south, west, north, east: the north of Lebanon
+    const body = '[out:json][timeout:40];(' + Q[kind].split(';').map((x) => x + '(' + bb.join(',') + ')').join(';') + ';);out center tags 1500;';
+    let data; try { const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(body), headers: { 'content-type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(50000) }); if (!r.ok) throw new Error('OpenStreetMap said ' + r.status); data = await r.json(); } catch (e) { throw bad('Could not reach OpenStreetMap: ' + (e.message || 'try again in a minute'), 502); }
+    const ids = [], names = [], lats = [], lngs = [];
+    for (const el of data.elements || []) {
+      const t = el.tags || {}, name = String(t['name:en'] || t.name || '').replace(/\s+/g, ' ').trim().slice(0, 60), la = el.lat != null ? el.lat : el.center && el.center.lat, lo = el.lon != null ? el.lon : el.center && el.center.lon;
+      if (name.length < 2 || !Number.isFinite(la) || !Number.isFinite(lo) || screenText(name, 60)) continue; // unnamed or odd names are skipped
+      ids.push(el.type[0] + el.id); names.push(name); lats.push(la); lngs.push(lo);
+    }
+    const r = ids.length ? await sql`insert into places (osm_id, name, kind, lat, lng) select t.i, t.n, ${kind}, t.la, t.lo from unnest(${ids}::text[], ${names}::text[], ${lats}::float8[], ${lngs}::float8[]) as t(i, n, la, lo) on conflict do nothing returning id` : [];
+    return out({ ok: true, found: ids.length, added: r.length });
+  }
   if (action === 'admin_places') { return out({ places: await sql`select p.id, p.name, p.kind, p.lat, p.lng, p.active, p.suggested_by, (select count(*) from users x where x.place_id = p.id)::int as members from places p order by p.active, p.id` }); }
   if (action === 'admin_place_save') {
     const lat = Number(b.lat), lng = Number(b.lng), name = String(b.name || '').trim().slice(0, 80), kind = ['school', 'uni', 'area', 'place', 'resort', 'shop', 'food', 'cafe', 'park'].includes(b.kind) ? b.kind : 'school';

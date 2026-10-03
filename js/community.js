@@ -534,10 +534,10 @@ window.CommunityInit = function (ui) {
 
 
   /* Schools map: pins for schools, universities and areas (public places only, never people). Tap a pin to see who is most active and to join. */
-  const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, no) => {
-    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.append(css);
-    const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; sc.onload = ok; sc.onerror = () => no(new Error('The map could not load. Check your connection.')); document.head.append(sc);
-  });
+  const addCss = (href) => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; document.head.append(l); };
+  const addJs = (src) => new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => no(new Error('The map could not load. Check your connection.')); document.head.append(sc); });
+  const CDN = 'https://cdnjs.cloudflare.com/ajax/libs/';
+  const loadLeaflet = async () => { if (window.L && window.L.markerClusterGroup) return; addCss(CDN + 'leaflet/1.9.4/leaflet.min.css'); addCss(CDN + 'leaflet.markercluster/1.5.3/MarkerCluster.min.css'); addCss(CDN + 'leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css'); await addJs(CDN + 'leaflet/1.9.4/leaflet.min.js'); await addJs(CDN + 'leaflet.markercluster/1.5.3/leaflet.markercluster.min.js'); };
   const KIND = { school: ['🏫', 'School'], uni: ['🎓', 'University'], area: ['🏫', 'Area'], resort: ['🏖️', 'Resort'], shop: ['🛍️', 'Shop'], food: ['🍔', 'Restaurant'], cafe: ['☕', 'Café'], park: ['🌳', 'Park'], place: ['📍', 'Place'] };
   const stars = (n) => '★★★★★'.slice(0, Math.round(n)) + '☆☆☆☆☆'.slice(0, 5 - Math.round(n));
   const whereAmI = () => new Promise((ok, no) => { if (!navigator.geolocation) return no(new Error('Your phone cannot share its location')); navigator.geolocation.getCurrentPosition((p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude }), () => no(new Error('Turn on location for this site to do that. We never save where you are.')), { enableHighAccuracy: true, timeout: 12000 }); });
@@ -545,13 +545,18 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     const mapEl = h('div', { class: 'mapcanvas', role: 'application', 'aria-label': 'Places map' }), sheet = h('div', { class: 'drawer-in' }), drawer = h('div', { class: 'mapdrawer' }, sheet);
     const closeBtn = () => h('button', { class: 'drawer-x', type: 'button', 'aria-label': 'Close', onclick: () => drawer.classList.remove('up') }, '✕');
-    const btnPlaces = h('button', { class: 'mapfab', type: 'button' }, '📍 Places'), btnFriends = h('button', { class: 'mapfab', type: 'button' }, '👥 Friends'), btnMe = h('button', { class: 'mapfab round', type: 'button', 'aria-label': 'Where am I' }, '🎯');
+    const btnPlaces = h('button', { class: 'mapfab', type: 'button' }, '📍 Places'), btnFriends = h('button', { class: 'mapfab', type: 'button' }, '👥 Friends'), btnMe = h('button', { class: 'mapfab round', type: 'button', 'aria-label': 'Where am I' }, '🎯'), btnLayer = h('button', { class: 'mapfab round', type: 'button', 'aria-label': 'Satellite or street map' }, '🗺️');
     const bubbleLayer = []; let map, L, d, youDot = null;
-    $app.replaceChildren(h('div', { class: 'mapfull' }, mapEl, h('div', { class: 'mapbtns' }, btnPlaces, btnFriends, btnMe), drawer, h('a', { class: 'mapback', href: '#/' }, '←')), bar('#/map', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'mapfull' }, mapEl, h('div', { class: 'mapbtns' }, btnPlaces, btnFriends, btnLayer, btnMe), drawer, h('a', { class: 'mapback', href: '#/' }, '←')), bar('#/map', ME && ME.points));
     try { [d] = await Promise.all([API.placesList(), loadLeaflet()]); } catch (e) { return mapEl.replaceChildren(h('p', { class: 'hint', style: 'padding:24px' }, err(e))); }
     L = window.L; map = L.map(mapEl, { zoomControl: false }).setView([34.40, 35.88], 9);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map); setTimeout(() => map.invalidateSize(), 50);
-    const icon = (p) => L.divIcon({ className: 'pin' + (String(p.id) === d.mine ? ' mine' : ''), html: '<span>' + (KIND[p.kind] || KIND.place)[0] + '</span><b>' + p.members + '</b>', iconSize: [44, 44], iconAnchor: [22, 22] });
+    const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+    const sat = L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' }), L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })]);
+    let satOn = store.get('adate.sat') !== '0'; (satOn ? sat : street).addTo(map); setTimeout(() => map.invalidateSize(), 50);
+    btnLayer.onclick = () => { satOn = !satOn; store.set('adate.sat', satOn ? '1' : '0'); if (satOn) { map.removeLayer(street); sat.addTo(map); } else { map.removeLayer(sat); street.addTo(map); } btnLayer.textContent = satOn ? '🗺️' : '🛰️'; };
+    btnLayer.textContent = satOn ? '🗺️' : '🛰️';
+    const zc = () => mapEl.classList.toggle('zhigh', map.getZoom() >= 15); map.on('zoomend', zc); zc();
+    const icon = (p) => L.divIcon({ className: 'pin' + (String(p.id) === d.mine ? ' mine' : ''), html: '<span>' + (KIND[p.kind] || KIND.place)[0] + '</span>' + (p.members ? '<b>' + p.members + '</b>' : '') + '<i>' + String(p.name).replace(/[<>&]/g, '') + '</i>', iconSize: [44, 44], iconAnchor: [22, 22] });
     const open = async (p) => {
       sheet.replaceChildren(closeBtn(), h('p', { class: 'hint spark' }, 'Loading…')); drawer.classList.add('up');
       try {
@@ -570,7 +575,7 @@ window.CommunityInit = function (ui) {
         map.panTo([v.place.lat, v.place.lng]);
       } catch (e) { sheet.replaceChildren(closeBtn(), h('p', { class: 'hint' }, err(e))); }
     };
-    const byId = {}; d.places.forEach((p) => { byId[p.id] = p; L.marker([p.lat, p.lng], { icon: icon(p), title: p.name }).addTo(map).on('click', () => open(p)); });
+    const byId = {}, cluster = L.markerClusterGroup({ maxClusterRadius: 48, showCoverageOnHover: false, disableClusteringAtZoom: 17 }); d.places.forEach((p) => { byId[p.id] = p; cluster.addLayer(L.marker([p.lat, p.lng], { icon: icon(p), title: p.name }).on('click', () => open(p))); }); map.addLayer(cluster);
     const show = (...kids) => { sheet.replaceChildren(closeBtn(), ...kids); drawer.classList.add('up'); };
     const placeRow = (p, sub) => h('button', { class: 'roomcard rowbtn', type: 'button', onclick: () => { const q = byId[p.id]; if (q) { map.setView([q.lat, q.lng], 15); open(q); } } }, h('span', { class: 'rc-e' }, (KIND[p.kind] || KIND.place)[0]), h('span', { class: 'rc-t' }, h('b', null, p.name), sub ? h('small', null, sub) : null));
     btnPlaces.onclick = async () => {
@@ -578,7 +583,7 @@ window.CommunityInit = function (ui) {
       let tab = sh.recent.length ? 'recent' : 'top', q = ''; const list = h('div', { class: 'stack' }), tabs = h('div', { class: 'row' }), search = h('input', { type: 'text', placeholder: 'Search for a place…', 'aria-label': 'Search places', maxlength: 30 });
       const draw = () => {
         tabs.replaceChildren(...[['recent', 'Recent'], ['top', 'Top'], ['suggested', 'Suggested']].map(([k2, l]) => h('button', { class: 'chip' + (tab === k2 && !q ? ' on' : ''), type: 'button', onclick: () => { tab = k2; q = ''; search.value = ''; draw(); } }, l)));
-        const rows = q ? d.places.filter((p) => p.name.toLowerCase().includes(q)).map((p) => placeRow(p, p.members + ' members')) : tab === 'recent' ? sh.recent.map((p) => placeRow(p, 'Visited ' + ui.ago(p.at))) : tab === 'top' ? sh.top.map((p) => placeRow(p, p.visits + ' visited')) : sh.suggested.map((p) => placeRow(p, 'You have not been here yet'));
+        const rows = q ? d.places.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 30).map((p) => placeRow(p, p.members + ' members')) : tab === 'recent' ? sh.recent.map((p) => placeRow(p, 'Visited ' + ui.ago(p.at))) : tab === 'top' ? sh.top.map((p) => placeRow(p, p.visits + ' visited')) : sh.suggested.map((p) => placeRow(p, 'You have not been here yet'));
         list.replaceChildren(...(rows.length ? rows : [h('p', { class: 'hint' }, q ? 'No place with that name.' : tab === 'recent' ? 'No check-ins yet. Open a place and tap "I am here".' : 'Nothing here yet.')]));
       };
       search.oninput = () => { q = search.value.trim().toLowerCase(); draw(); }; draw();

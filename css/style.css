@@ -485,3 +485,9 @@ html[data-ui="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brig
 .drawer-x{align-self:flex-end;background:var(--line);border:0;border-radius:50%;width:30px;height:30px;color:inherit}
 .rowbtn{width:100%;text-align:left;background:none;border:0;color:inherit}
 .fpin span{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#27d3a2;color:#06231b;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+
+/* map labels and clusters (names show when zoomed in, like Bump) */
+.pin i{display:none;position:absolute;top:42px;left:50%;transform:translateX(-50%);white-space:nowrap;font-style:normal;font-weight:800;font-size:12px;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000,0 0 6px #000;pointer-events:none;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.zhigh .pin i{display:block}
+.mapfab.round{margin-left:0}.mapbtns .round:last-child{margin-left:auto}
+.marker-cluster div{background:#7a5cff;color:#fff;font-weight:800}.marker-cluster{background:rgba(122,92,255,.35)}

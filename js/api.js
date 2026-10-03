@@ -156,6 +156,7 @@
     placeSuggest: (p) => call('place_suggest', { session: tok(), ...p }),
     placeJoin: (id) => call('place_join', { session: tok(), id }),
     adminPlaces: (key) => call('admin_places', { key }),
+    adminPlacesImport: (key, kind) => call('admin_places_import', { key, kind }),
     adminPlaceSave: (key, p) => call('admin_place_save', { key, ...p }),
     muteGet: (kind, id) => call('mute_get', { session: tok(), kind, id }),
     muteSet: (kind, id, on) => call('mute_set', { session: tok(), kind, id, on }),
