@@ -416,4 +416,5 @@ create table if not exists admin_subs (endpoint text primary key, p256dh text no
 alter table orders add column if not exists points int;
 update users set is_admin = false where is_admin;
 insert into users (phone, pass_salt, pass_hash, nick, role, profile_done, gender, meet, birthdate, country, interests, avatar, last_seen)
-  select 'team-account', 'x', 'x', 'ADate Team', 'team', true, 'm', 'both', '2008-01-01', 'LB', array['support'], 'animal:cat', now() where not exists (select 1 from users where phone = 'team-account');
+  select 'team-account', 'x', 'x', 'ADate Team', 'team', false, 'm', 'both', '2008-01-01', 'LB', array['support'], 'animal:cat', now() where not exists (select 1 from users where phone = 'team-account');
+update users set profile_done = false where phone = 'team-account';
