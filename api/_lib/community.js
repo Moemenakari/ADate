@@ -23,6 +23,30 @@ function screenText(raw, max) {
   return '';
 }
 
+
+/** Places for the part of the map the person is looking at. Real places (schools, food, resorts, shops, parks) come from OpenStreetMap the first time
+ *  somebody looks at an area, and are kept in our own table so the next person gets them instantly. Lebanon only. */
+const OSM_KIND = (t) => t.amenity === 'school' || t.amenity === 'kindergarten' ? 'school' : (t.amenity === 'university' || t.amenity === 'college') ? 'uni' : (t.amenity === 'restaurant' || t.amenity === 'fast_food') ? 'food' : t.amenity === 'cafe' ? 'cafe'
+  : ['resort', 'hotel', 'guest_house', 'attraction', 'museum'].includes(t.tourism) || ['beach_resort', 'water_park', 'resort'].includes(t.leisure) ? 'resort' : ['park', 'garden', 'stadium', 'sports_centre', 'fitness_centre'].includes(t.leisure) ? 'park' : t.shop ? 'shop' : null;
+const tileOf = (lat, lng, z) => { const n = 2 ** z, r = lat * Math.PI / 180; return [Math.floor((lng + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)]; };
+const tileBox = (x, y, z) => { const n = 2 ** z, lng = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI; return [lat(y + 1), lng(x), lat(y), lng(x + 1)]; }; // south, west, north, east
+async function loadTile(sql, x, y) {
+  const key = '14/' + x + '/' + y, have = await sql`select 1 from place_tiles where tile = ${key} and fetched_at > now() - interval '60 days'`;
+  if (have.length) return true;
+  const bb = tileBox(x, y, 14).map((v) => v.toFixed(5)).join(',');
+  const q = '[out:json][timeout:25];(nwr["amenity"~"^(school|kindergarten|university|college|restaurant|fast_food|cafe)$"](' + bb + ');nwr["tourism"~"^(resort|hotel|guest_house|attraction|museum)$"](' + bb + ');nwr["leisure"~"^(park|garden|stadium|sports_centre|fitness_centre|beach_resort|water_park|resort)$"](' + bb + ');nwr["shop"~"^(mall|supermarket|department_store|clothes|bakery|mobile_phone|convenience)$"](' + bb + '););out center tags 700;';
+  let data; try { const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'ADate/1.0 (adate.vercel.app)' }, signal: AbortSignal.timeout(22000) }); if (!r.ok) return false; data = await r.json(); } catch (e) { return false; }
+  const ids = [], names = [], kinds = [], lats = [], lngs = [];
+  for (const el of data.elements || []) {
+    const t = el.tags || {}, kind = OSM_KIND(t), name = String(t['name:en'] || t.name || '').replace(/\s+/g, ' ').trim().slice(0, 60), la = el.lat != null ? el.lat : el.center && el.center.lat, lo = el.lon != null ? el.lon : el.center && el.center.lon;
+    if (!kind || name.length < 2 || !Number.isFinite(la) || !Number.isFinite(lo) || screenText(name, 60)) continue;
+    ids.push(el.type[0] + el.id); names.push(name); kinds.push(kind); lats.push(la); lngs.push(lo);
+  }
+  if (ids.length) await sql`insert into places (osm_id, name, kind, lat, lng) select t.i, t.n, t.k, t.la, t.lo from unnest(${ids}::text[], ${names}::text[], ${kinds}::text[], ${lats}::float8[], ${lngs}::float8[]) as t(i, n, k, la, lo) on conflict do nothing`;
+  await sql`insert into place_tiles (tile) values (${key}) on conflict (tile) do update set fetched_at = now()`;
+  return true;
+}
+
 // Seasonal frames around the profile picture: 5 points, can be bought while the season runs and are kept afterwards.
 const FRAMES = { halloween: { name: 'Halloween', emoji: '🎃', price: 5, from: '2026-10-01', to: '2026-11-05' }, newyear: { name: 'New Year', emoji: '🎆', price: 5, from: '2026-12-15', to: '2027-01-06' }, ramadan: { name: 'Ramadan', emoji: '🌙', price: 5, from: '2027-02-08', to: '2027-03-12' } };
 const frameOpen = (f) => { const t = new Date().toISOString().slice(0, 10); return t >= f.from && t <= f.to; };
@@ -286,9 +310,9 @@ async function handle(action, ctx) {
     case 'place_share_set': { const u = await need(); await sql`update users set share_place = ${!!b.on} where id = ${u.id}`; return out({ ok: true }); }
     case 'places_sheet': { // my places: recent, top, and ones I have not been to
       const u = await need();
-      const recent = await sql`select p.id, p.name, p.kind, max(c.created_at) as at from place_checkins c join places p on p.id = c.place_id where c.user_id = ${u.id} and p.active group by p.id order by at desc limit 20`;
-      const top = await sql`select p.id, p.name, p.kind, count(distinct c.user_id)::int as visits from places p left join place_checkins c on c.place_id = p.id where p.active group by p.id order by visits desc, p.name limit 20`;
-      const sug = await sql`select p.id, p.name, p.kind from places p where p.active and not exists (select 1 from place_checkins c where c.place_id = p.id and c.user_id = ${u.id}) order by random() limit 12`;
+      const recent = await sql`select p.id, p.name, p.kind, p.lat, p.lng, max(c.created_at) as at from place_checkins c join places p on p.id = c.place_id where c.user_id = ${u.id} and p.active group by p.id order by at desc limit 20`;
+      const top = await sql`select p.id, p.name, p.kind, p.lat, p.lng, count(distinct c.user_id)::int as visits from places p left join place_checkins c on c.place_id = p.id where p.active group by p.id order by visits desc, p.name limit 20`;
+      const sug = await sql`select p.id, p.name, p.kind, p.lat, p.lng from places p where p.active and not exists (select 1 from place_checkins c where c.place_id = p.id and c.user_id = ${u.id}) order by random() limit 12`;
       return out({ recent, top, suggested: sug, share: !!u.share_place });
     }
     case 'place_friends_here': { // friends who chose to share and checked in during the last 3 hours (place only)
@@ -354,9 +378,27 @@ async function handle(action, ctx) {
       await notifyAdmins(sql, '📍 New place suggested', name);
       return out({ ok: true });
     }
+    case 'places_search': {
+      const u = await need(), q = String(b.q || '').replace(/[%_\\]/g, ' ').trim().slice(0, 30); if (q.length < 2) return out({ places: [] });
+      const rows = await sql`select p.id, p.name, p.kind, p.lat, p.lng, (select count(*) from users x where x.place_id = p.id)::int as members from places p where p.active and p.name ilike ${'%' + q + '%'} order by members desc, p.name limit 20`;
+      return out({ places: rows });
+    }
+    case 'places_view': { // places inside the box the person is looking at
+      const u = await need(), S = Number(b.south), W = Number(b.west), N = Number(b.north), E = Number(b.east);
+      if (![S, W, N, E].every(Number.isFinite) || N <= S || E <= W) throw bad('Bad area');
+      const s2 = Math.max(S, 33.0), n2 = Math.min(N, 34.75), w2 = Math.max(W, 35.05), e2 = Math.min(E, 36.65); // Lebanon only
+      let partial = false;
+      if (n2 > s2 && e2 > w2 && n2 - s2 <= 0.06 && e2 - w2 <= 0.06) { // zoomed in enough: fetch what is missing
+        const a = tileOf(n2, w2, 14), c = tileOf(s2, e2, 14), todo = [];
+        for (let x = a[0]; x <= c[0]; x++) for (let y = a[1]; y <= c[1]; y++) todo.push([x, y]);
+        for (const [x, y] of todo.slice(0, 4)) if (!(await loadTile(sql, x, y))) partial = true;
+      }
+      const rows = await sql`select p.id, p.name, p.kind, p.lat, p.lng, (select count(*) from users x where x.place_id = p.id)::int as members from places p where p.active and p.lat between ${S} and ${N} and p.lng between ${W} and ${E} order by p.id limit 500`;
+      return out({ places: rows, partial });
+    }
     case 'places_list': {
       const u = await need();
-      const rows = await sql`select p.id, p.name, p.kind, p.lat, p.lng, (select count(*) from users x where x.place_id = p.id)::int as members from places p where p.active order by p.name`;
+      const rows = await sql`select p.id, p.name, p.kind, p.lat, p.lng, (select count(*) from users x where x.place_id = p.id)::int as members from places p where p.active and p.osm_id is null order by p.name`;
       return out({ places: rows, mine: u.place_id ? String(u.place_id) : null });
     }
     case 'place_view': { // one place: who is the most active this week (nicknames only)
@@ -371,7 +413,10 @@ async function handle(action, ctx) {
       const avg = (await sql`select round(avg(rating)::numeric, 1)::float as a, count(*)::int as n from place_reviews where place_id = ${id}`)[0];
       const been = (await sql`select 1 from place_checkins where place_id = ${id} and user_id = ${u.id} limit 1`).length > 0;
       const myrv = (await sql`select rating, body from place_reviews where place_id = ${id} and user_id = ${u.id}`)[0] || null;
-      return out({ visits, rating: avg.n ? avg.a : null, rating_n: avg.n, reviews: rv, been, my_review: myrv, place: p, members, mine: String(u.place_id || '') === String(id), top: rows.map((r, i) => ({ rank: i + 1, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', score: r.score, me: r.id === u.id })) });
+      const fv = await sql`select distinct f.id, f.nick, f.avatar, f.frame, t.id as thread, max(c.created_at) as at
+        from dm_threads t join users f on f.id = case when t.a = ${u.id} then t.b else t.a end join place_checkins c on c.user_id = f.id and c.place_id = ${id}
+        where (t.a = ${u.id} or t.b = ${u.id}) and t.status = 'open' and f.share_place and not f.blocked and f.nick is not null group by f.id, t.id order by at desc limit 12`;
+      return out({ friends_been: fv, visits, rating: avg.n ? avg.a : null, rating_n: avg.n, reviews: rv, been, my_review: myrv, place: p, members, mine: String(u.place_id || '') === String(id), top: rows.map((r, i) => ({ rank: i + 1, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', score: r.score, me: r.id === u.id })) });
     }
     case 'place_join': { // pick my school or area, or leave with id = null
       const u = await need();

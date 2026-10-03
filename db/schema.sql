@@ -393,3 +393,5 @@ alter table users add column if not exists share_place boolean not null default 
 
 alter table places add column if not exists osm_id text;
 create unique index if not exists places_osm_idx on places (osm_id) where osm_id is not null;
+create table if not exists place_tiles (tile text primary key, fetched_at timestamptz not null default now());
+create index if not exists places_pos_idx on places (lat, lng);

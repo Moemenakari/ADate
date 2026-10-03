@@ -491,3 +491,5 @@ html[data-ui="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brig
 .zhigh .pin i{display:block}
 .mapfab.round{margin-left:0}.mapbtns .round:last-child{margin-left:auto}
 .marker-cluster div{background:#7a5cff;color:#fff;font-weight:800}.marker-cluster{background:rgba(122,92,255,.35)}
+
+.maphint{position:absolute;left:60px;right:12px;top:calc(14px + env(safe-area-inset-top));z-index:500;background:var(--surface);border-radius:999px;padding:9px 14px;font-size:.8rem;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.35);text-align:center;pointer-events:none}

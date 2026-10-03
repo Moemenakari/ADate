@@ -145,6 +145,8 @@
     noticeRead: (id) => call('notice_read', { session: tok(), id }),
     adminGift: (key, user_id, points, message) => call('admin_gift', { key, user_id, points, message }),
     placesList: () => call('places_list', { session: tok() }),
+    placesSearch: (q) => call('places_search', { session: tok(), q }),
+    placesView: (b) => call('places_view', { session: tok(), ...b }),
     placeView: (id) => call('place_view', { session: tok(), id }),
     placeShareSet: (on) => call('place_share_set', { session: tok(), on }),
     placesSheet: () => call('places_sheet', { session: tok() }),

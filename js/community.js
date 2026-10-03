@@ -570,23 +570,29 @@ window.CommunityInit = function (ui) {
           invite, friendBox,
           h('button', { class: 'btn block ' + (v.mine ? '' : ''), type: 'button', onclick: async () => { try { await API.placeJoin(v.mine ? null : p.id); d.mine = v.mine ? null : String(p.id); toast(v.mine ? 'Done' : 'Saved as my place ✓'); open(p); } catch (e) { toast(err(e), 'bad'); } } }, v.mine ? '✖ Not my place' : '⭐ This is my place'),
           v.been ? h('div', { class: 'stack' }, h('b', null, 'Your feedback'), starRow, rtxt, h('button', { class: 'btn block', type: 'button', onclick: async () => { try { await API.placeReview(p.id, rev.r, rtxt.value); toast('Thanks for your feedback ✓'); open(p); } catch (e) { toast(err(e), 'bad'); } } }, 'Send feedback')) : h('small', { class: 'hint' }, 'Check in here to leave feedback.'),
+          ...(v.friends_been && v.friends_been.length ? [h('b', null, '👥 Friends who came here'), ...v.friends_been.map((x) => h('div', { class: 'roomcard' }, avatar(x.avatar, x.nick, 36, x.frame), h('span', { class: 'rc-t' }, h('b', null, x.nick), h('small', null, 'Visited ' + ui.ago(x.at))), h('a', { class: 'btn sm', href: '#/dm/' + x.thread }, '💬')))] : []),
           h('b', null, '💬 Feedback'), ...(v.reviews.length ? v.reviews.map((r) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-t' }, h('b', null, stars(r.rating) + '  ' + r.nick), h('small', null, r.body || '')))) : [h('p', { class: 'hint' }, 'No feedback yet.')]),
           h('b', null, '🏆 Most active here this week'), ...(v.top.length ? v.top.map((t) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, '#' + t.rank), avatar(t.avatar, t.nick, 36, t.frame), h('span', { class: 'rc-t' }, h('b', null, t.nick + (t.me ? ' (you)' : '')), h('small', null, t.score + ' messages')))) : [h('p', { class: 'hint' }, 'Nobody yet.')]));
         map.panTo([v.place.lat, v.place.lng]);
       } catch (e) { sheet.replaceChildren(closeBtn(), h('p', { class: 'hint' }, err(e))); }
     };
-    const byId = {}, cluster = L.markerClusterGroup({ maxClusterRadius: 48, showCoverageOnHover: false, disableClusteringAtZoom: 17 }); d.places.forEach((p) => { byId[p.id] = p; cluster.addLayer(L.marker([p.lat, p.lng], { icon: icon(p), title: p.name }).on('click', () => open(p))); }); map.addLayer(cluster);
+    const byId = {}, cluster = L.markerClusterGroup({ maxClusterRadius: 48, showCoverageOnHover: false, disableClusteringAtZoom: 17 }); map.addLayer(cluster);
+    const addPlace = (p) => { if (byId[p.id]) return; byId[p.id] = p; cluster.addLayer(L.marker([p.lat, p.lng], { icon: icon(p), title: p.name }).on('click', () => open(p))); };
+    d.places.forEach(addPlace);
+    const hint = h('div', { class: 'maphint' }, '🔎 Zoom in to see schools, restaurants, resorts and shops'); mapEl.parentNode.append(hint);
+    let tmr; const fetchView = () => { if (map.getZoom() < 14) { hint.style.display = ''; return; } hint.style.display = 'none'; const bd = map.getBounds(); API.placesView({ south: bd.getSouth(), west: bd.getWest(), north: bd.getNorth(), east: bd.getEast() }).then((r) => r.places.forEach(addPlace)).catch(() => {}); };
+    map.on('moveend', () => { clearTimeout(tmr); tmr = setTimeout(fetchView, 450); }); fetchView();
     const show = (...kids) => { sheet.replaceChildren(closeBtn(), ...kids); drawer.classList.add('up'); };
-    const placeRow = (p, sub) => h('button', { class: 'roomcard rowbtn', type: 'button', onclick: () => { const q = byId[p.id]; if (q) { map.setView([q.lat, q.lng], 15); open(q); } } }, h('span', { class: 'rc-e' }, (KIND[p.kind] || KIND.place)[0]), h('span', { class: 'rc-t' }, h('b', null, p.name), sub ? h('small', null, sub) : null));
+    const placeRow = (p, sub) => h('button', { class: 'roomcard rowbtn', type: 'button', onclick: () => { addPlace(p); map.setView([p.lat, p.lng], 16); open(byId[p.id] || p); } }, h('span', { class: 'rc-e' }, (KIND[p.kind] || KIND.place)[0]), h('span', { class: 'rc-t' }, h('b', null, p.name), sub ? h('small', null, sub) : null));
     btnPlaces.onclick = async () => {
       let sh; try { sh = await API.placesSheet(); } catch (e) { return toast(err(e), 'bad'); }
       let tab = sh.recent.length ? 'recent' : 'top', q = ''; const list = h('div', { class: 'stack' }), tabs = h('div', { class: 'row' }), search = h('input', { type: 'text', placeholder: 'Search for a place…', 'aria-label': 'Search places', maxlength: 30 });
       const draw = () => {
         tabs.replaceChildren(...[['recent', 'Recent'], ['top', 'Top'], ['suggested', 'Suggested']].map(([k2, l]) => h('button', { class: 'chip' + (tab === k2 && !q ? ' on' : ''), type: 'button', onclick: () => { tab = k2; q = ''; search.value = ''; draw(); } }, l)));
-        const rows = q ? d.places.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 30).map((p) => placeRow(p, p.members + ' members')) : tab === 'recent' ? sh.recent.map((p) => placeRow(p, 'Visited ' + ui.ago(p.at))) : tab === 'top' ? sh.top.map((p) => placeRow(p, p.visits + ' visited')) : sh.suggested.map((p) => placeRow(p, 'You have not been here yet'));
+        const rows = q ? (found || d.places.filter((p) => p.name.toLowerCase().includes(q))).slice(0, 30).map((p) => placeRow(p, (KIND[p.kind] || KIND.place)[1] + (p.members ? ' · ' + p.members + ' members' : ''))) : tab === 'recent' ? sh.recent.map((p) => placeRow(p, 'Visited ' + ui.ago(p.at))) : tab === 'top' ? sh.top.map((p) => placeRow(p, p.visits + ' visited')) : sh.suggested.map((p) => placeRow(p, 'You have not been here yet'));
         list.replaceChildren(...(rows.length ? rows : [h('p', { class: 'hint' }, q ? 'No place with that name.' : tab === 'recent' ? 'No check-ins yet. Open a place and tap "I am here".' : 'Nothing here yet.')]));
       };
-      search.oninput = () => { q = search.value.trim().toLowerCase(); draw(); }; draw();
+      let found = null, st; search.oninput = () => { q = search.value.trim().toLowerCase(); found = null; draw(); clearTimeout(st); if (q.length >= 2) st = setTimeout(async () => { try { const r = await API.placesSearch(q); if (q === search.value.trim().toLowerCase()) { found = r.places; draw(); } } catch (e) { /* the local list stays */ } }, 350); }; draw();
       show(h('div', { class: 'h2' }, 'My places'), search, tabs, list, h('button', { class: 'btn block', type: 'button', onclick: () => suggestBtn.onclick() }, '➕ Suggest a place'));
     };
     const suggestBtn = h('button'); suggestBtn.onclick = async () => {
