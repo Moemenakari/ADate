@@ -122,20 +122,27 @@ window.CommunityInit = function (ui) {
 
   /* ---------------------------------------------------------------- chat engine (rooms and private) */
   const muteBtn = (kind, id) => { const b = h('button', { class: 'btn sm', 'aria-label': 'Notifications' }, '🔔'); let off = false; const paint = () => { b.textContent = off ? '🔕' : '🔔'; }; API.muteGet(kind, id).then((r) => { off = !!r.muted; paint(); }).catch(() => {}); b.onclick = async () => { try { await API.muteSet(kind, id, !off); off = !off; paint(); toast(off ? 'Notifications are off for this chat' : 'Notifications are on'); } catch (e) { toast(err(e), 'bad'); } }; return b; };
+  /** The sticker button: opens the sticker keyboard above the message box. */
+  function stickerButton(slot, onPick) {
+    const b = h('button', { class: 'btn sm stkopen', type: 'button', 'aria-label': 'Stickers' }, '🌟'); let open = false;
+    b.onclick = () => { open = !open; if (open && window.ChatStickers) slot.replaceChildren(window.ChatStickers.picker((id) => { slot.replaceChildren(); open = false; onPick(id); })); else slot.replaceChildren(); };
+    return b;
+  }
   function chat({ title, emoji, backHref, headerExtra, fetchFirst, fetchAfter, send, mineKey, report, extraTick, afterLayout }) {
     let last = 0, mutedUntil = null;
     const list = h('div', { class: 'chatlist' }), msg = h('div'), inp = h('input', { type: 'text', maxlength: 500, placeholder: 'Write a message (text only)', 'aria-label': 'Message', enterkeyhint: 'send' });
     const sendBtn = h('button', { class: 'btn pri', type: 'button' }, 'Send');
-    const bubble = (m) => h('div', { class: 'cmsg' + (m.mine ? ' mine' : '') }, m.mine ? null : h('button', { class: 'who', onclick: () => m.user_id && card(m.user_id) }, m.nick || ''), h('div', { class: 'bub' }, m.body), h('small', null, timeShort(m.at), ' ', m.mine || !report ? '' : h('button', { class: 'flag', title: 'Report', 'aria-label': 'Report this message', onclick: async () => { if (!confirm('Report this message?')) return; try { const r = await report(m.id); toast(r.muted ? 'Reported. Thank you.' : 'Reported. Thank you.'); } catch (e) { toast(err(e), 'bad'); } } }, '🚩')));
+    const bubble = (m) => h('div', { class: 'cmsg' + (m.mine ? ' mine' : '') }, m.mine ? null : h('button', { class: 'who', onclick: () => m.user_id && card(m.user_id) }, m.nick || ''), h('div', { class: 'bub' + (/^\[st:[a-z]+\]$/.test(m.body) ? ' stkmsg' : '') }, window.ChatStickers ? window.ChatStickers.body(m.body) : m.body), h('small', null, timeShort(m.at), ' ', m.mine || !report ? '' : h('button', { class: 'flag', title: 'Report', 'aria-label': 'Report this message', onclick: async () => { if (!confirm('Report this message?')) return; try { const r = await report(m.id); toast(r.muted ? 'Reported. Thank you.' : 'Reported. Thank you.'); } catch (e) { toast(err(e), 'bad'); } } }, '🚩')));
     const add = (rows) => { if (!rows.length) return; const near = list.scrollHeight - list.scrollTop - list.clientHeight < 140; rows.forEach((m) => { last = Math.max(last, m.id); list.append(bubble(m)); }); if (near || last === rows[rows.length - 1].id && list.children.length === rows.length) list.scrollTop = list.scrollHeight; };
     async function tick(first) {
       try { const d = first ? await fetchFirst() : await fetchAfter(last); if (first && d.room) head.querySelector('small').textContent = `${d.room.members} members`; if (d.other) { const nm = (d.other.nick || 'Chat') + (d.other.fast ? ' ⚡' : ''); head.querySelector('b').textContent = nm; head.querySelector('small').textContent = presence(d.other.last_seen) + (d.thread && d.thread.streak >= 2 ? ' · 🔥 ' + d.thread.streak : ''); } if (extraTick) { try { extraTick(d, first); } catch (e) { /* the chat still works */ } } mutedUntil = d.muted_until || null; banner.textContent = mutedUntil ? '🔇 You are muted for a while. You can still read.' : ''; banner.style.display = mutedUntil ? '' : 'none'; if (first) list.replaceChildren(); add(d.messages || []); if (first && d.other) head.querySelector('b').textContent = d.other.nick; } catch (e) { if (/log in/i.test(err(e))) location.hash = '#/login'; }
     }
     async function go() { const body = inp.value.trim(); if (!body) return; sendBtn.disabled = true; try { await send(body); inp.value = ''; msg.replaceChildren(); await tick(false); list.scrollTop = list.scrollHeight; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } sendBtn.disabled = false; inp.focus(); }
     sendBtn.onclick = go; inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+    const stkSlot = h('div'), stkBtn = stickerButton(stkSlot, async (id) => { try { await send('[st:' + id + ']'); msg.replaceChildren(); await tick(false); list.scrollTop = list.scrollHeight; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } });
     const head = h('div', { class: 'chathead' }, h('a', { class: 'btn sm', href: backHref }, '←'), h('div', { class: 'ct' }, h('b', null, (emoji ? emoji + ' ' : '') + title), h('small', null, '')), headerExtra || null);
     const banner = h('div', { class: 'note', style: 'display:none' });
-    $app.replaceChildren(h('div', { class: 'wrap cm chatwrap' }, head, banner, list, msg, h('div', { class: 'composer' }, inp, sendBtn)), bar(null, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm chatwrap' }, head, banner, list, msg, stkSlot, h('div', { class: 'composer' }, stkBtn, inp, sendBtn)), bar(null, ME && ME.points));
     if (afterLayout) afterLayout({ banner, list, msg, composer: document.querySelector('.composer'), head, inp, sendBtn });
     tick(true).then(() => { list.scrollTop = list.scrollHeight; });
     ui.setPoll(() => { if (document.visibilityState === 'visible') tick(false); }, 3000);
@@ -296,7 +303,7 @@ window.CommunityInit = function (ui) {
       const m = d.match, p = d.peer; lastId = 0;
       const list = h('div', { class: 'chatlist matchlist' }), inp = h('input', { type: 'text', maxlength: 300, placeholder: 'Say something (text only)', 'aria-label': 'Message', enterkeyhint: 'send' }), msg = h('div'), ctl = h('div', { class: 'matchctl' });
       let gameN = 0;
-      const bubble = (x) => x.kind === 'game' ? h('div', { class: 'gamebub' }, h('small', null, '🎲 Round ' + (++gameN) + ' of ' + m.rounds), h('b', null, x.body)) : h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' }, x.body));
+      const bubble = (x) => x.kind === 'game' ? h('div', { class: 'gamebub' }, h('small', null, '🎲 Round ' + (++gameN) + ' of ' + m.rounds), h('b', null, x.body)) : h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' + (/^\[st:[a-z]+\]$/.test(x.body) ? ' stkmsg' : '') }, window.ChatStickers ? window.ChatStickers.body(x.body) : x.body));
       const draw = (st) => {
         cur = st; ctl.replaceChildren();
         if (st.state !== 'chat') return;
@@ -310,8 +317,9 @@ window.CommunityInit = function (ui) {
       async function poll() { try { const r = await API.matchMsgs(m.id, lastId); r.messages.forEach((x) => { lastId = Math.max(lastId, x.id); list.append(bubble(x)); }); if (r.messages.length) list.scrollTop = list.scrollHeight; draw(r.match); if (r.match.state !== 'chat') tick(); } catch (e) { /* next tick */ } }
       async function go() { const body = inp.value.trim(); if (!body) return; try { await API.matchSend(m.id, body); inp.value = ''; msg.replaceChildren(); poll(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } }
       inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+      const stkSlot = h('div'), stkBtn = stickerButton(stkSlot, async (id) => { try { await API.matchSend(m.id, '[st:' + id + ']'); msg.replaceChildren(); poll(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } });
       const menu = h('button', { class: 'btn sm', 'aria-label': 'More', onclick: () => { const ch = prompt('Type 1 to report and block this person, 2 to just leave the chat.'); if (ch === '1') API.matchReport(m.id, true).then(() => { shown = ''; tick(); }); else if (ch === '2') API.matchLeave(m.id).then(() => { shown = ''; tick(); }); } }, '⋯');
-      box.replaceChildren(h('div', { class: 'chathead' }, peerHead(p), menu), list, msg, ctl, h('div', { class: 'composer' }, inp, h('button', { class: 'btn pri', onclick: go }, 'Send')));
+      box.replaceChildren(h('div', { class: 'chathead' }, peerHead(p), menu), list, msg, ctl, stkSlot, h('div', { class: 'composer' }, stkBtn, inp, h('button', { class: 'btn pri', onclick: go }, 'Send')));
       board = window.GameBoard.mount(box, ctl, { move: async (cell) => { const r = await API.matchMove(m.id, cell); draw(r.match); }, stroke: (k) => API.matchDraw(m.id, k), clear: () => API.matchDraw(m.id, null, true), guess: async (t) => { const r = await API.matchGuess(m.id, t); if (r.correct) toast('🎉 Correct!'); poll(); }, pick: async (i) => { const r = await API.matchPick(m.id, i); draw(r.match); } });
       draw(m); poll(); ui.setPoll(() => { if (document.visibilityState === 'visible') poll(); }, 2500);
     }

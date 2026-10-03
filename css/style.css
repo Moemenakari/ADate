@@ -463,3 +463,12 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .pin.mine span{border-color:#ffd60a;box-shadow:0 0 0 4px rgba(255,214,10,.35)}
 .pin b{position:absolute;right:-2px;top:-4px;background:#7a5cff;color:#fff;border-radius:10px;font-size:11px;padding:1px 6px}
 html[data-ui="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.95) contrast(.9)}
+
+/* chat stickers */
+.stk{position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:132px;height:132px;border-radius:38% 62% 55% 45%/50% 45% 55% 50%;transform:rotate(-4deg);box-shadow:0 3px 10px rgba(0,0,0,.25);color:#2b2140}
+.stk.sm{width:76px;height:76px;gap:0}.stk-e{font-size:54px;line-height:1}.stk.sm .stk-e{font-size:30px}
+.stk-t{font-weight:800;font-size:15px;text-align:center;padding:0 8px;line-height:1.1;-webkit-text-stroke:3px #fff;paint-order:stroke fill}.stk.sm .stk-t{font-size:10px;-webkit-text-stroke:2px #fff}
+.bub.stkmsg{background:transparent!important;box-shadow:none!important;border:0!important;padding:2px!important}
+.stkpick{display:flex;flex-direction:column;gap:8px;padding:10px;border-top:1px solid var(--line,#2a2a3a);max-height:42vh}
+.stkcats{display:flex;gap:6px;overflow-x:auto}.stkgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;overflow-y:auto;justify-items:center}
+.stkbtn{background:none;border:0;padding:2px;cursor:pointer}.stkopen{padding:0 10px}
