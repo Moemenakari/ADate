@@ -122,7 +122,7 @@
     matchGuess: (match, guess) => call('match_guess', { session: tok(), match, guess }),
     matchVote: (match, yes) => call('match_vote', { session: tok(), match, yes }),
     matchReport: (match, block) => call('match_report', { session: tok(), match, block }),
-    discoverNext: () => call('discover_next', { session: tok() }),
+    discoverNext: (scope) => call('discover_next', { session: tok(), scope }),
     discoverAct: (to, act, body) => call('discover_act', { session: tok(), to, act, body }),
     discoverReport: (to) => call('discover_report', { session: tok(), to }),
     discoverNear: () => call('discover_near', { session: tok() }),

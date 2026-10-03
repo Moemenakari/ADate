@@ -593,3 +593,6 @@ body.nx .brand{font-size:1.2rem;gap:5px}body.nx .brand b{padding:0 6px}
 .h2.big{font-size:1.7rem;font-weight:900;letter-spacing:-.03em;margin-top:8px}
 .authlogo{display:flex;flex-direction:column;align-items:center;gap:14px}.authlogo i{font-size:2.4rem;padding:0 16px}
 .legal h3{margin:14px 0 2px;font-size:1.05rem}.legal p{margin:4px 0;line-height:1.6}.legaltabs{margin:8px 0}.legal[dir=rtl]{text-align:right}
+body.nx .gamecard b,body.nx .gamecard small{color:inherit!important}html[data-ui=dark] body.nx .gamecard small{color:var(--muted)!important}
+html[data-ui] body.nx .gamecard,html[data-ui] body.nx .gamecard.c1,html[data-ui] body.nx .gamecard.c2,html[data-ui] body.nx .gamecard.c3{background:var(--surface)!important;color:var(--ink)!important;box-shadow:inset 0 4px 0 var(--yel)!important;background-image:none!important}
+html[data-ui] body.nx .gamecard small{color:var(--muted)!important}

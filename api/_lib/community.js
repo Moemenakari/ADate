@@ -507,7 +507,13 @@ async function handle(action, ctx) {
         let streak = t[0].streak || 0, newSd = sd;
         if (aDay === today && bDay === today && sd !== today) { streak = sd === yest ? streak + 1 : 1; newSd = today; }
         await sql`update dm_threads set a_day = ${aDay}, b_day = ${bDay}, streak = ${streak}, streak_day = ${newSd} where id = ${id}`; }
-      if ((await sql`select 1 from users where id = ${other} and role = 'team'`).length) { await pushOwner(sql, '💬 Message to the team', (u.nick || 'Someone') + ' wrote to the team.', '/#/admin'); return out({ ok: true }); }
+      if ((await sql`select 1 from users where id = ${other} and role = 'team'`).length) { // a message to the team: the owner is told, and the automatic assistant answers the first questions
+        const clean = String(b.body).replace(/\s+/g, ' ').trim();
+        const r = await require('./assistant').reply(sql, clean, other, id).catch(() => null);
+        await pushOwner(sql, r && r.urgent ? '⚠️ Needs you: ' + (u.nick || 'Someone') : '💬 Message to the team', (u.nick || 'Someone') + ': ' + clean.slice(0, 80), '/#/admin');
+        if (r && r.text) await sql`insert into dm_messages (thread_id, from_user, body) values (${id}, ${other}, ${r.text})`;
+        return out({ ok: true });
+      }
       if (!(await sql`select 1 from notif_mutes where user_id = ${other} and kind = 'dm' and ref = ${id}`).length) await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open O HUB to read it.', '/#/dm/' + id);
       return out({ ok: true });
     }
