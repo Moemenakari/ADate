@@ -80,7 +80,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
-      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, nudge_off: !!u.nudge_off, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
+      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, nudge_off: !!u.nudge_off, birthday_left: Math.max(0, 2 - (u.birthday_changes || 0)), verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
     }
     /* ------------------------------------------------ nickname, theme, avatar */
     case 'nick_set': {
@@ -283,6 +283,16 @@ async function handle(action, ctx) {
       const r = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, ${prize}, 'box', null where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'box' and created_at >= date_trunc('day', now())) returning id`;
       if (!r.length) throw bad('Come back tomorrow for the next one', 409);
       return out({ ok: true, prize, balance: await balanceOf(sql, u.id) });
+    }
+    case 'birthday_set': { // a person can correct their birthday twice; it can never move a person under 18 into the adult group
+      const u = await need(), d = String(b.birthdate || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(new Date(d))) throw bad('Pick your birthday');
+      const now = ageOf(u.birthdate), next = ageOf(d);
+      if (next < 13) throw bad('ADate is for ages 13 and up'); if (next > 100) throw bad('That birthday does not look right');
+      if ((u.birthday_changes || 0) >= 2) throw bad('You already changed your birthday twice. Write to the team in the support chat if it is still wrong.', 403);
+      if (now < 18 && next >= 18) throw bad('To move to the adult group, write to the team in the support chat.', 403);
+      await sql`update users set birthdate = ${d}::date, birthday_changes = birthday_changes + 1 where id = ${u.id}`;
+      return out({ ok: true, age_band: bandOf(next), left: 1 - (u.birthday_changes || 0) });
     }
     case 'mute_get': { const u = await need(); return out({ muted: (await sql`select 1 from notif_mutes where user_id = ${u.id} and kind = ${b.kind === 'room' ? 'room' : 'dm'} and ref = ${idNum(b.id)}`).length > 0 }); }
     case 'mute_set': {
