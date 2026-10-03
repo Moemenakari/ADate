@@ -46,7 +46,7 @@
     adminOrders: (key) => call('admin_orders', { key }),
     adminOrderDecide: (key, id, approve) => call('admin_order_decide', { key, id, approve }),
     photoBuy: () => call('photo_buy', { session: tok() }),
-    photoSet: (data, remove) => call('photo_set', { session: tok(), data, remove: !!remove }),
+    photoSet: (data, remove, slot) => call('photo_set', { session: tok(), data, remove: !!remove, slot: slot || 1 }),
     frameBuy: (key) => call('frame_buy', { session: tok(), key }),
     shareClaim: () => call('share_claim', { session: tok() }),
     hub: () => call('hub', { session: tok() }),

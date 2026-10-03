@@ -187,7 +187,7 @@ async function handle(action, ctx) {
     const u = await need();
     if (!u.gender) throw bad('Tell us who you are first', 409);
     const meet = u.meet || 'both', age = ageOf(u.birthdate), mi = new Set(u.interests || []);
-    const rows = await sql`select t.id, t.nick, t.gender, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, t.reply_n, t.reply_secs, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
+    const rows = await sql`select t.id, t.nick, t.gender, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo2, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, t.reply_n, t.reply_secs, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
       where t.role is distinct from 'team' and t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.muted_until is null or t.muted_until < now())
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
         and (${b.scope === 'near' ? (u.country || '') : ''} = '' or t.country = ${u.country || ''})
@@ -210,7 +210,7 @@ async function handle(action, ctx) {
         if (ins.length) await sql`insert into points_ledger (user_id, delta, reason, ref) values (${u.id}, ${-P.swipe_price}, 'swipe', ${String(t.id)})`;
       }
     }
-    return out({ free: free0, card: { id: t.id, nick: t.nick, last_seen: t.last_seen, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
+    return out({ free: free0, card: { id: t.id, nick: t.nick, last_seen: t.last_seen, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', photo2: photoOn(t) ? (t.photo2 || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
   }
   if (action === 'discover_act') { // Skip, or Invite with an optional first message
     const u = await need(), to = idNum(b.to); if (to === u.id) throw bad('That is you');

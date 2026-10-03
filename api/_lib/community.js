@@ -126,7 +126,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
-      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, photo: photoOn(u) && u.photo ? u.photo : '', todo: todoOf(u, age, P), nudge_off: !!u.nudge_off, birthday_left: Math.max(0, 2 - (u.birthday_changes || 0)), verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: P.photo_price, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
+      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, photo: photoOn(u) && u.photo ? u.photo : '', photo2: photoOn(u) && u.photo2 ? u.photo2 : '', todo: todoOf(u, age, P), nudge_off: !!u.nudge_off, birthday_left: Math.max(0, 2 - (u.birthday_changes || 0)), verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: P.photo_price, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
     }
     /* ------------------------------------------------ nickname, theme, avatar */
     case 'nick_set': {
@@ -154,7 +154,7 @@ async function handle(action, ctx) {
     }
     case 'profile_view': {
       const u = await need(), id = idNum(b.user_id);
-      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo_ok, photo_until, frame, verified, selfie_ok, is_admin, role, socials, reply_n, reply_secs, blocked from users where id = ${id}`;
+      const r = await sql`select id, nick, country, birthdate, interests, theme, avatar, photo, photo2, photo_ok, photo_until, frame, verified, selfie_ok, is_admin, role, socials, reply_n, reply_secs, blocked from users where id = ${id}`;
       if (!r.length || r[0].blocked) throw bad('Not found', 404);
       const t = r[0], age = ageOf(t.birthdate);
       const blockedByMe = (await sql`select 1 from blocks where blocker = ${u.id} and blocked = ${id}`).length > 0;
@@ -163,7 +163,7 @@ async function handle(action, ctx) {
         if (!seen.length) { const recent = await sql`select 1 from profile_views where target = ${id} and notified and created_at > now() - interval '2 hours'`; const tell = !recent.length;
           await sql`insert into profile_views (viewer, target, notified) values (${u.id}, ${id}, ${tell})`;
           if (tell) await pushUsers(sql, [id], '👀 Someone viewed your profile', 'Open Views to see who. It costs 1 star.', '/#/views'); } }
-      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && !!(t.socials && Object.keys(t.socials).length), socials_have: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { ...socOf(P).price, all: P.soc_price_all }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
+      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', photo2: photoOn(t) ? (t.photo2 || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && !!(t.socials && Object.keys(t.socials).length), socials_have: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { ...socOf(P).price, all: P.soc_price_all }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
       const u = await need(); if (photoOn(u)) return out({ ok: true, balance: await balanceOf(sql, u.id) });
@@ -172,11 +172,13 @@ async function handle(action, ctx) {
       if (r.length) await addPoints(sql, u.id, -P.photo_price, 'photo');
       return out({ ok: true, balance: await balanceOf(sql, u.id) });
     }
-    case 'photo_set': {
-      const u = await need(); if (!photoOn(u)) throw bad('Get the real photo option first', 402);
-      if (b.remove) { await sql`update users set photo = null where id = ${u.id}`; return out({ ok: true }); }
+    case 'photo_set': { // up to two pictures: slot 1 and slot 2
+      const u = await need(); if (!photoOn(u)) throw bad('Unlock photos first', 402);
+      const col2 = Number(b.slot) === 2;
+      if (b.remove) { if (col2) await sql`update users set photo2 = null where id = ${u.id}`; else await sql`update users set photo = photo2, photo2 = null where id = ${u.id}`; return out({ ok: true }); }
       const d = String(b.data || ''); if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(d) || d.length > 220000) throw bad('That picture is too big or not a picture');
-      await sql`update users set photo = ${d} where id = ${u.id}`; return out({ ok: true });
+      if (col2) await sql`update users set photo2 = ${d} where id = ${u.id}`; else await sql`update users set photo = ${d} where id = ${u.id}`;
+      return out({ ok: true });
     }
     case 'frame_buy': {
       const u = await need(), f = FRAMES[b.key]; if (!f) throw bad('Bad frame');

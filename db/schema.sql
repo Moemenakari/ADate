@@ -420,3 +420,5 @@ insert into users (phone, pass_salt, pass_hash, nick, role, profile_done, gender
 update users set profile_done = false where phone = 'team-account';
 
 create table if not exists swipe_views (viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, day date not null, primary key (viewer, target, day));
+
+alter table users add column if not exists photo2 text;

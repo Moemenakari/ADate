@@ -598,3 +598,11 @@ html[data-ui] body.nx .gamecard,html[data-ui] body.nx .gamecard.c1,html[data-ui]
 html[data-ui] body.nx .gamecard small{color:var(--muted)!important}
 .coinring{width:auto;min-width:42px;padding:0 9px;border-radius:999px;flex-direction:row;gap:3px;height:42px}.coinring span{font-size:.85rem}.coinring b{font-size:.9rem;white-space:nowrap}
 .profilecard{display:flex;align-items:center;gap:16px;background:var(--surface);border-radius:20px;padding:16px}.pc-info{display:flex;flex-direction:column;gap:2px}.pc-name{font-size:1.4rem;font-weight:900;letter-spacing:-.02em}.pc-info small{color:var(--muted)}
+
+/* photos card: two tiles */
+.phototiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}.phototiles.locked{opacity:.45;pointer-events:none}
+.phototile{position:relative;aspect-ratio:3/4;border-radius:18px;background:var(--surface);overflow:hidden;border:2px dashed var(--line)}.phototile.has{border:0}
+.phototile img{width:100%;height:100%;object-fit:cover;display:block}
+.ptadd{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;color:var(--muted)}.ptadd span{font-size:2.4rem;line-height:1;color:var(--ink)}.ptadd input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ptx{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-weight:900}
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gallery img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:14px}
