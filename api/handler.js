@@ -343,19 +343,11 @@ module.exports = async (req, res) => {
     /* ---------- site owner ---------- */
     if (owner.ACTIONS.includes(action)) { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await owner.handle(action, { sql, b, res, bad })) return; }
     if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide' || action === 'admin_gift' || action === 'admin_hosts' || action === 'admin_test_push' || action === 'admin_selfies' || action === 'admin_selfie_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
-    if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
+    if (action === 'admin_reset' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
-      if (action === 'admin_invite') {
-        if (!ID.test(b.id || '')) throw bad('Bad id');
-        const i = await sql`select id, created_at, opens, first_opened_at, last_opened_at, config from invites where id = ${b.id}`;
-        if (!i.length) throw bad('Not found', 404);
-        const rs = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${b.id} order by created_at desc`;
-        const events = await sql`select created_at as at, kind, data, visitor from events where invite_id = ${b.id} order by created_at asc limit 400`;
-        return res.status(200).json({ created_at: i[0].created_at, opens: i[0].opens, first_opened_at: i[0].first_opened_at, last_opened_at: i[0].last_opened_at, config: i[0].config, responses: rs, events });
-      }
       if (action === 'admin_settings') { const r = await sql`select key, value from settings`; return res.status(200).json(Object.fromEntries(r.map((x) => [x.key, x.value]))); }
       if (action === 'admin_set') {
-        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_link', 'whish_note', 'whish_number', 'whish_link_points12', 'whish_link_points29', 'whish_link_points100', 'card_checkout_url', 'tod_price_1', 'tod_price_2', 'tod_price_3', 'tod_price_4', 'tod_price_5'].includes(k)) throw bad('Bad setting');
+        const k = String(b.name || ''); if (!['owner_whatsapp', 'whish_note', 'whish_number'].includes(k)) throw bad('Bad setting');
         const v = String(b.value || '').trim().slice(0, 300);
         await sql`insert into settings (key, value) values (${k}, ${v}) on conflict (key) do update set value = ${v}`;
         return res.status(200).json({ ok: true });
@@ -382,23 +374,6 @@ module.exports = async (req, res) => {
         await sql`delete from sessions where user_id = ${r[0].id}`;
         return res.status(200).json({ phone, temp });
       }
-      const users = await sql`select u.id, u.phone, u.name, u.first_name, u.last_name, u.birthdate, u.interests, u.profile_done, u.blocked, u.blocked_note, u.verified, u.verify_code, u.is_admin, u.role, u.muted_until, (u.photo is not null) as has_photo, (u.google_sub is not null) as google, u.email, u.created_at, u.last_login_at, u.question,
-          (select count(*) from invites i where i.user_id = u.id)::int as invites from users u order by u.created_at desc limit 1000`;
-      const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens,
-          i.first_opened_at, i.last_opened_at, i.config->>'toIg' as to_ig, (select u.email from users u where u.id = i.user_id) as account_email, (select u.id from users u where u.id = i.user_id) as account_id, (select e.data->>'phone' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'phone', '') <> '' order by e.created_at desc limit 1) as typed_phone, (select e.data->>'ig' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'ig', '') <> '' order by e.created_at desc limit 1) as typed_ig, (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,
-          (select count(*) from responses r where r.invite_id = i.id)::int as answers,
-          (select max(created_at) from responses r where r.invite_id = i.id) as last_answer_at,
-          (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone,
-          (select r.receiver_ig from responses r where r.invite_id = i.id and r.receiver_ig is not null order by r.created_at desc limit 1) as receiver_ig,
-          (select r.answer->>'src' from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_src
-        from invites i order by i.created_at desc limit 1000`;
-      const answers = await sql`select r.invite_id, r.created_at as at, r.message, r.receiver_phone, r.receiver_ig, r.answer, i.sender_name, i.to_name, i.sender_phone
-        from responses r join invites i on i.id = r.invite_id order by r.created_at desc limit 100`;
-      const stats = {
-        users: users.length, invites: invites.length, opened: invites.filter((r) => r.opens > 0).length, answered: invites.filter((r) => r.answers > 0).length,
-        phones: new Set(users.map((r) => r.phone).concat(invites.map((r) => r.sender_phone), invites.map((r) => r.receiver_phone), invites.map((r) => (r.to_contact && r.to_contact[0] !== '@' ? r.to_contact : null))).filter(Boolean)).size
-      };
-      return res.status(200).json({ stats, users, invites, answers });
     }
     throw bad('Unknown action', 404);
   } catch (e) {

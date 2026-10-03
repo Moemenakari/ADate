@@ -82,6 +82,7 @@
           else if (what === 'block') { if (!confirm((p.blocked ? 'Unblock ' : 'Block ') + (p.nick || p.name) + '?')) return; await API.adminMark(key, p.id, p.blocked ? 'unblock' : 'block'); }
           else if (what === 'verify') { await API.adminMark(key, p.id, p.verified ? 'unverify' : 'verify'); }
           else if (what === 'role') { const r = prompt('Role: agent, host, or none', p.role || 'none'); if (r === null) return; const op = ['agent', 'host', 'none'].includes(r.trim()) ? 'role_' + r.trim() : null; if (!op) return alert('Type agent, host or none'); await API.adminMark(key, p.id, op); }
+          else if (what === 'reset') { if (!confirm('Give ' + (p.nick || p.name) + ' a temporary password? Their old password stops working and they are logged out.')) return; const r = await API.adminReset(key, p.phone); prompt('Temporary password for +' + r.phone + '. Send it to them privately, they should change it after logging in.', r.temp); return; }
           else if (what === 'delete') { const t = prompt('Delete ' + (p.nick || p.name) + ' and everything they have for good?\nType DELETE to confirm.'); if (t === null) return; await API.adminUserDelete(key, p.id, t); }
           load();
         } catch (e) { alert(e.message); }
@@ -90,7 +91,7 @@
       const card = (p) => h('details', { class: 'inv ocard' }, h('summary', null, h('b', null, (p.nick || p.name || '?') + (p.verified ? ' ✅' : '') + (p.blocked ? ' 🚫' : '')), h('span', { class: 'hint' }, ' · ' + (p.age != null ? p.age + 'y ' : '') + p.country + ' · ⭐' + p.points + (p.paid_orders ? ' · paid ' + money(p.paid_cents) : '') + ' · ' + (p.last_seen ? ago(p.last_seen) : 'never'))),
         h('div', { class: 'kv' }, h('div', null, h('b', null, 'Name: '), p.name || '—'), h('div', null, h('b', null, 'Number: '), wa(p.phone)), h('div', null, h('b', null, 'Email: '), p.email || '—'), h('div', null, h('b', null, 'Social: '), social(p) || '—'),
           h('div', null, h('b', null, 'Groups: '), String(p.groups), h('b', null, '  Chats: '), String(p.chats), h('b', null, '  Paid orders: '), String(p.paid_orders)), h('div', { class: 'hint' }, 'Joined ' + ago(p.joined) + (p.role ? ' · role ' + p.role : ''))),
-        h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => act(p, 'points') }, '± Points'), h('button', { class: 'btn sm', onclick: () => act(p, 'verify') }, p.verified ? 'Unverify' : 'Verify'), h('button', { class: 'btn sm', onclick: () => act(p, 'role') }, 'Role'), h('button', { class: 'btn sm', onclick: () => act(p, 'block') }, p.blocked ? 'Unblock' : 'Block'), h('button', { class: 'btn sm danger', onclick: () => act(p, 'delete') }, 'Delete')));
+        h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => act(p, 'points') }, '± Points'), h('button', { class: 'btn sm', onclick: () => act(p, 'verify') }, p.verified ? 'Unverify' : 'Verify'), h('button', { class: 'btn sm', onclick: () => act(p, 'role') }, 'Role'), h('button', { class: 'btn sm', onclick: () => act(p, 'reset') }, 'Reset password'), h('button', { class: 'btn sm', onclick: () => act(p, 'block') }, p.blocked ? 'Unblock' : 'Block'), h('button', { class: 'btn sm danger', onclick: () => act(p, 'delete') }, 'Delete')));
       const csv = () => { const cols = ['id', 'nick', 'name', 'phone', 'email', 'age', 'country', 'instagram', 'snapchat', 'tiktok', 'whatsapp', 'points', 'groups', 'chats', 'paid_orders', 'paid_usd', 'verified', 'blocked', 'joined', 'last_seen']; const qv = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; const body = rows.map((p) => [p.id, p.nick, p.name, p.phone, p.email, p.age, p.country, p.socials.ig, p.socials.snap, p.socials.tiktok, p.socials.wa, p.points, p.groups, p.chats, p.paid_orders, (p.paid_cents / 100).toFixed(2), p.verified, p.blocked, p.joined, p.last_seen].map(qv).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'people.csv'; a.click(); };
       async function load() {
         peopleState.filter = filter; peopleState.q = q;
@@ -120,8 +121,8 @@
 
     async more(c, rerender) {
       const sub = h('div', { class: 'stack' }), menu = h('div', { class: 'row ochips' });
-      const draw = () => { menu.replaceChildren(...[['prices', '⭐ Prices'], ['settings', 'Numbers'], ['selfies', 'Selfies'], ['reports', 'Reports']].map(([k, l]) => h('button', { class: 'chip' + (k === moreTab ? ' on' : ''), type: 'button', onclick: () => { moreTab = k; draw(); MORE[k](sub); } }, l))); };
-      c.replaceChildren(h('div', { class: 'h2' }, 'More'), menu, sub, h('a', { class: 'btn block', href: '#/admin-old' }, 'Old dashboard (invites, questions, hosts)'));
+      const draw = () => { menu.replaceChildren(...[['prices', 'Prices'], ['questions', 'Questions'], ['settings', 'Numbers'], ['selfies', 'Selfies'], ['reports', 'Reports']].map(([k, l]) => h('button', { class: 'chip' + (k === moreTab ? ' on' : ''), type: 'button', onclick: () => { moreTab = k; draw(); MORE[k](sub); } }, l))); };
+      c.replaceChildren(h('div', { class: 'h2' }, 'More'), menu, sub);
       draw(); MORE[moreTab](sub);
     }
   };
@@ -133,6 +134,15 @@
       const d = await API.adminPrices(key), groups = {}; d.prices.forEach((p) => (groups[p.group] = groups[p.group] || []).push(p));
       sub.replaceChildren(h('p', { class: 'hint' }, 'Change any number here. It applies at once, no code. Prices of packs are in US cents (260 = $2.60).'),
         ...Object.entries(groups).map(([g, items]) => h('div', { class: 'stack' }, h('div', { class: 'h2' }, g), ...items.map((p) => { const inp = h('input', { type: 'number', min: 0, value: p.value, inputmode: 'numeric', 'aria-label': p.label }), msg = h('small', { class: 'hint' }, p.value !== p.default ? 'default ' + p.default : ''); return h('div', { class: 'stack' }, h('b', null, p.label), h('div', { class: 'row' }, inp, h('button', { class: 'btn sm pri', type: 'button', onclick: async () => { try { await API.adminPriceSet(key, p.key, inp.value); msg.textContent = '✅ Saved'; } catch (e) { msg.textContent = e.message; } } }, 'Save'), msg)); }))));
+    },
+    async questions(sub) { // the Truth or Dare question bank
+      let qs = (await API.adminTod(key, {})).questions || [];
+      const lvl = h('select', { 'aria-label': 'Level' }, [1, 2, 3, 4, 5].map((n) => h('option', { value: n }, 'Level ' + n))), kind = h('select', { 'aria-label': 'Kind' }, h('option', { value: 'truth' }, 'Truth'), h('option', { value: 'dare' }, 'Dare')), txt = h('textarea', { rows: 2, maxlength: 300, placeholder: 'Write a question or a dare', 'aria-label': 'Question' }), note = h('div');
+      const refresh = async (o) => { try { qs = (await API.adminTod(key, o)).questions; draw(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
+      const draw = () => sub.replaceChildren(h('p', { class: 'hint' }, 'The Truth or Dare bank. Add your own, hide any you do not like. Levels 1 to 3 are for 13+, level 4 for 18+, level 5 for 25+ (the server enforces it).'), note,
+        h('div', { class: 'stack' }, h('div', { class: 'row' }, lvl, kind), txt, h('button', { class: 'btn pri', type: 'button', onclick: () => { if (txt.value.trim().length < 5) return; const v = txt.value; txt.value = ''; refresh({ op: 'add', level: lvl.value, kind: kind.value, text: v }); } }, 'Add')),
+        ...[1, 2, 3, 4, 5].map((n) => h('details', null, h('summary', null, 'Level ' + n + ' (' + qs.filter((x) => x.level === n && x.active).length + ' active)'), ...qs.filter((x) => x.level === n).map((x) => h('div', { class: 'hist' }, h('span', { style: x.active ? '' : 'opacity:.4;text-decoration:line-through' }, (x.kind === 'dare' ? 'Dare: ' : 'Truth: ') + x.text), h('button', { class: 'btn sm', type: 'button', onclick: () => refresh({ op: x.active ? 'hide' : 'show', id: x.id }) }, x.active ? 'Hide' : 'Show'))))));
+      draw();
     },
     async settings(sub) {
       const s = await API.adminSettings(key);

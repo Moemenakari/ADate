@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>/* set the look before anything is drawn, so the design never flashes or changes while loading */(function(){try{var v=null;try{v=JSON.parse(localStorage.getItem('adate.ui'))}catch(e){}var sys=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.ui=(v==='light'||v==='dark')?v:sys}catch(e){document.documentElement.dataset.ui='dark'}})();</script>
+<style>html[data-ui=dark] body{background:#101011;color:#ececec}html[data-ui=light] body{background:#f7f7f5;color:#1c1c1e}body{margin:0}</style>
+
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>O HUB – Meet people, play games, make friends</title>
 <meta name="description" content="O HUB is a free app to meet people your age, play quick games together, join rooms and make friends. Made for teens and young adults in Lebanon and the Arab world.">
@@ -41,9 +44,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=72">
+<link rel="stylesheet" href="css/style.css?v=73">
 </head>
-<body>
+<body class="nx">
 <div id="app">
   <!-- Shown to search engines and while the app loads; replaced as soon as the app starts. -->
   <main style="max-width:560px;margin:0 auto;padding:32px 18px;font-family:system-ui,sans-serif;text-align:center">
@@ -52,20 +55,20 @@
   </main>
 </div>
 <noscript>O HUB needs JavaScript to work.</noscript>
-<script src="config.js?v=72"></script>
-<script src="js/stickers.js?v=72"></script>
-<script src="js/animals.js?v=72"></script>
-<script src="js/themes.js?v=72"></script>
-<script src="js/presets.js?v=72"></script>
-<script src="js/scenes.js?v=72"></script>
-<script src="js/ai.js?v=72"></script>
-<script src="js/api.js?v=72"></script>
-<script src="js/chatstickers.js?v=72"></script>
-<script src="js/gamepanels.js?v=72"></script>
-<script src="js/community.js?v=72"></script>
-<script src="js/logo.js?v=72"></script>
-<script src="js/legal.js?v=72"></script>
-<script src="js/owner.js?v=72"></script>
-<script src="js/app.js?v=72"></script>
+<script src="config.js?v=73"></script>
+<script src="js/stickers.js?v=73"></script>
+<script src="js/animals.js?v=73"></script>
+<script src="js/themes.js?v=73"></script>
+<script src="js/presets.js?v=73"></script>
+<script src="js/scenes.js?v=73"></script>
+<script src="js/ai.js?v=73"></script>
+<script src="js/api.js?v=73"></script>
+<script src="js/chatstickers.js?v=73"></script>
+<script src="js/gamepanels.js?v=73"></script>
+<script src="js/community.js?v=73"></script>
+<script src="js/logo.js?v=73"></script>
+<script src="js/legal.js?v=73"></script>
+<script src="js/owner.js?v=73"></script>
+<script src="js/app.js?v=73"></script>
 </body>
 </html>

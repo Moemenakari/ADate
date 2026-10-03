@@ -1162,149 +1162,6 @@ function privacy() {
       h('p', null, 'The invite is reachable by anyone who has its link. Only you (through your private link) can see its answers. The site owner can see the numbers and names to run and improve the service.'),
       h('p', null, 'You can delete an invite and all its answers any time from “My invites”. We never sell your data. Don’t upload pictures of people who haven’t agreed to it.')), footer()));
 }
-async function admin() {
-  document.title = 'O HUB – Owner';
-  const key0 = (() => { try { return sessionStorage.getItem('adate.key') || localStorage.getItem('adate.keyR') || ''; } catch (e) { return ''; } })();
-  const rem = h('input', { type: 'checkbox', 'aria-label': 'Remember on this phone' }); try { rem.checked = !!localStorage.getItem('adate.keyR'); } catch (e) { /* ok */ }
-  const out = h('div'), inp = h('input', { type: 'password', placeholder: 'Owner key', value: key0, autocomplete: 'off' });
-  let tab = 'contacts';
-  async function load() {
-    const key = inp.value.trim(); if (!key) return;
-    out.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
-    try {
-      const d = await API.admin(key); try { d.settings = await API.adminSettings(key); } catch (e) { d.settings = {}; } try { d.reports = (await API.adminReports(key)).targets; } catch (e) { d.reports = []; } try { d.tod = (await API.adminTod(key)).questions; } catch (e) { d.tod = []; } try { d.selfies = (await API.adminSelfies(key)).selfies; } catch (e) { d.selfies = []; } try { d.hosts = (await API.adminHosts(key)).hosts; } catch (e) { d.hosts = []; } try { d.orders = await API.adminOrders(key); } catch (e) { d.orders = { orders: [], done: [] }; } try { sessionStorage.setItem('adate.key', key); try { if (rem.checked) localStorage.setItem('adate.keyR', key); else localStorage.removeItem('adate.keyR'); } catch (e) { /* ok */ } } catch (e) { /* ignore */ }
-      const st = d.stats, num = (v) => h('div', { class: 'panel', style: 'flex:1;min-width:96px;text-align:center;margin:0;padding:10px' }, h('b', { style: 'font-size:1.5rem' }, v[0]), h('div', { class: 'hint' }, v[1]));
-      const wa = (n) => (n ? h('a', { href: 'https://wa.me/' + n, target: '_blank', rel: 'noopener' }, '+' + n) : '—');
-      const contactLink = (c) => (!c ? '—' : c[0] === '@' ? h('a', { href: 'https://instagram.com/' + encodeURIComponent(c.slice(1)), target: '_blank', rel: 'noopener' }, c) : wa(c));
-      const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-      const csv = () => { const cols = ['created_at', 'type', 'sender_name', 'sender_phone', 'to_name', 'opens', 'answers', 'last_answer_at', 'receiver_phone', 'receiver_ig', 'id']; const blob = new Blob([[cols.join(',')].concat(d.invites.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-invites.csv' }).click(); };
-      const csvUsers = () => { const cols = ['created_at', 'first_name', 'last_name', 'phone', 'email', 'birthdate', 'interests', 'google', 'last_login_at', 'invites']; const blob = new Blob([[cols.join(',')].concat(d.users.map((r) => cols.map((c) => q(r[c])).join(','))).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-users.csv' }).click(); };
-      const note = h('div');
-      const views = {
-        users: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvUsers }, '⬇ Export users CSV')), note, ...d.users.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '👤 ' + (u.name || 'No name')), h('span', { class: 'badge' }, u.invites + ' invites')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Name: '), [u.first_name, u.last_name].filter(Boolean).join(' ') || '—', ' · ', u.google ? 'Google' : 'number + password', u.profile_done ? '' : ' · profile not finished'), h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Email: '), u.email || '—'), h('div', null, h('b', null, 'Birthday: '), u.birthdate ? String(u.birthdate).slice(0, 10) : '—'), h('div', null, h('b', null, 'Interests: '), (u.interests || []).join(', ') || '—'), h('div', null, h('b', null, 'Joined: '), ago(u.created_at) + (u.last_login_at ? ' · last login ' + ago(u.last_login_at) : '')),
-            h('div', { class: 'hint' }, 'Passwords are stored scrambled (nobody can read them). Reset gives a temporary one.')),
-          h('button', { class: 'btn sm', onclick: async () => { if (!confirm('Reset the password for +' + u.phone + '?')) return; try { const r = await API.adminReset(key, u.phone); note.replaceChildren(h('div', { class: 'note' }, 'Temporary password for +' + r.phone + ': ', h('b', null, r.temp), '. Send it to them; they can change it with “Forgot password”.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Reset password')))],
-        invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? 'opened' : 'new')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone || r.receiver_ig ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
-          (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, 'Journey'), slot); })()))],
-        people: () => {
-          const name = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ') || u.name || '—';
-          const rows = d.users.map((u) => ({ kind: 'sender', u, name: name(u), phone: u.phone, email: u.email, ig: '', note: (u.google ? 'Google' : 'number + password') + (u.profile_done ? '' : ' · profile not finished') }));
-          const seen = new Set();
-          d.invites.forEach((r) => {
-            const phone = r.receiver_phone || r.typed_phone || (r.to_contact && r.to_contact[0] !== '@' ? r.to_contact : ''), ig = r.receiver_ig || r.typed_ig || r.to_ig || (r.to_contact && r.to_contact[0] === '@' ? r.to_contact.slice(1) : '');
-            const k = phone || ig || r.id; if (seen.has(k)) return; seen.add(k);
-            rows.push({ kind: 'receiver', r, name: r.to_name || '—', phone, email: '', ig, note: 'receiver of ' + (r.sender_name || '?') + ' · ' + (r.receiver_phone || r.receiver_ig ? 'gave it herself' : r.typed_phone || r.typed_ig ? 'typed it, did not send' : 'typed by the sender') });
-          });
-          const act = async (u, op, ask) => { const why = op === 'block' ? prompt('Why block ' + name(u) + '? (optional note)', 'fake') : ''; if (op === 'block' && why === null) return; if (op !== 'block' && ask && !confirm(ask)) return; try { await API.adminMark(key, u.id, op, why || ''); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-          const csvP = () => { const cols = ['role', 'name', 'whatsapp', 'email', 'instagram', 'status']; const body = rows.map((x) => [x.kind, x.name, x.phone, x.email, x.ig, x.kind === 'sender' ? (x.u.blocked ? 'blocked' : x.u.verified ? 'verified' : 'unchecked') : x.note].map(q).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-people.csv' }).click(); };
-          const hello = (x) => 'Hi ' + (String(x.name).split(' ')[0] || '') + ', this is the O HUB team. We are checking that your profile is real. Can you reply to confirm?';
-          return [h('p', { class: 'hint' }, `${rows.length} people: message each one on WhatsApp to check they are real. If someone is fake, tap Block: they can no longer sign in or send invites.`),
-            h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvP }, '⬇ Export people CSV')), note,
-            h('div', { class: 'tscroll' }, h('table', { class: 'ptable' }, h('thead', null, h('tr', null, ['Role', 'Name', 'WhatsApp', 'Email', 'Instagram', 'Status', ''].map((c) => h('th', null, c)))),
-              h('tbody', null, rows.map((x) => h('tr', { class: x.u && x.u.blocked ? 'blocked' : '' },
-                h('td', null, x.kind === 'sender' ? 'Account' : 'Receiver'), h('td', null, x.name),
-                h('td', null, x.phone ? h('a', { href: 'https://wa.me/' + x.phone, target: '_blank', rel: 'noopener' }, '+' + x.phone) : '—'),
-                h('td', null, x.email || '—'), h('td', null, x.ig ? contactLink('@' + x.ig) : '—'),
-                h('td', null, x.kind === 'sender' ? (x.u.blocked ? 'blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : 'unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
-                h('td', { class: 'acts' }, x.phone ? h('a', { class: 'btn sm', href: 'https://wa.me/' + x.phone + '?text=' + encodeURIComponent(hello(x)), target: '_blank', rel: 'noopener' }, '💬') : null,
-                  x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, 'Block'),
-                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : 'Real') : null, h('button', { class: 'btn sm', onclick: async () => { const r = prompt('Role for ' + name(x.u) + ': type agent, host, bot, or none', x.u.role || 'none'); if (r === null) return; const op = { mod: 'role_mod', agent: 'role_agent', host: 'role_host', bot: 'role_bot', none: 'role_none' }[r.trim().toLowerCase()]; if (!op) return alert('Type mod, agent, host, bot or none'); try { await API.adminMark(key, x.u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Role'), h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + name(x.u) + ' (use a minus to take points away; leave 0 for a message only)', '100'); if (pts === null) return; const msg = prompt('Message from the O HUB team (optional)', 'You are great! Thank you for helping the community.'); if (msg === null) return; try { const r = await API.adminGift(key, x.u.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Gift'), x.u.has_photo ? h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'photo_off', 'Remove the real photo of ' + x.name + '?') }, 'remove photo') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? 'admin' : 'admin') : null] : null))))))];
-        },
-        reports: () => {
-          const t = d.reports || [];
-          const act = async (u, op) => { try { await API.adminMod(key, u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-          return [h('p', { class: 'hint' }, 'Three different people reporting the same member in 24 hours mutes them for 24 hours and sends you a notification. Review here: unmute, dismiss, or block the account.'), note,
-            ...(t.length ? t.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🚩 ' + (u.nick || u.name || 'Member')), h('span', { class: 'badge ' + (u.muted_until && new Date(u.muted_until) > new Date() ? 'warn' : '') }, u.muted_until && new Date(u.muted_until) > new Date() ? 'muted' : u.today + ' in 24h')),
-              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Reports: '), u.today + ' people in 24h · ' + u.week + ' this week'), ...(u.bodies || []).map((x) => h('div', { class: 'bubble' }, x))),
-              h('div', { class: 'row' }, h('a', { class: 'btn sm', href: 'https://wa.me/' + u.phone + '?text=' + encodeURIComponent('Hi, this is the O HUB team. Several people reported your messages. Can we talk?'), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
-                h('button', { class: 'btn sm', onclick: () => act(u, 'unmute') }, 'Unmute'), h('button', { class: 'btn sm', onclick: () => act(u, 'dismiss') }, 'Dismiss reports'),
-                h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm('Block this account?')) return; try { await API.adminMark(key, u.id, 'block', 'reported'); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Block')))) : [h('p', { class: 'hint' }, 'No reports in the last 7 days. 🎉')])];
-        },
-        tod: () => {
-          const qs = d.tod || [], lvl = h('select', { 'aria-label': 'Level' }, [1, 2, 3, 4, 5].map((n) => h('option', { value: n }, 'Level ' + n))), kind = h('select', { 'aria-label': 'Kind' }, h('option', { value: 'truth' }, 'Truth'), h('option', { value: 'dare' }, 'Dare')), txt = h('textarea', { rows: 2, maxlength: 300, placeholder: 'Write a question or a dare', 'aria-label': 'Question' });
-          const refresh = async (o) => { try { d.tod = (await API.adminTod(key, o)).questions; draw(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-          return [h('p', { class: 'hint' }, 'The Truth or Dare bank. Add your own; hide any you do not like. Levels 1 to 3 are for 13+, level 4 for 18+, level 5 for 25+ (enforced by the server).'), note,
-            h('div', { class: 'stack' }, h('div', { class: 'fieldrow' }, lvl, kind), txt, h('button', { class: 'btn pri', onclick: () => { if (txt.value.trim().length < 5) return; refresh({ op: 'add', level: lvl.value, kind: kind.value, text: txt.value }); } }, 'Add')),
-            ...[1, 2, 3, 4, 5].map((n) => h('details', null, h('summary', null, `Level ${n} (${qs.filter((x) => x.level === n && x.active).length} active)`), ...qs.filter((x) => x.level === n).map((x) => h('div', { class: 'hist' }, h('span', { style: x.active ? '' : 'opacity:.4;text-decoration:line-through' }, (x.kind === 'dare' ? '🔥 ' : '💬 ') + x.text), h('button', { class: 'btn sm', onclick: () => refresh({ op: x.active ? 'hide' : 'show', id: x.id }) }, x.active ? 'Hide' : 'Show')))))];
-        },
-        hosts: () => [h('p', { class: 'hint' }, 'Your official accounts (Host and Bot). Mark an account in People, then Role. Messages are counted over the last 7 days.'), note,
-          ...((d.hosts || []).length ? d.hosts.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, (x.role === 'bot' ? '🤖 ' : '🌟 ') + (x.nick || '?')), h('span', { class: 'badge' }, x.role)), h('div', { class: 'kv' }, h('div', null, h('b', null, 'Points: '), String(x.points), ' · ', h('b', null, 'Messages 7d: '), String(x.messages7)), h('div', { class: 'hint' }, x.last_seen ? 'Last seen ' + ago(x.last_seen) : 'Never seen')),
-            h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + x.nick, '50'); if (pts === null) return; const msg = prompt('Message from the team (optional)', 'Thank you for being a great host!'); if (msg === null) return; try { const r = await API.adminGift(key, x.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Balance: ' + r.balance)); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Gift'))) : [h('p', { class: 'hint' }, 'No hosts yet. In People, press Role and type host.')])],
-        selfies: () => {
-          const decide = async (x, ok) => { if (!confirm(ok ? 'Approve and give the badge and points?' : 'Reject this selfie?')) return; try { await API.adminSelfieDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-          return [h('p', { class: 'hint' }, 'Check that the face is real and the person shows the right number of fingers. The picture is erased as soon as you decide, and after 7 days if you do not.'), note,
-            ...((d.selfies || []).length ? d.selfies.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🤳 ' + (x.nick || x.name || '?')), h('span', { class: 'badge' }, 'Fingers: ' + x.code)),
-              h('img', { src: x.data, alt: 'selfie', style: 'max-width:100%;border-radius:14px' }), h('div', { class: 'hint' }, ago(x.at)),
-              h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject')))) : [h('p', { class: 'hint' }, 'No selfies waiting.')])];
-        },
-        orders: () => {
-          const o = d.orders || { orders: [], done: [] };
-          const decide = async (x, ok) => { if (!confirm(ok ? `Add the points to ${x.name || x.nick}? Check Whish first.` : 'Reject this order?')) return; try { await API.adminOrderDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-          const adjust = async (x) => { const pts = prompt('Add (+) or remove (-) points for ' + (x.nick || x.name || 'this person') + '. Example: 50 or -50', '10'); if (pts === null) return; const msg = prompt('Message to show them (optional)', '') || ''; try { const r = await API.adminGift(key, x.user_id, Number(pts) || 0, msg); note.replaceChildren(h('div', { class: 'note' }, 'Done. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-          const view = (img) => { const w = window.open('', '_blank'); if (w) { w.document.write('<img src="' + img + '" style="max-width:100%">'); w.document.title = 'Receipt'; } };
-          return [h('p', { class: 'hint' }, 'People who paid with Whish. Check 4 things on the receipt: the Transaction ID matches what they typed, the Amount is right, the Receiver is your number, and the time is recent. Then find the same transfer in your own Whish history and approve. Wrong or fake? Reject. You can also add or remove points for anyone.'), note,
-            ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `AD-${x.id} · $${(x.cents / 100).toFixed(2)} · ${({ points5: 5, points12: 12, points25: 25, points29: 29, points100: 100 })[x.kind] || ''} points`), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? 'sent a receipt' : 'not paid yet')),
-              h('div', { class: 'kv' }, h('div', null, h('b', null, 'Person: '), (x.name || x.nick || '?') + ' · ', wa(x.phone)), h('div', null, h('b', null, 'Transaction ID: '), x.txid || '—'), h('div', { class: 'hint' }, x.claimed_at ? 'Receipt sent ' + ago(x.claimed_at) : 'Ordered ' + ago(x.at))),
-              x.receipt ? h('img', { src: x.receipt, alt: 'Receipt', style: 'max-width:100%;max-height:300px;border-radius:12px;cursor:zoom-in', onclick: () => view(x.receipt) }) : null,
-              h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject'), h('button', { class: 'btn sm', onclick: () => adjust(x) }, '± Points')))) : [h('p', { class: 'hint' }, 'No orders waiting.')]),
-            ...(o.done.length ? [h('div', { class: 'h2' }, 'Recent'), ...o.done.map((x) => h('div', { class: 'hist' }, h('span', null, `AD-${x.id} · ${x.name || '?'} · ${x.status}${x.txid ? ' · ' + x.txid : ''}`), h('span', { class: 'row' }, h('b', null, '$' + (x.cents / 100).toFixed(2)), h('button', { class: 'btn sm', onclick: () => adjust(x) }, '±'))))] : [])];
-        },
-        settings: () => {
-          const f = (label, name, ph) => { const inp = h('input', { type: 'text', value: (d.settings || {})[name] || '', placeholder: ph, 'aria-label': label }), msg = h('span', { class: 'hint' }); return h('div', { class: 'stack' }, h('b', null, label), inp, h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: async () => { try { await API.adminSet(key, name, inp.value); msg.textContent = 'Saved ✓'; (d.settings = d.settings || {})[name] = inp.value.trim(); } catch (e) { msg.textContent = e.message; } } }, 'Save'), msg)); };
-          return [h('p', { class: 'hint' }, 'Numbers and links you choose to show users. Nothing here is in the code.'),
-            f('Your WhatsApp number for verification (digits with country code, e.g. 9617xxxxxxx)', 'owner_whatsapp', '9617…'), f('Your Whish number to receive payments (digits, with country code)', 'whish_number', '9617…'), f('Note shown to people who pay (optional)', 'whish_note', 'Send exactly the amount, then add the receipt.'),
-            h('div', { class: 'h2' }, 'Truth or Dare prices (points for 24 hours)'), f('Level 1 (default 2)', 'tod_price_1', '2'), f('Level 2 (default 4)', 'tod_price_2', '4'), f('Level 3 (default 5)', 'tod_price_3', '5'), f('Level 4 (default 10)', 'tod_price_4', '10'), f('Level 5 (default 15)', 'tod_price_5', '15')];
-        },
-        contacts: () => {
-          const byInvite = {}; d.answers.forEach((a) => (byInvite[a.invite_id] = byInvite[a.invite_id] || []).push(a));
-          const rows = d.invites.map((r) => ({ r, got: !!(r.receiver_phone || r.receiver_ig || r.typed_phone || r.typed_ig) }));
-          const csvC = () => { const cols = ['created_at', 'account_name', 'account_email', 'sender_name', 'sender_phone', 'to_name', 'to_contact', 'to_ig', 'opens', 'answers', 'receiver_phone', 'receiver_ig', 'typed_phone', 'typed_ig', 'confirmed']; const body = rows.map(({ r, got }) => cols.map((c) => q(c === 'confirmed' ? (got ? 'yes' : 'no') : r[c])).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }); h('a', { href: URL.createObjectURL(blob), download: 'adate-everything.csv' }).click(); };
-          const none = (t) => h('span', { class: 'hint' }, t);
-          return [h('p', { class: 'hint' }, `${rows.length} invites · ${rows.filter((x) => x.got).length} receivers gave their contact. Everything about each invite in one place: who sent it, who it is for, what they opened and answered, and their number or Instagram.`),
-            h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvC }, '⬇ Export everything CSV')),
-            ...rows.map(({ r, got }) => {
-              const ans = byInvite[r.id] || [], when = r.answers ? 'answered before this was required' : 'has not answered yet';
-              const slot = h('div');
-              return h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? 'opened' : 'not opened')),
-                h('div', { class: 'kv' },
-                  h('div', null, h('b', null, 'Sender: '), (r.account_name || r.sender_name || '?') + ' · ', wa(r.sender_phone), r.account_email ? ' · ' + r.account_email : ''),
-                  h('div', null, h('b', null, 'Receiver: '), r.to_name || '?'),
-                  h('div', null, h('b', null, 'Sender wrote for them: '), r.to_contact ? contactLink(r.to_contact) : '—', r.to_ig ? [' · ', contactLink('@' + r.to_ig)] : ''),
-                  h('div', null, h('b', null, 'Receiver WhatsApp: '), r.receiver_phone ? [wa(r.receiver_phone), r.receiver_src ? (r.receiver_src === 'contact' ? ' 📇 from contacts' : ' ⌨️ typed') : ''] : r.typed_phone ? [wa(r.typed_phone), h('span', { class: 'hint' }, ' ✍️ typed on the last page, not sent')] : none('— ' + when)),
-                  h('div', null, h('b', null, 'Receiver Instagram: '), r.receiver_ig ? contactLink('@' + r.receiver_ig) : r.typed_ig ? [contactLink('@' + r.typed_ig), h('span', { class: 'hint' }, ' ✍️ typed, not sent')] : none('— not given')),
-                  h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_opened_at ? ' · last ' + ago(r.last_opened_at) : ''))),
-                ...ans.map((a) => h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:6px 0 0' }, h('b', null, 'Answered ' + ago(a.at)), details(a.answer || {}), a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.'))),
-                h('div', { class: 'row', style: 'margin-top:6px' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, 'Journey')), slot);
-            })];
-        },
-        answers: () => d.answers.map((a) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `💖 ${a.to_name || '?'} → ${a.sender_name || '?'}`), h('span', { class: 'hint' }, ago(a.at))),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(a.sender_phone)), a.receiver_phone || a.receiver_ig ? h('div', null, h('b', null, 'Receiver: '), a.receiver_phone ? wa(a.receiver_phone) : null, a.receiver_phone && a.receiver_ig ? ' · ' : '', a.receiver_ig ? contactLink('@' + a.receiver_ig) : null) : null, a.answer && a.answer.date ? h('div', null, h('b', null, 'Date: '), fmtDate(a.answer.date) + (a.answer.time ? ' · ' + fmtTime(a.answer.time) : '') + (a.answer.act ? ' · ' + a.answer.act : '')) : null),
-          a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.')))
-      };
-      const draw = () => out.replaceChildren(h('div', { class: 'row' }, num([st.users, 'accounts']), num([st.invites, 'invites']), num([st.opened, 'opened']), num([st.answered, 'answered']), num([st.phones, 'numbers'])),
-        (() => {
-          const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-          const perm = 'Notification' in window ? Notification.permission : 'unsupported';
-          const slot = h('div'), res = h('small', { class: 'hint' });
-          if (perm === 'default') pushControl().then((n) => n && slot.replaceChildren(n)).catch(() => {});
-          const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-          return h('div', { class: 'note stack' }, h('b', null, 'Alerts on your phone'),
-            h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : 'Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, and open O HUB from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications are on.' : perm === 'denied' ? '❌ Notifications are blocked: allow them in your phone settings for this site.' : perm === 'default' ? 'Notifications are not on yet: tap the button below.' : 'This browser cannot show notifications.')),
-            slot, h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.adminTestPush(inp.value.trim()); res.textContent = r.devices ? 'Sent to ' + r.devices + ' device(s). Did it arrive?' : 'No phone is registered yet. Log in with your own account on this phone, turn on notifications, then try again.'; } catch (e) { res.textContent = e.message; } } }, 'Send me a test alert'), res,
-            h('small', { class: 'hint' }, 'You get an alert for: a payment waiting, a selfie waiting, a new report, a new member, and messages to the team.'));
-        })(),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', 'Everything'], ['people', 'People'], ['reports', 'Reports'], ['orders', 'Orders'], ['selfies', 'Selfies'], ['hosts', 'Hosts'], ['tod', 'Questions'], ['invites', 'Invites'], ['settings', 'Settings'], ['answers', 'Answers'], ['users', 'Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
-      draw();
-    } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
-  }
-  inp.onkeydown = (e) => { if (e.key === 'Enter') load(); };
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, h('b', null, 'HUB')), h('span', { class: 'pill' }, 'Owner')),
-    h('div', { class: 'h2' }, 'Owner dashboard'), h('div', { class: 'fieldrow' }, inp, h('button', { class: 'btn pri', onclick: load }, 'Open')), h('label', { class: 'row' }, rem, h('span', { class: 'hint' }, 'Remember the key on this phone (only on your own phone)')), h('div', { style: 'height:12px' }), out));
-  if (key0) load();
-}
-
 /* ------------------------------------------------------------------ router */
 function setRobots(index) { // invites, inboxes and the owner page must never show up in search results
   let m = document.querySelector('meta[name=robots]');
@@ -1314,7 +1171,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 async function route() {
   await API.ready;
   document.body.style.background = '';
-  document.body.classList.toggle('nx', !/^#\/((i|v|d)\/|date|mine|make|admin-old)/.test(location.hash || '#/'));
+  document.body.classList.toggle('nx', !/^#\/((i|v|d)\/|date|mine|make)/.test(location.hash || '#/'));
   setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|recover-phone|verify|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
@@ -1334,7 +1191,6 @@ async function route() {
   if (hash === '#/privacy') return window.Legal.privacy();
   if (hash === '#/terms') return window.Legal.terms();
   if (hash === '#/admin') return window.OwnerDash.open();
-  if (hash === '#/admin-old') return admin();
   if (hash === '#/welcome') return welcome();
   if (hash === '#/profile') return profile();
   if (hash === '#/make') {
