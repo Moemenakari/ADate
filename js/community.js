@@ -549,14 +549,14 @@ window.CommunityInit = function (ui) {
     const packs = d.products.map((p) => h('button', { class: 'pack' + (p.points >= 100 ? ' best' : ''), onclick: buy(p) }, p.points >= 100 ? h('em', null, 'Best value') : null, h('span', { class: 'pk-n' }, '⭐ ' + p.points), h('b', null, money(p.cents)), h('small', null, 'Tap to buy')));
     const num = d.settings.whish_number;
     let receipt = '';
-    const txid = h('input', { type: 'text', maxlength: 24, placeholder: 'Transaction ID from the receipt', 'aria-label': 'Whish transaction ID', autocomplete: 'off', inputmode: 'text' });
+    const txid = h('input', { type: 'text', maxlength: 24, placeholder: 'Transaction ID (numbers, like 648584461)', 'aria-label': 'Whish transaction ID', autocomplete: 'off', inputmode: 'text' });
     const prev = h('div', { class: 'receiptprev' }), file = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Screenshot of the Whish receipt', onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { receipt = await ui.shrinkImage(f, 1000, 0.75); prev.replaceChildren(h('img', { src: receipt, alt: 'Receipt preview' })); } catch (x) { msg.replaceChildren(h('div', { class: 'note' }, err(x))); } } });
     const copyBtn = h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText('+' + num); toast('Number copied ✓'); } catch (e) { toast('Copy it by hand: +' + num, 'bad'); } } }, '📋 Copy');
     const payCard = open && open.status === 'pending' ? h('div', { class: 'stack paycard' },
       h('div', { class: 'note' }, h('b', null, `${pk(open.kind).label || ''} · ${money(open.cents)}`), h('p', { class: 'hint' }, 'Order AD-' + open.id)),
       h('b', null, '1️⃣ Send the money on Whish'), num ? h('div', { class: 'row numrow' }, h('span', { class: 'bignum' }, '+' + num), copyBtn) : h('p', { class: 'hint' }, 'The Whish number is not set yet. Chat with the team below.'),
       h('p', { class: 'hint' }, 'Send exactly ' + money(open.cents) + '.' + (d.settings.whish_note ? ' ' + d.settings.whish_note : '')),
-      h('b', null, '2️⃣ Add a screenshot of the receipt'), file, prev,
+      h('b', null, '2️⃣ Add a screenshot of the receipt'), h('p', { class: 'hint' }, 'Open the transfer in Whish and take a screenshot. It must show the Transaction ID, the Amount' + (num ? ' and the Receiver number +' + num : '') + '.'), file, prev,
       h('b', null, '3️⃣ Write the transaction ID'), txid,
       h('button', { class: 'btn pri block', type: 'button', onclick: async () => { if (!receipt) return msg.replaceChildren(h('div', { class: 'note' }, 'Add the screenshot of your Whish receipt first.')); try { await API.orderPaid(open.id, txid.value, receipt); toast('Sent. We will check it now.'); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '✅ I paid, check it'),
       h('p', { class: 'hint' }, 'No receipt, no points. Each transaction ID counts once. A fake receipt means lost points and a ban.'),
