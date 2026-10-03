@@ -455,7 +455,7 @@ function buildStage(cfg, opts) {
 /* ------------------------------------------------------------------ shared pieces */
 function footer() {
   return h('footer', { class: 'foot' },
-    h('div', { class: 'by' }, h('a', { href: '#/privacy' }, 'Privacy')));
+    h('div', { class: 'by' }, h('a', { href: '#/privacy' }, 'Privacy'), ' · ', h('a', { href: '#/terms' }, 'Terms')));
 }
 const myInvites = () => store.get('adate.mine', []);
 function rememberInvite(rec) { const l = myInvites().filter((x) => x.id !== rec.id); l.unshift(rec); store.set('adate.mine', l.slice(0, 30)); }
@@ -854,7 +854,7 @@ function login(mode) {
     mode === 'signup' ? [pw2, h('b', { class: 'pwlabel' }, 'Your email (to get your account back)'), qa.email, h('p', { class: 'hint' }, 'If you forget your password we ask you two questions. Only you should know the answers.'), h('label', { class: 'f' }, 'Question 1', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), qa.a, h('b', { class: 'pwlabel' }, 'Question 2: ' + API.q2), qa.a2] : null,
     h('button', { class: 'btn pri block', onclick: submit }, mode === 'signup' ? 'Create my account' : 'Log in'), mode === 'login' ? h('a', { href: '#/recover' }, 'Forgot your password?') : null);
   authShell(mode === 'signup' ? 'Create your account' : 'Welcome back', tabs,
-    API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, msg, h('a', { href: '#/' }, '← Back'));
+    API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, mode === 'signup' ? h('p', { class: 'hint' }, 'By signing up you confirm you are 13 or older and agree to the ', h('a', { href: '#/terms' }, 'Terms'), ' and ', h('a', { href: '#/privacy' }, 'Privacy'), '.') : null, msg, h('a', { href: '#/' }, '← Back'));
 }
 /** After signing in: name, number, birthday and interests. Needed once, before the O HUB game. */
 function profile() {
@@ -1314,7 +1314,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 async function route() {
   await API.ready;
   document.body.style.background = '';
-  document.body.classList.toggle('nx', !/^#\/((i|v|d)\/|date|mine|make|admin-old|privacy)/.test(location.hash || '#/'));
+  document.body.classList.toggle('nx', !/^#\/((i|v|d)\/|date|mine|make|admin-old)/.test(location.hash || '#/'));
   setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|recover-phone|verify|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
@@ -1331,7 +1331,8 @@ async function route() {
   if (hash === '#/recover') return recover();
   if (hash === '#/recover-phone') return recoverPhone();
   if (hash === '#/verify') return verifyPage();
-  if (hash === '#/privacy') return privacy();
+  if (hash === '#/privacy') return window.Legal.privacy();
+  if (hash === '#/terms') return window.Legal.terms();
   if (hash === '#/admin') return window.OwnerDash.open();
   if (hash === '#/admin-old') return admin();
   if (hash === '#/welcome') return welcome();
