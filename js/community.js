@@ -75,6 +75,7 @@ window.CommunityInit = function (ui) {
       d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null,
       h('div', { class: 'h2' }, 'Games'),
       h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, '💌 Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, '🎲 Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))),
+      h('a', { class: 'gamecard c2', href: '#/map' }, h('b', null, '🗺️ Schools map'), h('small', null, 'Find your school, see who is most active')),
       mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : null,
       h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms'),
       h('a', { class: 'gamecard c3', href: '#/points' }, h('b', null, '🎁 Invite a friend, get 5 points'), h('small', null, 'Share your link. You earn when they send their first message.')));
@@ -523,6 +524,33 @@ window.CommunityInit = function (ui) {
   /* ---------------------------------------------------------------- referral landing */
   function join(code) { store.set('adate.ref', String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)); location.hash = API.session ? '#/' : '#/signup'; }
 
+
+  /* Schools map: pins for schools, universities and areas (public places only, never people). Tap a pin to see who is most active and to join. */
+  const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, no) => {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.append(css);
+    const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; sc.onload = ok; sc.onerror = () => no(new Error('The map could not load. Check your connection.')); document.head.append(sc);
+  });
+  async function mapPage() {
+    if (!ME) await load();
+    const sheet = h('div', { class: 'mapsheet' }), mapEl = h('div', { class: 'mapbox', role: 'application', 'aria-label': 'Schools map' });
+    page('#/map', h('div', { class: 'h2' }, '🗺️ Schools map'), h('p', { class: 'hint' }, 'Tap a school to see who is most active there and to join it. We show only schools and areas, never where a person is.'), mapEl, sheet);
+    let d; try { [d] = await Promise.all([API.placesList(), loadLeaflet()]); } catch (e) { return mapEl.replaceChildren(h('p', { class: 'hint' }, err(e))); }
+    const L = window.L, map = L.map(mapEl, { zoomControl: true }).setView([34.40, 35.88], 9);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+    const icon = (p) => L.divIcon({ className: 'pin' + (String(p.id) === d.mine ? ' mine' : ''), html: '<span>' + (p.kind === 'uni' ? '🎓' : p.kind === 'place' ? '📍' : '🏫') + '</span><b>' + p.members + '</b>', iconSize: [44, 44], iconAnchor: [22, 22] });
+    const open = async (p) => {
+      sheet.replaceChildren(h('p', { class: 'hint spark' }, 'Loading…'));
+      try {
+        const v = await API.placeView(p.id);
+        sheet.replaceChildren(h('div', { class: 'h2' }, (v.place.kind === 'uni' ? '🎓 ' : '🏫 ') + v.place.name), h('small', { class: 'hint' }, v.members + ' members'),
+          h('button', { class: 'btn block ' + (v.mine ? '' : 'pri'), onclick: async () => { try { await API.placeJoin(v.mine ? null : p.id); d.mine = v.mine ? null : String(p.id); toast(v.mine ? 'You left ' + v.place.name : 'You joined ' + v.place.name + ' ✓'); open(p); } catch (e) { toast(err(e), 'bad'); } } }, v.mine ? 'Leave' : '➕ This is my school'),
+          h('b', null, '🏆 Most active this week'), ...(v.top.length ? v.top.map((t) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, '#' + t.rank), avatar(t.avatar, t.nick, 36, t.frame), h('span', { class: 'rc-t' }, h('b', null, t.nick + (t.me ? ' (you)' : '')), h('small', null, t.score + ' messages')))) : [h('p', { class: 'hint' }, 'Nobody yet. Be the first!')]));
+        sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (e) { sheet.replaceChildren(h('p', { class: 'hint' }, err(e))); }
+    };
+    d.places.forEach((p) => L.marker([p.lat, p.lng], { icon: icon(p), title: p.name }).addTo(map).on('click', () => open(p)));
+    if (d.mine) { const m = d.places.find((p) => String(p.id) === d.mine); if (m) { map.setView([m.lat, m.lng], 11); open(m); } }
+  }
   return function route(hash) {
     if (!API.enabled) return null;
     const s = API.session;
@@ -537,6 +565,7 @@ window.CommunityInit = function (ui) {
     if (hash === '#/match/online') return wrap(online);
     if (hash.startsWith('#/play/')) return wrap(() => match(hash.slice(7)));
     if (hash === '#/rooms') return wrap(rooms);
+    if (hash === '#/map') return wrap(mapPage);
     if (hash.startsWith('#/room/')) return wrap(() => room(hash.slice(7)));
     if (hash === '#/dms') return wrap(dms);
     if (hash.startsWith('#/dm/')) return wrap(() => dm(hash.slice(5)));

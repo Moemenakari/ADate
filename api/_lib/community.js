@@ -283,6 +283,27 @@ async function handle(action, ctx) {
       if (!r.length) throw bad('Come back tomorrow for the next one', 409);
       return out({ ok: true, prize, balance: await balanceOf(sql, u.id) });
     }
+    case 'places_list': {
+      const u = await need();
+      const rows = await sql`select p.id, p.name, p.kind, p.lat, p.lng, (select count(*) from users x where x.place_id = p.id)::int as members from places p where p.active order by p.name`;
+      return out({ places: rows, mine: u.place_id ? String(u.place_id) : null });
+    }
+    case 'place_view': { // one place: who is the most active this week (nicknames only)
+      const u = await need(), id = idNum(b.id);
+      const p = (await sql`select id, name, kind from places where id = ${id} and active`)[0]; if (!p) throw bad('Not found', 404);
+      const rows = await sql`select x.id, x.nick, x.avatar, x.frame,
+          ((select count(*) from messages m where m.user_id = x.id and m.created_at > now() - interval '7 days') + (select count(*) from dm_messages d where d.from_user = x.id and d.created_at > now() - interval '7 days'))::int as score
+        from users x where x.place_id = ${id} and x.profile_done and x.nick is not null and not x.blocked order by score desc, x.id limit 10`;
+      const members = (await sql`select count(*)::int as n from users where place_id = ${id}`)[0].n;
+      return out({ place: p, members, mine: String(u.place_id || '') === String(id), top: rows.map((r, i) => ({ rank: i + 1, nick: r.nick, avatar: r.avatar || '', frame: r.frame || '', score: r.score, me: r.id === u.id })) });
+    }
+    case 'place_join': { // pick my school or area, or leave with id = null
+      const u = await need();
+      if (b.id == null) { await sql`update users set place_id = null where id = ${u.id}`; return out({ ok: true }); }
+      const id = idNum(b.id); if (!(await sql`select 1 from places where id = ${id} and active`).length) throw bad('Not found', 404);
+      await sql`update users set place_id = ${id} where id = ${u.id}`;
+      return out({ ok: true });
+    }
     case 'mute_get': { const u = await need(); return out({ muted: (await sql`select 1 from notif_mutes where user_id = ${u.id} and kind = ${b.kind === 'room' ? 'room' : 'dm'} and ref = ${idNum(b.id)}`).length > 0 }); }
     case 'mute_set': {
       const u = await need(), kind = b.kind === 'room' ? 'room' : 'dm', ref = idNum(b.id);
@@ -464,6 +485,14 @@ async function reportTarget(sql, reporter, target, kind, body, roomId) {
 /** Owner-only actions (the handler already checked the owner key). */
 async function handleAdmin(action, ctx) {
   const { sql, b, res, bad } = ctx, out = (j) => { res.status(200).json(j); return true; };
+  if (action === 'admin_places') { return out({ places: await sql`select p.id, p.name, p.kind, p.lat, p.lng, p.active, (select count(*) from users x where x.place_id = p.id)::int as members from places p order by p.id` }); }
+  if (action === 'admin_place_save') {
+    const lat = Number(b.lat), lng = Number(b.lng), name = String(b.name || '').trim().slice(0, 80), kind = ['school', 'uni', 'area', 'place'].includes(b.kind) ? b.kind : 'school';
+    if (!name || !(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180)) throw bad('Name and a real position, please');
+    if (b.id) await sql`update places set name = ${name}, kind = ${kind}, lat = ${lat}, lng = ${lng}, active = ${b.active !== false} where id = ${idNum(b.id)}`;
+    else await sql`insert into places (name, kind, lat, lng) values (${name}, ${kind}, ${lat}, ${lng})`;
+    return out({ ok: true });
+  }
   if (action === 'admin_hosts') { // the official accounts: how active they are, and their points
     const rows = await sql`select u.id, u.nick, u.role, u.last_seen, u.photo_ok, (select coalesce(sum(delta), 0)::int from points_ledger l where l.user_id = u.id) as points,
         (select count(*)::int from dm_messages x where x.from_user = u.id and x.created_at > now() - interval '7 days') as dm7,

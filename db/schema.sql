@@ -372,3 +372,12 @@ alter table users add column if not exists nudge_off boolean not null default fa
 alter table users add column if not exists nudged_at timestamptz;
 create table if not exists notif_mutes (user_id bigint not null references users(id) on delete cascade, kind text not null, ref bigint not null, primary key (user_id, kind, ref));
 update users set nick = 'Bot' where phone = 'bot-engy';
+
+-- ===== Schools map =====
+create table if not exists places (id bigserial primary key, name text not null, kind text not null default 'school', lat double precision not null, lng double precision not null, active boolean not null default true, created_at timestamptz not null default now());
+alter table users add column if not exists place_id bigint references places(id) on delete set null;
+insert into places (name, kind, lat, lng) select v.n, v.k, v.a, v.b from (values
+  ('Schools of Tripoli','area',34.4367,35.8497), ('Schools of Koura','area',34.3036,35.8030), ('Schools of Zgharta','area',34.3975,35.8944),
+  ('Schools of Batroun','area',34.2553,35.6586), ('Schools of Akkar','area',34.5481,36.0783), ('Schools of Minieh-Danniyeh','area',34.4592,35.9433),
+  ('Schools of Bcharre','area',34.2500,36.0097), ('Universities of the North','area',34.3667,35.7333)) as v(n,k,a,b)
+  where not exists (select 1 from places p where p.name = v.n);

@@ -338,7 +338,7 @@ module.exports = async (req, res) => {
     }
 
     /* ---------- site owner ---------- */
-    if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide' || action === 'admin_gift' || action === 'admin_hosts' || action === 'admin_selfies' || action === 'admin_selfie_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
+    if (action === 'admin_reports' || action === 'admin_mod' || action === 'admin_tod' || action === 'admin_orders' || action === 'admin_order_decide' || action === 'admin_gift' || action === 'admin_hosts' || action === 'admin_places' || action === 'admin_place_save' || action === 'admin_selfies' || action === 'admin_selfie_decide') { if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403); if (await community.handleAdmin(action, { sql, b, res, bad })) return; if (await play.handleAdmin(action, { sql, b, res, bad })) return; if (await shop.handleAdmin(action, { sql, b, res, bad })) return; }
     if (action === 'admin' || action === 'admin_reset' || action === 'admin_invite' || action === 'admin_mark' || action === 'admin_set' || action === 'admin_settings') {
       if (!process.env.ADMIN_KEY || !b.key || !same(b.key, process.env.ADMIN_KEY)) throw bad('Wrong key', 403);
       if (action === 'admin_invite') {
