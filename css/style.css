@@ -586,3 +586,8 @@ body.nx .brand b,.authlogo i{background:#ffd60a;color:#0a0a0a;padding:0 8px;bord
 .authlogo{color:var(--ink);text-shadow:none}
 html[data-ui] body.nx .tabbar a.on{color:var(--ink)}
 html[data-ui] body.nx .tabbar a.on small{color:var(--ink);font-weight:800}
+/* roomier top bar on small phones */
+body.nx .brand{font-size:1.2rem;gap:5px}body.nx .brand b{padding:0 6px}
+.mechip{padding:3px 10px 3px 3px;gap:6px}.mechip b{max-width:64px;font-size:.8rem}.mechip small{white-space:nowrap;font-size:.64rem}
+.coinring{width:42px;height:42px}
+.h2.big{font-size:1.7rem;font-weight:900;letter-spacing:-.03em;margin-top:8px}

@@ -92,7 +92,7 @@ window.CommunityInit = function (ui) {
   function page(active, ...kids) {
     document.title = 'Oppa HUB';
     const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '')))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, 'Oppa ', h('b', null, 'HUB')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
   /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
   window.addEventListener('adate:needpoints', (e) => {
@@ -117,12 +117,17 @@ window.CommunityInit = function (ui) {
     const roomRow = (r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, `${r.members} here · ${r.msgs24} messages today`)), r.member ? h('span', { class: 'badge ok' }, 'Joined') : h('span', { class: 'badge' }, r.price ? '⭐ ' + r.price : 'Free'));
     const nickBox = ME.nick ? null : (() => { const inp = h('input', { type: 'text', maxlength: 20, placeholder: 'Your nickname', 'aria-label': 'Nickname' }), msg = h('div'); return h('div', { class: 'note' }, h('b', null, 'Choose your nickname'), h('p', { class: 'hint' }, 'This is the name people see in rooms. Not your real name.'), inp, h('button', { class: 'btn pri block', onclick: async () => { try { await API.nickSet('*', inp.value); hub(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Save nickname'), msg); })();
     page('#/', h('div', { class: 'hello' }, myAvatar(52), h('div', null, h('b', null, 'Hi ' + (ME.nick || 'there') + ' ' + (FLAG[ME.country] || '')), h('small', { class: 'hint' }, 'Age circles: ' + ME.circles.join(' · ')))), nickBox,
-      homeTabs(),
-      ...[homeToday, homeGames, homeRooms, homeActivities].map((f) => f()));
+      homeActivities());
     function homeToday() { return h('div', { class: 'stack hsec', 'data-sec': 'today' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, 'Oppa Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }), d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null, h('p', { class: 'hint' }, 'Nothing else new right now. Check Activities to earn points.')); }
     function homeGames() { return h('div', { class: 'stack hsec', 'data-sec': 'games' }, h('div', { class: 'h2' }, 'Games'), h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, 'Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, 'Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))), h('a', { class: 'gamecard c3', href: '#/match' }, h('b', null, 'Meet people'), h('small', null, 'Swipe, play 3 quick games together and become friends'))); }
     function homeRooms() { return h('div', { class: 'stack hsec', 'data-sec': 'rooms' }, ...(mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : []), h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms')); }
-    function homeActivities() { return h('div', { class: 'stack hsec', 'data-sec': 'act' }, h('div', { class: 'h2' }, 'Earn points'), h('p', { class: 'hint' }, 'Small things you can do now. Points open Truth or Dare, chats and more.'), ...(ME.todo || []).map((t) => h('a', { class: 'roomcard', href: t.href }, h('span', { class: 'rc-e' }, '⭐'), h('span', { class: 'rc-t' }, h('b', null, t.text), h('small', null, 'Get ' + t.points + ' points')), h('span', { class: 'badge' }, '+' + t.points))), h('a', { class: 'btn pri block', href: '#/shop' }, '⭐ Get more points')); }
+    function homeActivities() {
+      const todo = (ME.todo || []).map((t) => h('a', { class: 'roomcard', href: t.href }, h('span', { class: 'rc-t' }, h('b', null, t.text), h('small', null, 'Get ' + t.points + ' points')), h('span', { class: 'badge' }, '+' + t.points)));
+      return h('div', { class: 'stack hsec' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, 'Message from the team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { try { await API.noticeRead(n.id); } catch (e) { /* ok */ } box.remove(); } }, 'OK')); return box; }),
+        d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null,
+        h('div', { class: 'h2 big' }, 'Earn points'), h('p', { class: 'hint' }, 'Small things you can do now. Points open Truth or Dare, chats and more.'), ...todo, h('a', { class: 'btn pri block', href: '#/shop' }, 'Get more points'),
+        h('div', { class: 'h2' }, 'Play'), h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/tod' }, h('b', null, 'Truth or Dare'), h('small', null, 'Five levels')), h('a', { class: 'gamecard c3', href: '#/date' }, h('b', null, 'Truth Date'), h('small', null, 'Ask someone out'))));
+    }
     function homeTabs() { const names = [['today', 'Today'], ['games', 'Games'], ['rooms', 'My rooms'], ['act', 'Activities']]; let cur = 'today'; try { cur = localStorage.getItem('adate.homeTab') || 'today'; } catch (e) { /* ok */ } const row = h('div', { class: 'hometabs', role: 'tablist' }); const paint = () => { row.replaceChildren(...names.map(([k, l]) => h('button', { class: 'chip' + (k === cur ? ' on' : ''), type: 'button', role: 'tab', onclick: () => { cur = k; try { localStorage.setItem('adate.homeTab', k); } catch (e) { /* ok */ } paint(); } }, l))); document.querySelectorAll('.hsec').forEach((x) => { x.style.display = x.dataset.sec === cur ? '' : 'none'; }); }; setTimeout(paint, 0); return row; }
   }
 
@@ -276,7 +281,7 @@ window.CommunityInit = function (ui) {
   async function swipe() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }), msg = h('input', { type: 'text', maxlength: 300, placeholder: 'Send a message', 'aria-label': 'Send a message', enterkeyhint: 'send' });
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('swipe'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('swipe'), box), bar('#/match', ME && ME.points));
     let card = null;
     function prefsView() {
       const pr = { gender: '', meet: 'both' };
@@ -304,7 +309,7 @@ window.CommunityInit = function (ui) {
   async function online() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
     async function draw() {
       try {
         const d = await API.onlineList();
@@ -316,7 +321,7 @@ window.CommunityInit = function (ui) {
   async function near() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('near'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('near'), box), bar('#/match', ME && ME.points));
     const d = await API.discoverNear(), q = h('input', { type: 'text', placeholder: 'Search a place', 'aria-label': 'Search a place' }), list = h('div');
     const draw = () => { const t = q.value.trim().toLowerCase(); const rs = d.rooms.filter((r) => !t || r.title.toLowerCase().includes(t)); list.replaceChildren(...(rs.length ? rs.map((r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '📍'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, r.members + ' here')), h('span', { class: 'badge' }, 'Open'))) : [h('p', { class: 'hint' }, 'No place found.')])); };
     q.oninput = draw;
@@ -326,7 +331,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     let stop = false, shown = '', lastId = 0, cur = null, prefs = { gender: '', meet: 'both' };
     const box = h('div', { class: 'matchbox stack' });
-    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
+    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, window.OppaLogo ? window.OppaLogo(30) : null, 'Oppa ', h('b', null, 'HUB')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
     const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, presence(p.last_seen) + ' · Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
     function prefsView(first) {
       const pick = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (prefs[key] === v ? ' on' : ''), onclick: () => { prefs[key] = v; prefsView(first); } }, h('span', null, e), h('b', null, l))));

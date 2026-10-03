@@ -1,0 +1,11 @@
+/* The Oppa HUB mark: a big black O with a cat in the middle, on yellow. window.OppaLogo(size) returns an <svg>. */
+(function () {
+  const inner = '<circle cx="512" cy="512" r="318" fill="none" stroke="#0a0a0a" stroke-width="96"/>' +
+    '<path d="M372 478l18-128 92 66z M652 478l-18-128-92 66z" fill="#0a0a0a" stroke="#0a0a0a" stroke-width="22" stroke-linejoin="round"/>' +
+    '<ellipse cx="512" cy="548" rx="166" ry="138" fill="#0a0a0a"/>' +
+    '<ellipse cx="458" cy="536" rx="18" ry="27" fill="#ffd60a"/><ellipse cx="566" cy="536" rx="18" ry="27" fill="#ffd60a"/>' +
+    '<path d="M494 578h36l-18 22z" fill="#ffd60a"/><path d="M512 600q-16 26-44 20M512 600q16 26 44 20" fill="none" stroke="#ffd60a" stroke-width="12" stroke-linecap="round"/>' +
+    '<path d="M366 566l-70-12M366 590l-66 22M658 566l70-12M658 590l66 22" stroke="#0a0a0a" stroke-width="12" stroke-linecap="round"/>';
+  window.OPPA_LOGO_SVG = (bg) => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">' + (bg ? '<rect width="1024" height="1024" rx="230" fill="#ffd60a"/>' : '') + inner + '</svg>';
+  window.OppaLogo = (size, bg) => { const w = document.createElement('span'); w.className = 'oppalogo'; w.style.cssText = 'display:inline-flex;width:' + size + 'px;height:' + size + 'px'; w.innerHTML = window.OPPA_LOGO_SVG(bg !== false); w.setAttribute('aria-hidden', 'true'); return w; };
+})();

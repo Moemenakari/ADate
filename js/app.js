@@ -794,7 +794,7 @@ function phoneInputs(cc0) {
 }
 function authShell(title, ...kids) {
   $app.replaceChildren(h('div', { class: 'authwall' }, h('div', { class: 'wrap authwrap' },
-    h('div', { class: 'authlogo' }, h('b', null, 'Oppa ', h('i', null, 'HUB'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
+    h('div', { class: 'authlogo' }, window.OppaLogo ? window.OppaLogo(96) : null, h('b', null, 'Oppa ', h('i', null, 'HUB'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
     h('div', { class: 'panel stack authcard' }, h('h2', { style: 'margin:0' }, title), ...kids), footer())));
 }
 const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['🎬', 'Movies & series'], ['⚽', 'Football'], ['💪', 'Gym & fitness'], ['✈️', 'Travel'], ['🍳', 'Cooking'], ['🐶', 'Animals'], ['🎨', 'Art & drawing'], ['📷', 'Photography'], ['💻', 'Tech & coding'],
