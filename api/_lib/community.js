@@ -79,7 +79,7 @@ async function handle(action, ctx) {
       const bal = await balanceOf(sql, u.id);
       const dm = await sql`select count(*)::int as n from dm_threads where status = 'pending' and started_by <> ${u.id} and (a = ${u.id} or b = ${u.id})`;
       const nicks = await sql`select country, nick from nicknames where user_id = ${u.id}`;
-      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, nudge_off: !!u.nudge_off, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
+      return out({ me: { id: u.id, nick: u.nick || '', country: u.country || countryOf(u.phone), theme: u.theme || '', avatar: u.avatar || '', ref_code: u.ref_code || '', points: bal, age_band: bandOf(age), circles: circlesOf(age), muted_until: u.muted_until, is_admin: !!u.is_admin, nudge_off: !!u.nudge_off, share_place: !!u.share_place, verified: !!u.verified, nicks, photo_ok: photoOn(u), photo_until: u.photo_until || null, selfie_ok: tickOf(u), role: roleOf(u), has_photo: !!u.photo, photo_price: PHOTO_PRICE, frame: u.frame || '', frames: (u.frames || []).filter((k) => FRAMES[k]), frame_shop: Object.entries(FRAMES).map(([key, f]) => ({ key, name: f.name, emoji: f.emoji, price: f.price, open: frameOpen(f), own: (u.frames || []).includes(key) })) }, dm_requests: dm[0].n });
     }
     /* ------------------------------------------------ nickname, theme, avatar */
     case 'nick_set': {
@@ -282,6 +282,25 @@ async function handle(action, ctx) {
       const r = await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, ${prize}, 'box', null where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'box' and created_at >= date_trunc('day', now())) returning id`;
       if (!r.length) throw bad('Come back tomorrow for the next one', 409);
       return out({ ok: true, prize, balance: await balanceOf(sql, u.id) });
+    }
+    case 'place_share_set': { const u = await need(); await sql`update users set share_place = ${!!b.on} where id = ${u.id}`; return out({ ok: true }); }
+    case 'places_sheet': { // my places: recent, top, and ones I have not been to
+      const u = await need();
+      const recent = await sql`select p.id, p.name, p.kind, max(c.created_at) as at from place_checkins c join places p on p.id = c.place_id where c.user_id = ${u.id} and p.active group by p.id order by at desc limit 20`;
+      const top = await sql`select p.id, p.name, p.kind, count(distinct c.user_id)::int as visits from places p left join place_checkins c on c.place_id = p.id where p.active group by p.id order by visits desc, p.name limit 20`;
+      const sug = await sql`select p.id, p.name, p.kind from places p where p.active and not exists (select 1 from place_checkins c where c.place_id = p.id and c.user_id = ${u.id}) order by random() limit 12`;
+      return out({ recent, top, suggested: sug, share: !!u.share_place });
+    }
+    case 'place_friends_here': { // friends who chose to share and checked in during the last 3 hours (place only)
+      const u = await need();
+      const rows = await sql`select distinct on (f.id) f.id as user_id, f.nick, f.avatar, f.frame, t.id as thread, p.id as place_id, p.name as place, p.kind, c.created_at as at
+        from dm_threads t join users f on f.id = case when t.a = ${u.id} then t.b else t.a end
+        join place_checkins c on c.user_id = f.id and c.created_at > now() - interval '3 hours'
+        join places p on p.id = c.place_id and p.active
+        where (t.a = ${u.id} or t.b = ${u.id}) and t.status = 'open' and f.share_place and not f.blocked and f.nick is not null
+          and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = f.id) or (bl.blocker = f.id and bl.blocked = ${u.id}))
+        order by f.id, c.created_at desc`;
+      return out({ friends: rows });
     }
     case 'place_checkin': { // "I am here": 1 point, only when the phone really is close. Where the person is is never stored.
       const u = await need(), id = idNum(b.id), la = Number(b.lat), lo = Number(b.lng);

@@ -472,3 +472,16 @@ html[data-ui="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brig
 .stkpick{display:flex;flex-direction:column;gap:8px;padding:10px;border-top:1px solid var(--line,#2a2a3a);max-height:42vh}
 .stkcats{display:flex;gap:6px;overflow-x:auto}.stkgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;overflow-y:auto;justify-items:center}
 .stkbtn{background:none;border:0;padding:2px;cursor:pointer}.stkopen{padding:0 10px}
+
+/* full-screen map */
+.mapfull{position:fixed;left:0;right:0;top:0;bottom:calc(60px + env(safe-area-inset-bottom));z-index:5;background:var(--bg)}
+.mapcanvas{position:absolute;inset:0}
+.mapbtns{position:absolute;left:12px;right:12px;bottom:14px;display:flex;gap:10px;align-items:center;z-index:500;pointer-events:none}
+.mapbtns>*{pointer-events:auto}.mapfab{background:var(--surface);color:var(--text,inherit);border:1px solid var(--line);border-radius:999px;padding:12px 18px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.mapfab.round{margin-left:auto;width:48px;height:48px;padding:0;font-size:20px}
+.mapback{position:absolute;left:12px;top:calc(12px + env(safe-area-inset-top));z-index:500;background:var(--surface);color:var(--text,inherit);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.mapdrawer{position:absolute;left:0;right:0;bottom:0;max-height:68%;overflow-y:auto;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.4);z-index:600;transform:translateY(105%);transition:transform .25s ease;padding:14px 16px 18px}
+.mapdrawer.up{transform:none}.drawer-in{display:flex;flex-direction:column;gap:10px}
+.drawer-x{align-self:flex-end;background:var(--line);border:0;border-radius:50%;width:30px;height:30px;color:inherit}
+.rowbtn{width:100%;text-align:left;background:none;border:0;color:inherit}
+.fpin span{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#27d3a2;color:#06231b;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}

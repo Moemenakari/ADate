@@ -387,3 +387,6 @@ alter table places add column if not exists suggested_by bigint references users
 create table if not exists place_checkins (id bigserial primary key, user_id bigint not null references users(id) on delete cascade, place_id bigint not null references places(id) on delete cascade, created_at timestamptz not null default now());
 create index if not exists place_checkins_idx on place_checkins (place_id, user_id, created_at desc);
 create table if not exists place_reviews (place_id bigint not null references places(id) on delete cascade, user_id bigint not null references users(id) on delete cascade, rating int not null check (rating between 1 and 5), body text not null default '', created_at timestamptz not null default now(), primary key (place_id, user_id));
+
+-- friends can see which place I am at (place only, never exact position), off unless I switch it on
+alter table users add column if not exists share_place boolean not null default false;
