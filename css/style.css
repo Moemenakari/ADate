@@ -480,3 +480,16 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .todobar a,.todobar a b{color:#2b2140!important}
 .installbar ~ .todobar,.wrap > div:has(.pushbar) ~ .todobar{display:none}
 .socl{width:100%;background:none;border:1px dashed var(--line);color:inherit;opacity:.9}.socbox a.setrow{text-decoration:none;color:inherit}
+
+/* sign in / sign up wallpaper */
+.authwall{position:relative;min-height:100vh;overflow:hidden;background:linear-gradient(160deg,#2b1055,#7a5cff 45%,#ff7ab6 75%,#ffd36e);background-size:220% 220%;animation:wallmove 18s ease infinite}
+@keyframes wallmove{0%{background-position:0% 0%}50%{background-position:100% 100%}100%{background-position:0% 0%}}
+.flo{position:absolute;bottom:-60px;opacity:.38;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25));animation-name:floatup;animation-timing-function:linear;animation-iteration-count:infinite;pointer-events:none}
+@keyframes floatup{0%{transform:translateY(0) rotate(-12deg)}50%{transform:translateY(-55vh) rotate(14deg)}100%{transform:translateY(-120vh) rotate(-12deg)}}
+.authwrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:calc(34px + env(safe-area-inset-top))}
+.authlogo{display:flex;flex-direction:column;align-items:center;color:#fff;font-size:2.6rem;font-weight:900;letter-spacing:-.5px;text-shadow:0 3px 14px rgba(0,0,0,.35)}
+.authlogo i{font-style:normal;color:#ffe36e}.authcat{font-size:4.4rem;animation:bob 3s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-8px) rotate(4deg)}}
+.authtag{color:#fff;opacity:.92;margin:0 0 6px;font-weight:600;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+.authcard{width:min(440px,100%);background:color-mix(in srgb,var(--surface,#14141d) 86%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.28);border-radius:26px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+@media (prefers-reduced-motion:reduce){.authwall,.flo,.authcat{animation:none}}

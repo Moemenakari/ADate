@@ -26,8 +26,8 @@ window.CommunityInit = function (ui) {
       box.replaceChildren(h('b', null, '🔗 Their accounts'),
         ...have.map((k) => { const m = SOC[k] || ['🔗', k, (v) => '#', (v) => v]; return open[k]
           ? h('a', { class: 'setrow', href: m[2](open[k]), target: '_blank', rel: 'noopener noreferrer' }, h('span', null, m[0] + ' ' + m[1]), h('b', null, m[3](open[k])))
-          : h('button', { class: 'setrow socl', type: 'button', onclick: () => unlock(k, p.soc_price.one) }, h('span', null, m[0] + ' ' + m[1]), h('b', null, '🔒 ' + p.soc_price.one + ' ⭐')); }),
-        left.length > 1 ? h('button', { class: 'btn pri block', type: 'button', onclick: () => unlock('*', p.soc_price.all) }, '🔓 Open all · ' + p.soc_price.all + ' ⭐') : null);
+          : h('button', { class: 'setrow socl', type: 'button', onclick: () => unlock(k, p.soc_price[k] || 10) }, h('span', null, m[0] + ' ' + m[1]), h('b', null, '🔒 ' + (p.soc_price[k] || 10) + ' ⭐')); }),
+        left.filter((k) => k !== 'wa').length > 1 ? h('button', { class: 'btn pri block', type: 'button', onclick: () => unlock('*', p.soc_price.all) }, '🔓 Open all · ' + p.soc_price.all + ' ⭐') : null);
     };
     const unlock = async (key, price) => { if (!confirm('Open ' + (key === '*' ? 'all their accounts' : (SOC[key] || [0, key])[1]) + ' for ' + price + ' points?')) return; try { const r = await API.socialView(p.id, key); ME.points = r.balance; p.socials_open = r.socials_open; draw(); toast('Opened ✓'); } catch (x) { toast(err(x), 'bad'); } };
     draw(); return box;
@@ -45,12 +45,11 @@ window.CommunityInit = function (ui) {
   let deferredInstall = null; window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
   function installBanner() {
     if (isStandalone()) return null;
-    let hide = 0; try { hide = Number(localStorage.getItem('adate.installHide') || 0); } catch (e) { /* ok */ }
-    if (Date.now() < hide) return null;
+    try { if (localStorage.getItem('adate.installHide')) return null; } catch (e) { /* ok */ } // shown once: after the X it never comes back (Settings still explains it)
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const box = h('div', { class: 'installbar' }, h('div', null, h('b', null, '📲 Add ADate to your Home Screen'), h('small', null, ios ? 'Tap the Share button, then “Add to Home Screen”. You get notifications and +10 points.' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. You get notifications and +10 points.')),
       deferredInstall ? h('button', { class: 'btn pri sm', onclick: async () => { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch (e) { /* ignore */ } box.remove(); } }, 'Install') : null,
-      h('button', { class: 'btn sm', 'aria-label': 'Hide for 3 days', onclick: () => { try { localStorage.setItem('adate.installHide', String(Date.now() + 3 * 86400000)); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
+      h('button', { class: 'btn sm', 'aria-label': 'Close', onclick: () => { try { localStorage.setItem('adate.installHide', '1'); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
     return box;
   }
   if (isStandalone() && API.session) { let done = false; try { done = localStorage.getItem('adate.installClaimed') === '1'; } catch (e) { /* ok */ } if (!done) API.installClaim().then((r) => { try { localStorage.setItem('adate.installClaimed', '1'); } catch (e) { /* ok */ } if (r && r.claimed) setTimeout(() => toast('+10 points for adding ADate to your home screen ⭐'), 1500); }).catch(() => {}); }
@@ -60,11 +59,12 @@ window.CommunityInit = function (ui) {
     try {
       const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
       if (!('Notification' in window) || Notification.permission !== 'default' || !ui.pushControl || (ios && !isStandalone())) return slot;
+      if (localStorage.getItem('adate.pushAsked')) return slot; localStorage.setItem('adate.pushAsked', '1'); // asked once, not on every visit
       ui.pushControl().then((el) => { if (el && Notification.permission === 'default') slot.append(h('div', { class: 'pushbar' }, h('small', null, '🔔 Get a message when a friend writes or invites you to play'), el)); }).catch(() => {});
     } catch (e) { /* optional */ }
     return slot;
   }
-  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/me', '👤', 'Me']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
+  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/shop', '🛒', 'Shop']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
   /** My own avatar: the real photo when I have one, otherwise the cartoon. */
   const myAvatar = (size) => avatar(ME && ME.avatar, ME && ME.nick, size, ME && ME.frame, ME && ME.photo);
   /** One reminder at the top that slides in, most important first: install, notifications, then things that earn points. Hidden for a day with the X. */
@@ -77,7 +77,7 @@ window.CommunityInit = function (ui) {
   }
   function page(active, ...kids) {
     document.title = 'ADate';
-    const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '') + ' · ⭐ ' + ME.points))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
+    const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '')))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
     $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), me), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
   /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
@@ -416,11 +416,10 @@ window.CommunityInit = function (ui) {
     API.viewsList().then((r) => viewsSec.replaceChildren(h('div', { class: 'sethead' }, h('span', null, '👀'), h('b', null, 'Who viewed my profile')), ...(r.views.length ? r.views.map((v) => h('div', { class: 'setrow' }, h('span', { class: 'row', style: 'gap:8px;align-items:center' }, avatar(v.avatar, v.nick, 28, v.frame), v.nick), h('small', { class: 'hint' }, ui.ago(v.at)))) : [h('p', { class: 'hint' }, 'Nobody yet. Be active in groups and Swipe to be seen.')]))).catch(() => viewsSec.replaceChildren(h('p', { class: 'hint' }, 'Not available now.')));
     const socialSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '🔗'), h('b', null, 'My social accounts')), h('p', { class: 'hint spark' }, 'Loading…'));
     API.socialGet().then((s) => {
-      if (!s.allowed) return socialSec.replaceChildren(h('div', { class: 'sethead' }, h('span', null, '🔗'), h('b', null, 'My social accounts')), h('p', { class: 'hint' }, 'Social accounts are for ages 18 and up. They are never shown to younger people.'));
-      const f = (k, label, ph) => h('label', { class: 'f' }, label, h('input', { type: 'text', value: (s.socials || {})[k] || '', placeholder: ph, autocapitalize: 'none', 'data-k': k }));
-      const msg3 = h('div'), box3 = h('div', { class: 'stack' }, f('ig', 'Instagram', 'username'), f('snap', 'Snapchat', 'username'), f('tiktok', 'TikTok', 'username'), f('wa', 'WhatsApp number', 'digits with country code'),
+      const f = (k, label, ph) => h('label', { class: 'f' }, label + ' · ' + (s.earn[k] || 0) + ' ⭐', h('input', { type: 'text', value: (s.socials || {})[k] || '', placeholder: ph, autocapitalize: 'none', 'data-k': k }));
+      const msg3 = h('div'), box3 = h('div', { class: 'stack' }, f('ig', 'Instagram', 'username'), f('snap', 'Snapchat', 'username'), f('tiktok', 'TikTok', 'username'), s.adult ? f('wa', 'WhatsApp number', 'digits with country code') : null,
         h('button', { class: 'btn pri block', onclick: async () => { const o = {}; box3.querySelectorAll('input[data-k]').forEach((i) => { o[i.dataset.k] = i.value; }); try { const r = await API.socialSet(o); ME.points = r.balance; toast('Saved ✓'); } catch (e) { msg3.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Save'), msg3);
-      socialSec.replaceChildren(h('div', { class: 'sethead' }, h('span', null, '🔗'), h('b', null, 'My social accounts')), h('p', { class: 'hint' }, 'Adults only. Each account you add gives you ' + s.reward + ' points. Others pay 5 points to see them, and only adults can.'), box3);
+      socialSec.replaceChildren(h('div', { class: 'sethead' }, h('span', null, '🔗'), h('b', null, 'My social accounts')), h('p', { class: 'hint' }, 'Each account you add earns you points, once. Other people pay points to see them, and only people in your own age group can: ' + (s.adult ? 'adults see adults' : 'under 18 see under 18') + '.' + (s.adult ? ' Phone numbers are for adults only.' : '')), box3);
     }).catch(() => socialSec.replaceChildren(h('p', { class: 'hint' }, 'Not available now.')));
     const pc = ui.pushControl ? await ui.pushControl() : null;
     const bdIn = h('input', { type: 'date', 'aria-label': 'New birthday', max: new Date().toISOString().slice(0, 10) });

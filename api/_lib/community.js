@@ -25,18 +25,29 @@ function screenText(raw, max) {
 
 
 
+/** The friend who shared the link earns 5 points once the invited person has really joined (finished setting up the account). One reward per new account, at most 10 a day. */
+async function creditReferral(sql, uid) {
+  const ref = await sql`update referrals set counted = true where invited_id = ${uid} and not counted returning inviter_id`;
+  if (!ref.length) return false;
+  const today = (await sql`select count(*)::int as n from points_ledger where user_id = ${ref[0].inviter_id} and reason = 'invite' and created_at > now() - interval '24 hours'`)[0].n;
+  if (today >= 10) return false;
+  await addPoints(sql, ref[0].inviter_id, 5, 'invite', String(uid));
+  await pushUsers(sql, [ref[0].inviter_id], '⭐ Your friend joined', 'You got 5 points.', '/#/points');
+  return true;
+}
 /** The accounts of `t` that viewer `vid` has already paid for (all of them when the whole set was opened). */
 async function openSocials(sql, vid, t) {
   const so = t.socials || {}; if (!Object.keys(so).length || vid === t.id) return {};
   const rows = await sql`select kind from social_unlocks where viewer = ${vid} and target = ${t.id}`, kinds = rows.map((r) => r.kind), out = {};
-  for (const k of Object.keys(so)) if (kinds.includes('*') || kinds.includes(k)) out[k] = so[k];
+  for (const k of Object.keys(so)) if (kinds.includes(k) || (kinds.includes('*') && SOC_SET.includes(k))) out[k] = so[k];
   return out;
 }
 /** Small things a person can still do to earn points, most useful first. Social accounts are for adults only. */
 function todoOf(u, age) {
   const t = [], so = u.socials || {};
-  if (!tickOf(u) && u.selfie_state !== 'pending') t.push({ k: 'selfie', text: 'Verify yourself with a selfie', points: 5, href: '#/settings' });
-  if (age >= 18) { if (!so.ig) t.push({ k: 'ig', text: 'Add your Instagram', points: 5, href: '#/settings' }); if (!so.snap) t.push({ k: 'snap', text: 'Add your Snapchat', points: 5, href: '#/settings' }); if (!so.wa) t.push({ k: 'wa', text: 'Add your WhatsApp number', points: 5, href: '#/settings' }); }
+  if (!tickOf(u) && u.selfie_state !== 'pending') t.push({ k: 'selfie', text: 'Verify yourself with a selfie', points: SELFIE_REWARD, href: '#/settings' });
+  for (const [k, name] of [['ig', 'Instagram'], ['snap', 'Snapchat'], ['tiktok', 'TikTok']]) if (!so[k]) t.push({ k, text: 'Add your ' + name, points: SOC_EARN[k], href: '#/settings' });
+  if (age >= 18 && !so.wa) t.push({ k: 'wa', text: 'Add your WhatsApp number', points: SOC_EARN.wa, href: '#/settings' });
   t.push({ k: 'invite', text: 'Invite a friend', points: 5, href: '#/points' });
   return t;
 }
@@ -44,7 +55,12 @@ function todoOf(u, age) {
 // Seasonal frames around the profile picture: 5 points, can be bought while the season runs and are kept afterwards.
 const FRAMES = { halloween: { name: 'Halloween', emoji: '🎃', price: 5, from: '2026-10-01', to: '2026-11-05' }, newyear: { name: 'New Year', emoji: '🎆', price: 5, from: '2026-12-15', to: '2027-01-06' }, ramadan: { name: 'Ramadan', emoji: '🌙', price: 5, from: '2027-02-08', to: '2027-03-12' } };
 const frameOpen = (f) => { const t = new Date().toISOString().slice(0, 10); return t >= f.from && t <= f.to; };
-const SELFIE_REWARD = 5, SOC_ONE = 10, SOC_ALL = 20; // points to open one social account, or all of a person's accounts
+const SELFIE_REWARD = 20; // points for a checked selfie
+const SOC_EARN = { ig: 10, snap: 10, tiktok: 10, wa: 5 }; // points for adding each account to my profile (WhatsApp: adults only)
+const SOC_PRICE = { ig: 10, snap: 10, tiktok: 10, wa: 100 }, SOC_ALL = 20; // points to open one account; the three of Instagram, Snapchat and TikTok together cost 20
+const SOC_SET = ['ig', 'snap', 'tiktok'];
+/** Social accounts are only shown inside the same age group: under 18 with under 18, adults with adults. */
+const sameGroup = (a, b) => (a >= 18) === (b >= 18);
 /** Replies fast: on average within half an hour, over at least 10 replies. */
 const fastOf = (u) => (u.reply_n || 0) >= 10 && Number(u.reply_secs || 0) / u.reply_n <= 1800;
 const dayStr = (d) => d.toISOString().slice(0, 10);
@@ -134,7 +150,7 @@ async function handle(action, ctx) {
         if (!seen.length) { const recent = await sql`select 1 from profile_views where target = ${id} and notified and created_at > now() - interval '2 hours'`; const tell = !recent.length;
           await sql`insert into profile_views (viewer, target, notified) values (${u.id}, ${id}, ${tell})`;
           if (tell) await pushUsers(sql, [id], '👀 ' + (u.nick || 'Someone') + ' viewed your profile', 'Open ADate to see who.', '/#/settings'); } }
-      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: ageOf(u.birthdate) >= 18 && ageOf(t.birthdate) >= 18 && !!(t.socials && Object.keys(t.socials).length), socials_have: ageOf(u.birthdate) >= 18 && ageOf(t.birthdate) >= 18 && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { one: SOC_ONE, all: SOC_ALL }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
+      return out({ id: t.id, nick: t.nick || 'Member', country: t.country, age: age >= 18 ? String(age) : bandOf(age), zodiac: zodiac(dateStr(t.birthdate)), interests: t.interests || [], theme: t.theme || '', avatar: t.avatar || '', photo: photoOn(t) ? (t.photo || '') : '', frame: t.frame || '', verified: !!t.verified, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), can_socials: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && !!(t.socials && Object.keys(t.socials).length), socials_have: sameGroup(ageOf(u.birthdate), ageOf(t.birthdate)) && id !== u.id ? Object.keys(t.socials || {}) : [], socials_open: await openSocials(sql, u.id, t), soc_price: { ...SOC_PRICE, all: SOC_ALL }, can_dm: id !== u.id && shareCircle(ageOf(u.birthdate), age), blocked: blockedByMe, me: id === u.id });
     }
     case 'photo_buy': { // a real photo costs 25 points for 30 days
       const u = await need(); if (photoOn(u)) return out({ ok: true, balance: await balanceOf(sql, u.id) });
@@ -183,7 +199,7 @@ async function handle(action, ctx) {
     case 'ref_join': { // a new account arrived through someone's invite link
       const u = await userOf(sql, b.session);
       const code = String(b.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
-      if (!code || u.referred_by) return out({ ok: true });
+      if (!code || u.referred_by || u.profile_done) return out({ ok: true }); // only brand-new accounts count
       const inv = await sql`select id from users where ref_code = ${code} and id <> ${u.id} and not blocked`;
       if (!inv.length) return out({ ok: true });
       await sql`update users set referred_by = ${inv[0].id} where id = ${u.id} and referred_by is null`;
@@ -237,10 +253,6 @@ async function handle(action, ctx) {
       const nick = (nk[0] && nk[0].nick) || u.nick; if (!nick) throw bad('Choose a nickname first', 403);
       const r = await sql`insert into messages (room_id, user_id, nick, body) values (${id}, ${u.id}, ${nick}, ${body}) returning id`;
       await sql`delete from messages where room_id = ${id} and (expires_at < now() or id in (select id from messages where room_id = ${id} order by id desc offset 1000))`; // 3 days, or the newest 1000
-      if (u.referred_by) { // the friend who invited her earns +5 once she sends her first message (max 10 a day)
-        const ref = await sql`update referrals set counted = true where invited_id = ${u.id} and not counted returning inviter_id`;
-        if (ref.length) { const today = await sql`select count(*)::int as n from points_ledger where user_id = ${ref[0].inviter_id} and reason = 'invite' and created_at > now() - interval '24 hours'`; if (today[0].n < 10) await addPoints(sql, ref[0].inviter_id, 5, 'invite', String(u.id)); }
-      }
       return out({ ok: true, id: r[0].id });
     }
     /* ------------------------------------------------ safety */
@@ -259,32 +271,34 @@ async function handle(action, ctx) {
       await notifyAdmins(sql, '🤳 A selfie is waiting', (u.nick || 'Someone') + ' wants to be verified.');
       return out({ ok: true });
     }
-    case 'social_get': { // my own social accounts (18+ only)
-      const u = await need();
-      return out({ allowed: ageOf(u.birthdate) >= 18, socials: u.socials || {}, reward: 5 });
+    case 'social_get': { // my own social accounts; everyone can add Instagram, Snapchat and TikTok, WhatsApp only adults
+      const u = await need(), adult = ageOf(u.birthdate) >= 18;
+      return out({ allowed: true, adult, socials: u.socials || {}, earn: SOC_EARN });
     }
-    case 'social_set': { // adding an account earns 5 points, once per account
-      const u = await need(); if (ageOf(u.birthdate) < 18) throw bad('Social accounts are for ages 18 and up', 403);
+    case 'social_set': { // adding an account earns points, once per account
+      const u = await need(), adult = ageOf(u.birthdate) >= 18;
       const cur = Object.assign({}, u.socials || {}), added = [];
       for (const key of ['ig', 'snap', 'tiktok', 'wa']) {
         if (b[key] === undefined) continue; const v = String(b[key] || '').trim().replace(/^@/, '');
+        if (key === 'wa' && !adult) { if (v) throw bad('A phone number can only be added by adults', 403); continue; }
         if (!v) { delete cur[key]; continue; }
         if (key === 'wa' ? !/^\d{7,15}$/.test(v) : !/^[A-Za-z0-9._]{2,30}$/.test(v)) throw bad(key === 'wa' ? 'Write the WhatsApp number with digits only' : 'That username does not look right');
         if (cur[key] !== v) { if (!cur[key]) added.push(key); cur[key] = v; }
       }
       await sql`update users set socials = ${JSON.stringify(cur)}::jsonb where id = ${u.id}`;
-      for (const key of added) await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, 5, 'social', ${key} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'social' and ref = ${key})`;
+      for (const key of added) await sql`insert into points_ledger (user_id, delta, reason, ref) select ${u.id}, ${SOC_EARN[key]}, 'social', ${key} where not exists (select 1 from points_ledger where user_id = ${u.id} and reason = 'social' and ref = ${key})`;
       return out({ ok: true, socials: cur, balance: await balanceOf(sql, u.id) });
     }
-    case 'social_view': { // open one account for 10 points, or all of them for 20; adults only, both sides
-      const u = await need(), id = idNum(b.user_id); if (ageOf(u.birthdate) < 18) throw bad('Social accounts are for ages 18 and up', 403);
-      const t = (await sql`select id, nick, birthdate, socials, blocked from users where id = ${id}`)[0]; if (!t || t.blocked || ageOf(t.birthdate) < 18 || !t.socials || !Object.keys(t.socials).length) throw bad('Nothing to show', 404);
+    case 'social_view': { // open one account (10 points, WhatsApp 100) or Instagram, Snapchat and TikTok together (20); only inside the same age group
+      const u = await need(), id = idNum(b.user_id);
+      const t = (await sql`select id, nick, birthdate, socials, blocked from users where id = ${id}`)[0]; if (!t || t.blocked || !t.socials || !Object.keys(t.socials).length) throw bad('Nothing to show', 404);
+      if (!sameGroup(ageOf(u.birthdate), ageOf(t.birthdate))) throw bad('Not available', 403);
       if (id === u.id || await blockedPair(u.id, id)) throw bad('Not available', 403);
       const key = String(b.key || '*'); if (key !== '*' && !t.socials[key]) throw bad('They have not added that one', 404);
-      const open = await openSocials(sql, u.id, t), all = Object.keys(t.socials);
+      const open = await openSocials(sql, u.id, t), all = Object.keys(t.socials).filter((k) => SOC_SET.includes(k));
       const need2 = key === '*' ? all.filter((k) => !open[k]) : open[key] ? [] : [key];
       if (need2.length) {
-        const price = key === '*' ? SOC_ALL : SOC_ONE, bal = await balanceOf(sql, u.id);
+        const price = key === '*' ? SOC_ALL : SOC_PRICE[key], bal = await balanceOf(sql, u.id);
         if (bal < price) throw bad(`${key === '*' ? 'Seeing all their accounts' : 'Seeing this account'} costs ${price} points. You have ${bal}.`, 402);
         await addPoints(sql, u.id, -price, 'social_view', String(id) + ':' + key);
         await sql`insert into social_unlocks (viewer, target, kind) values (${u.id}, ${id}, ${key}) on conflict do nothing`;
@@ -550,4 +564,4 @@ async function handleAdmin(action, ctx) {
   return false;
 }
 
-module.exports = { handle, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };
+module.exports = { handle, creditReferral, reportTarget, pushUsers, photoOn, tickOf, roleOf, fastOf, FRAMES, handleAdmin, screenText, circlesOf, shareCircle, ageOf, dateStr, countryOf, bandOf, zodiac };

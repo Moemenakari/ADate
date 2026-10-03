@@ -793,8 +793,11 @@ function phoneInputs(cc0) {
   return { sel, inp, get value() { return normalizePhone(sel.value, inp.value); } };
 }
 function authShell(title, ...kids) {
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
-    h('div', { class: 'panel stack' }, h('h2', { style: 'margin:0' }, title), ...kids), footer()));
+  const critters = ['🐶', '🐱', '🦊', '🐼', '🐨', '🦄', '🐧', '🐸', '🦁', '🐙', '🐝', '🦋'];
+  const floaters = critters.map((c, i) => h('span', { class: 'flo', 'aria-hidden': 'true', style: `left:${(i * 83) % 100}%;animation-delay:${-i * 1.7}s;animation-duration:${14 + (i % 5) * 3}s;font-size:${24 + (i % 4) * 10}px` }, c));
+  $app.replaceChildren(h('div', { class: 'authwall' }, ...floaters, h('div', { class: 'wrap authwrap' },
+    h('div', { class: 'authlogo' }, h('span', { class: 'authcat' }, '🐱'), h('b', null, 'A', h('i', null, 'Date'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
+    h('div', { class: 'panel stack authcard' }, h('h2', { style: 'margin:0' }, title), ...kids), footer())));
 }
 const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['🎬', 'Movies & series'], ['⚽', 'Football'], ['💪', 'Gym & fitness'], ['✈️', 'Travel'], ['🍳', 'Cooking'], ['🐶', 'Animals'], ['🎨', 'Art & drawing'], ['📷', 'Photography'], ['💻', 'Tech & coding'],
   ['👗', 'Fashion'], ['🌿', 'Nature & hiking'], ['🍥', 'Anime'], ['☕', 'Coffee spots'], ['🎤', 'Singing'], ['💃', 'Dancing'], ['🧠', 'Psychology'], ['🚗', 'Cars'], ['🏖️', 'Beach'], ['🎲', 'Board games'], ['✍️', 'Writing'], ['🗣️', 'Languages']];

@@ -176,6 +176,7 @@ module.exports = async (req, res) => {
       const refc = u.ref_code || crypto.randomBytes(5).toString('hex').slice(0, 8).toUpperCase();
       await sql`update users set ref_code = ${refc}, country = coalesce(country, ${community.countryOf(phone)}) where id = ${u.id}`;
       if (!(await sql`select 1 from points_ledger where user_id = ${u.id} and reason = 'profile'`).length) await sql`insert into points_ledger (user_id, delta, reason) values (${u.id}, 15, 'profile')`; // completing the profile earns 15 points, once
+      await community.creditReferral(sql, u.id).catch(() => {}); // the friend who invited this person is rewarded now that the account is set up
       const fresh = await sql`select * from users where id = ${u.id}`; r[0] = fresh[0];
       return res.status(200).json({ user: publicUser(r[0]) });
     }
