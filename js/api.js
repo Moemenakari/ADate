@@ -7,7 +7,7 @@
   async function call(action, body, keep) { // keep: lets the request finish even if the browser jumps to WhatsApp
     const r = await fetch(`${base}/${action}`, { method: 'POST', keepalive: !!keep, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch (e) { /* not json */ }
-    if (!r.ok) throw new Error((j && j.message) || 'Request failed (' + r.status + ')');
+    if (!r.ok) { if (r.status === 402) { try { window.dispatchEvent(new CustomEvent('adate:needpoints', { detail: (j && j.message) || '' })); } catch (e) { /* ok */ } } throw new Error((j && j.message) || 'Request failed (' + r.status + ')'); }
     return j;
   }
   async function ping() {
@@ -131,7 +131,7 @@
     orderCancel: (id) => call('order_cancel', { session: tok(), id }),
     socialGet: () => call('social_get', { session: tok() }),
     socialSet: (o) => call('social_set', Object.assign({ session: tok() }, o)),
-    socialView: (user_id) => call('social_view', { session: tok(), user_id }),
+    socialView: (user_id, key) => call('social_view', { session: tok(), user_id, key }),
     viewsList: () => call('views_list', { session: tok() }),
     boxState: () => call('box_state', { session: tok() }),
     boxOpen: () => call('box_open', { session: tok() }),

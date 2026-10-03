@@ -17,6 +17,21 @@ window.CommunityInit = function (ui) {
   const FRAME_LOOK = { halloween: ['#ff7a00', '🎃'], newyear: ['#e6b422', '🎆'], ramadan: ['#6b4fbb', '🌙'] };
   const presence = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 150) return '🟢 Online'; if (s < 3600) return 'Last seen ' + Math.round(s / 60) + ' min ago'; if (s < 86400) return 'Last seen ' + Math.round(s / 3600) + ' h ago'; return 'Last seen ' + Math.round(s / 86400) + ' d ago'; };
   const TICK = (ok, role, fast) => (ok ? ' ✅' : '') + ({ owner: ' 👑', mod: ' 🛡️', agent: ' 💰', host: ' 🌟 Host', bot: ' 🤖 Bot' }[role] || '') + (fast ? ' ⚡' : '');
+  /** Their social accounts shown as logos. Locked until opened: one for 10 points, all of them for 20. */
+  const SOC = { ig: ['📸', 'Instagram', (v) => 'https://instagram.com/' + v, (v) => '@' + v], snap: ['👻', 'Snapchat', (v) => 'https://www.snapchat.com/add/' + v, (v) => '@' + v], tiktok: ['🎵', 'TikTok', (v) => 'https://www.tiktok.com/@' + v, (v) => '@' + v], wa: ['💬', 'WhatsApp', (v) => 'https://wa.me/' + v, (v) => '+' + v] };
+  function socialsBox(p) {
+    const box = h('div', { class: 'stack socbox' });
+    const draw = () => {
+      const have = p.socials_have || [], open = p.socials_open || {}, left = have.filter((k) => !open[k]);
+      box.replaceChildren(h('b', null, '🔗 Their accounts'),
+        ...have.map((k) => { const m = SOC[k] || ['🔗', k, (v) => '#', (v) => v]; return open[k]
+          ? h('a', { class: 'setrow', href: m[2](open[k]), target: '_blank', rel: 'noopener noreferrer' }, h('span', null, m[0] + ' ' + m[1]), h('b', null, m[3](open[k])))
+          : h('button', { class: 'setrow socl', type: 'button', onclick: () => unlock(k, p.soc_price.one) }, h('span', null, m[0] + ' ' + m[1]), h('b', null, '🔒 ' + p.soc_price.one + ' ⭐')); }),
+        left.length > 1 ? h('button', { class: 'btn pri block', type: 'button', onclick: () => unlock('*', p.soc_price.all) }, '🔓 Open all · ' + p.soc_price.all + ' ⭐') : null);
+    };
+    const unlock = async (key, price) => { if (!confirm('Open ' + (key === '*' ? 'all their accounts' : (SOC[key] || [0, key])[1]) + ' for ' + price + ' points?')) return; try { const r = await API.socialView(p.id, key); ME.points = r.balance; p.socials_open = r.socials_open; draw(); toast('Opened ✓'); } catch (x) { toast(err(x), 'bad'); } };
+    draw(); return box;
+  }
   function avatar(av, nick, size, frame, photo) {
     const sz = size || 40, box = h('span', { class: 'avatar' + (frame ? ' framed' : ''), style: `width:${sz}px;height:${sz}px` + (FRAME_LOOK[frame] ? `;--ring:${FRAME_LOOK[frame][0]}` : '') });
     const k = String(av || '').replace(/^cartoon:/, ''), an = /^animal:/.test(av || '') ? (window.ANIMALS || []).find((x) => 'animal:' + x[0] === av) : null;
@@ -50,10 +65,28 @@ window.CommunityInit = function (ui) {
     return slot;
   }
   const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/me', '👤', 'Me']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
+  /** My own avatar: the real photo when I have one, otherwise the cartoon. */
+  const myAvatar = (size) => avatar(ME && ME.avatar, ME && ME.nick, size, ME && ME.frame, ME && ME.photo);
+  /** One reminder at the top that slides in, most important first: install, notifications, then things that earn points. Hidden for a day with the X. */
+  function todoBanner() {
+    if (!ME || !ME.todo) return null;
+    let hidden = {}; try { hidden = JSON.parse(localStorage.getItem('adate.todoHide') || '{}'); } catch (e) { /* ok */ }
+    const t = ME.todo.find((x) => x.k !== 'invite' && !(hidden[x.k] > Date.now())); if (!t) return null;
+    const box = h('div', { class: 'todobar slidein' }, h('a', { href: t.href }, h('b', null, '⭐ ' + t.text + ' to get ' + t.points + ' points')), h('button', { class: 'btn sm', 'aria-label': 'Hide for a day', onclick: () => { hidden[t.k] = Date.now() + 86400000; try { localStorage.setItem('adate.todoHide', JSON.stringify(hidden)); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
+    return box;
+  }
   function page(active, ...kids) {
     document.title = 'ADate';
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), installBanner(), pushPrompt(), ...kids), bar(active, ME && ME.points));
+    const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '') + ' · ⭐ ' + ME.points))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), me), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
+  /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
+  window.addEventListener('adate:needpoints', (e) => {
+    if (document.querySelector('.needpts')) return;
+    const box = h('div', { class: 'needpts sheet-over', role: 'dialog', 'aria-label': 'You need more points' }, h('div', { class: 'sheet stack' }, h('div', { class: 'bigemoji' }, '⭐'), h('h2', { class: 'wz-h' }, 'You need more points'), h('p', { class: 'hint' }, (e.detail || '').slice(0, 160)),
+      h('a', { class: 'btn pri block', href: '#/shop', onclick: () => box.remove() }, '⭐ Buy more points'), h('a', { class: 'btn block', href: '#/', onclick: () => { try { localStorage.setItem('adate.homeTab', 'act'); } catch (x) { /* ok */ } box.remove(); } }, '✨ Earn free points'), h('button', { class: 'btn block', type: 'button', onclick: () => box.remove() }, 'Not now')));
+    document.body.append(box);
+  });
   async function load() { // who am I; also earns the +1 that comes every 6 hours
     const d = await API.hub(); ME = d.me; applyTheme(ME.theme); window.__dmRequests = d.dm_requests;
     API.pointsClaim().then((r) => { if (r && r.claimed) { ME.points = r.balance; toast('+1 point ⭐'); } }).catch(() => {});
@@ -69,15 +102,14 @@ window.CommunityInit = function (ui) {
     const mine = rs.filter((r) => r.member), suggest = rs.filter((r) => !r.member && (r.score || 0) > 0).slice(0, 5);
     const roomRow = (r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, `${r.members} here · ${r.msgs24} messages today`)), r.member ? h('span', { class: 'badge ok' }, 'Joined') : h('span', { class: 'badge' }, r.price ? '⭐ ' + r.price : 'Free'));
     const nickBox = ME.nick ? null : (() => { const inp = h('input', { type: 'text', maxlength: 20, placeholder: 'Your nickname', 'aria-label': 'Nickname' }), msg = h('div'); return h('div', { class: 'note' }, h('b', null, 'Choose your nickname'), h('p', { class: 'hint' }, 'This is the name people see in rooms. Not your real name.'), inp, h('button', { class: 'btn pri block', onclick: async () => { try { await API.nickSet('*', inp.value); hub(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Save nickname'), msg); })();
-    page('#/', h('div', { class: 'hello' }, avatar(ME.avatar, ME.nick, 52, ME.frame), h('div', null, h('b', null, 'Hi ' + (ME.nick || 'there') + ' ' + (FLAG[ME.country] || '')), h('small', { class: 'hint' }, 'Age circles: ' + ME.circles.join(' · ')))), nickBox,
-      boxCard,
-      ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, '📩 ADate Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }),
-      d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null,
-      h('div', { class: 'h2' }, 'Games'),
-      h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, '💌 Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, '🎲 Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))),
-      mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : null,
-      h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms'),
-      h('a', { class: 'gamecard c3', href: '#/points' }, h('b', null, '🎁 Invite a friend, get 5 points'), h('small', null, 'Share your link. You earn when they send their first message.')));
+    page('#/', h('div', { class: 'hello' }, myAvatar(52), h('div', null, h('b', null, 'Hi ' + (ME.nick || 'there') + ' ' + (FLAG[ME.country] || '')), h('small', { class: 'hint' }, 'Age circles: ' + ME.circles.join(' · ')))), nickBox,
+      homeTabs(),
+      ...[homeToday, homeGames, homeRooms, homeActivities].map((f) => f()));
+    function homeToday() { return h('div', { class: 'stack hsec', 'data-sec': 'today' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, '📩 ADate Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }), d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null, h('p', { class: 'hint' }, 'Nothing else new right now. Check Activities to earn points.')); }
+    function homeGames() { return h('div', { class: 'stack hsec', 'data-sec': 'games' }, h('div', { class: 'h2' }, 'Games'), h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, '💌 Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, '🎲 Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))), h('a', { class: 'gamecard c3', href: '#/match' }, h('b', null, '💜 Meet people'), h('small', null, 'Swipe, play 3 quick games together and become friends'))); }
+    function homeRooms() { return h('div', { class: 'stack hsec', 'data-sec': 'rooms' }, ...(mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : []), h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms')); }
+    function homeActivities() { return h('div', { class: 'stack hsec', 'data-sec': 'act' }, h('div', { class: 'h2' }, '✨ Earn points'), h('p', { class: 'hint' }, 'Small things you can do now. Points open Truth or Dare, chats and more.'), ...(ME.todo || []).map((t) => h('a', { class: 'roomcard', href: t.href }, h('span', { class: 'rc-e' }, '⭐'), h('span', { class: 'rc-t' }, h('b', null, t.text), h('small', null, 'Get ' + t.points + ' points')), h('span', { class: 'badge' }, '+' + t.points))), h('a', { class: 'btn pri block', href: '#/shop' }, '⭐ Get more points')); }
+    function homeTabs() { const names = [['today', '🔔 Today'], ['games', '🎮 Games'], ['rooms', '💬 My rooms'], ['act', '✨ Activities']]; let cur = 'today'; try { cur = localStorage.getItem('adate.homeTab') || 'today'; } catch (e) { /* ok */ } const row = h('div', { class: 'hometabs', role: 'tablist' }); const paint = () => { row.replaceChildren(...names.map(([k, l]) => h('button', { class: 'chip' + (k === cur ? ' on' : ''), type: 'button', role: 'tab', onclick: () => { cur = k; try { localStorage.setItem('adate.homeTab', k); } catch (e) { /* ok */ } paint(); } }, l))); document.querySelectorAll('.hsec').forEach((x) => { x.style.display = x.dataset.sec === cur ? '' : 'none'; }); }; setTimeout(paint, 0); return row; }
   }
 
   /* ---------------------------------------------------------------- rooms */
@@ -114,7 +146,7 @@ window.CommunityInit = function (ui) {
       p.me ? null : [p.can_dm ? h('div', { class: 'stack' }, h('input', { type: 'text', maxlength: 300, placeholder: 'Say hi (text only)', 'aria-label': 'First message' }), h('button', { class: 'btn pri block', onclick: async (e) => {
         const body = e.currentTarget.parentNode.querySelector('input').value; try { const r = await API.dmStart(p.id, body); m.remove(); location.hash = '#/dm/' + r.thread; } catch (x) { dm.replaceChildren(h('div', { class: 'note' }, err(x))); } } }, '💬 Send message request')) : h('p', { class: 'hint' }, 'Private messages are only between people in the same age circles.'), dm,
         h('button', { class: 'btn block danger', onclick: async () => { if (!confirm(p.blocked ? 'Unblock this person?' : 'Block this person? You will not see each other.')) return; await API.userBlock(p.id, p.blocked); toast(p.blocked ? 'Unblocked' : 'Blocked'); m.remove(); } }, p.blocked ? 'Unblock' : '🚫 Block')],
-      p.can_socials && !p.me ? (() => { const sb = h('div', { class: 'stack' }); return h('div', { class: 'stack' }, h('button', { class: 'btn block', onclick: async () => { if (!confirm('See their social accounts for 5 points? (free if you saw them before)')) return; try { const r = await API.socialView(p.id); ME.points = r.balance; const L = { ig: 'Instagram', snap: 'Snapchat', tiktok: 'TikTok', wa: 'WhatsApp' }; sb.replaceChildren(...Object.entries(r.socials).map(([k2, v]) => h('div', { class: 'setrow' }, h('span', null, L[k2] || k2), h('b', null, k2 === 'wa' ? '+' + v : '@' + v)))); } catch (x) { sb.replaceChildren(h('div', { class: 'note' }, err(x))); } } }, '🔗 See their social accounts · 5 ⭐'), sb); })() : null,
+      p.can_socials && !p.me ? socialsBox(p) : null,
       h('button', { class: 'btn block', onclick: () => m.remove() }, 'Close')));
     document.body.append(m);
   }
@@ -460,11 +492,11 @@ window.CommunityInit = function (ui) {
     const photoBox = () => {
       if (!ME.photo_ok) return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, 'The animal avatar is free. A real photo shows on your profile card for 30 days.'), h('button', { class: 'btn', onclick: async () => { if (!confirm(`Use a real photo for ${ME.photo_price} points a month?`)) return; try { await API.photoBuy(); me(); } catch (e) { toast(err(e), 'bad'); } } }, `📷 Real photo · ⭐ ${ME.photo_price} / month`));
       const f = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Choose a photo', onchange: async (e) => { const file = e.target.files[0]; if (!file) return; try { const data = await ui.shrinkImage(file, 320, 0.8, true); await API.photoSet(data); toast('Photo saved'); me(); } catch (x) { toast(err(x), 'bad'); } } });
-      return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, ME.has_photo ? 'Your photo is on your profile card until ' + String(ME.photo_until || '').slice(0, 10) + '.' : 'Choose a photo of yourself.'), f, ME.has_photo ? h('button', { class: 'btn sm danger', onclick: async () => { await API.photoSet('', true); me(); } }, 'Remove my photo') : null);
+      return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), ME.photo ? h('div', { class: 'photoprev' }, avatar('', ME.nick, 96, ME.frame, ME.photo)) : null, h('p', { class: 'hint' }, ME.has_photo ? 'Your photo is on your profile card until ' + String(ME.photo_until || '').slice(0, 10) + '.' : 'Choose a photo of yourself.'), f, ME.has_photo ? h('button', { class: 'btn sm danger', onclick: async () => { await API.photoSet('', true); me(); } }, 'Remove my photo') : null);
     };
     const frameBox = () => h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Season frames'), h('p', { class: 'hint' }, 'A frame around your picture. 5 points each, while the season lasts. You keep it.'), ...ME.frame_shop.map((f) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, f.emoji), h('span', { class: 'rc-t' }, h('b', null, f.name), h('small', null, f.own ? (ME.frame === f.key ? 'Using it' : 'You own it') : f.open ? '⭐ ' + f.price : 'Not on sale now')),
       f.own ? h('button', { class: 'btn sm' + (ME.frame === f.key ? '' : ' pri'), onclick: async () => { await API.meSet({ frame: ME.frame === f.key ? '' : f.key }); me(); } }, ME.frame === f.key ? 'Remove' : 'Use') : f.open ? h('button', { class: 'btn sm', onclick: async () => { if (!confirm(`Buy the ${f.name} frame for ${f.price} points?`)) return; try { await API.frameBuy(f.key); me(); } catch (x) { toast(err(x), 'bad'); } } }, 'Buy') : h('span', { class: 'badge' }, '🔒'))));
-    page('#/me', h('div', { class: 'hello' }, avatar(ME.avatar, ME.nick, 56, ME.frame), h('div', null, h('b', null, ME.nick || 'No nickname yet'), h('small', { class: 'hint' }, 'Your public profile'))),
+    page('#/me', h('div', { class: 'hello' }, myAvatar(56), h('div', null, h('b', null, ME.nick || 'No nickname yet'), h('small', { class: 'hint' }, 'Your public profile'))),
       h('a', { class: 'btn pri block', href: '#/settings' }, '⚙️ Settings'),
       h('button', { class: 'btn', onclick: () => { ui.toggleMode(); me(); } }, '🌓 Light / dark'),
       h('div', { class: 'h2' }, 'Nickname'), nickIn, h('button', { class: 'btn sm pri', onclick: saveNick(() => '*', nickIn) }, 'Save'),

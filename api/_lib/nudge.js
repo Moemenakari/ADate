@@ -18,6 +18,10 @@ async function optionsFor(sql, u, online) {
   if (u.birthdate && new Date(u.birthdate).toISOString().slice(5, 10) === new Date().toISOString().slice(5, 10)) o.push({ t: '🎂 Happy birthday!', b: 'Your gift is waiting for you.', url: '/#/', real: true });
   const rooms = await sql`select r.title, r.kind from rooms r join room_members m on m.room_id = r.id where m.user_id = ${u.id} and r.active and not exists (select 1 from notif_mutes nm where nm.user_id = ${u.id} and nm.kind = 'room' and nm.ref = r.id) and exists (select 1 from messages x where x.room_id = r.id and x.created_at > now() - interval '6 hours' and x.user_id <> ${u.id}) limit 5`;
   for (const r of rooms) o.push({ t: '💬 ' + r.title + ' has new messages', b: 'Come and see what you missed.', url: '/#/rooms', real: true });
+  if (u.birthdate && Date.now() - new Date(u.birthdate).getTime() >= 18 * 365.25 * 86400000) { const so = u.socials || {}; // social accounts are for adults only
+    if (!so.ig) o.push({ t: '⭐ Add your Instagram', b: 'Get 5 points for adding it to your profile.', url: '/#/settings', real: true });
+    if (!so.snap) o.push({ t: '⭐ Add your Snapchat', b: 'Get 5 points for adding it to your profile.', url: '/#/settings', real: true });
+    if (!so.wa) o.push({ t: '⭐ Add your WhatsApp number', b: 'Get 5 points. Only people who pay can see it.', url: '/#/settings', real: true }); }
   if (!u.selfie_ok) o.push({ t: '✅ Get your verified tick', b: 'Send a selfie and earn points.', url: '/#/settings', real: true });
   const bal = (await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${u.id}`)[0].n;
   if (bal >= 2) o.push({ t: '⭐ You have ' + bal + ' points', b: 'You can open a Truth or Dare with them.', url: '/#/tod', real: true });
@@ -30,7 +34,7 @@ async function optionsFor(sql, u, online) {
 
 async function run(sql) {
   const online = (await sql`select count(*)::int as n from users where last_seen > now() - interval '150 seconds'`)[0].n;
-  const people = await sql`select u.id, u.birthdate, u.selfie_ok, u.country from users u
+  const people = await sql`select u.id, u.birthdate, u.selfie_ok, u.country, u.socials from users u
     where not u.blocked and u.profile_done and not u.nudge_off
       and (u.nudged_at is null or u.nudged_at < now() - interval '170 minutes')
       and exists (select 1 from push_subs p where p.user_id = u.id) limit 300`;

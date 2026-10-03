@@ -464,3 +464,19 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .stkcats{display:flex;gap:6px;overflow-x:auto}.stkgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;overflow-y:auto;justify-items:center}
 .stkbtn{background:none;border:0;padding:2px;cursor:pointer}.stkopen{padding:0 10px}
 
+
+/* new top bar, slide-in reminders, home tabs */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mechip{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px}
+.mechip span{display:flex;flex-direction:column;line-height:1.1}.mechip b{font-size:.85rem;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mechip small{font-size:.68rem;opacity:.8}
+.todobar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(135deg,#ffe36e,#ffb36b);color:#2b2140;border-radius:16px;padding:10px 12px;margin:8px 0}
+.todobar a{color:inherit;text-decoration:none}
+.slidein,.installbar,.pushbar{animation:slidedown .35s ease both}
+@keyframes slidedown{from{transform:translateY(-120%);opacity:0}to{transform:none;opacity:1}}
+.hometabs{display:flex;gap:6px;overflow-x:auto;padding:8px 0}.hometabs .chip{white-space:nowrap}
+.photoprev{display:flex;justify-content:center;padding:6px}
+.needpts{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.55);display:flex;align-items:flex-end}
+.needpts .sheet{width:100%;background:var(--surface);border-radius:22px 22px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));text-align:center}
+.todobar a,.todobar a b{color:#2b2140!important}
+.installbar ~ .todobar,.wrap > div:has(.pushbar) ~ .todobar{display:none}
+.socl{width:100%;background:none;border:1px dashed var(--line);color:inherit;opacity:.9}.socbox a.setrow{text-decoration:none;color:inherit}

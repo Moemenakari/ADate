@@ -397,3 +397,8 @@ create table if not exists place_tiles (tile text primary key, fetched_at timest
 create index if not exists places_pos_idx on places (lat, lng);
 
 alter table users add column if not exists birthday_changes int not null default 0;
+
+-- social accounts are opened one by one (10 points) or all together (20 points)
+alter table social_unlocks add column if not exists kind text not null default '*';
+alter table social_unlocks drop constraint if exists social_unlocks_pkey;
+alter table social_unlocks add primary key (viewer, target, kind);
