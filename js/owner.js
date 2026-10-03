@@ -53,9 +53,9 @@
           tile('Payments waiting', ov.orders_waiting, () => { tab = 'pay'; shell2(); }, ov.orders_waiting > 0), tile('Selfies waiting', ov.selfies_waiting, () => { tab = 'more'; moreTab = 'selfies'; shell2(); }, ov.selfies_waiting > 0),
           tile('Reports (7 days)', ov.reports_week, () => { tab = 'more'; moreTab = 'reports'; shell2(); }, ov.reports_week > 0), tile('Support waiting', ov.support_open, () => { tab = 'support'; shell2(); }, ov.support_open > 0),
           tile('Money received', money(ov.revenue_cents)), tile('People who paid', ov.paid_people), tile('Stars in the app', ov.points_out), tile('Alert phones', ov.alert_devices)),
-        h('div', { class: 'note stack' }, h('b', null, '📲 Alerts on this phone'),
-          h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : '⚠️ Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, then open Owner from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications allowed.' : perm === 'denied' ? '❌ Notifications are blocked in your phone settings.' : 'Tap the button below to allow them.')),
-          h('button', { class: 'btn pri sm', type: 'button', onclick: enable }, '🔔 Turn on alerts on this phone'),
+        h('div', { class: 'note stack' }, h('b', null, 'Alerts on this phone'),
+          h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : 'Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, then open Owner from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications allowed.' : perm === 'denied' ? '❌ Notifications are blocked in your phone settings.' : 'Tap the button below to allow them.')),
+          h('button', { class: 'btn pri sm', type: 'button', onclick: enable }, 'Turn on alerts on this phone'),
           h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.adminTestPush(key); res.textContent = r.devices ? 'Sent to ' + r.devices + ' phone(s). Did it arrive?' : 'No phone is registered yet. Turn on alerts first.'; } catch (e) { res.textContent = e.message; } } }, 'Send me a test alert'), res,
           h('small', { class: 'hint' }, 'You get an alert for: a payment waiting, a selfie waiting, every report, a new member, and messages to the team.')));
     },
@@ -64,8 +64,8 @@
       const o = await API.adminOrders(key), note = h('div');
       const decide = async (x, ok) => { if (!confirm(ok ? 'Add the points to ' + (x.name || x.nick) + '? Check Whish first.' : 'Reject this order?')) return; try { await API.adminOrderDecide(key, x.id, ok); rerender(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
       const adjust = async (x) => { const pts = prompt('Add (+) or remove (-) points. Example: 50 or -50', '10'); if (pts === null) return; const msg = prompt('Message for them (optional)', '') || ''; try { const r = await API.adminGift(key, x.user_id, Number(pts) || 0, msg); note.replaceChildren(h('div', { class: 'note' }, 'Done. Balance: ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
-      c.replaceChildren(h('div', { class: 'h2' }, '💳 Payments'), h('p', { class: 'hint' }, 'Check 4 things on the receipt: Transaction ID matches, Amount is right, Receiver is your number, time is recent. Then find the same transfer in your own Whish history.'), note,
-        ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, 'AD-' + x.id + ' · ' + money(x.cents) + ' · ' + (x.points || '') + ' points'), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? '🔎 receipt sent' : '⏳ not paid yet')),
+      c.replaceChildren(h('div', { class: 'h2' }, 'Payments'), h('p', { class: 'hint' }, 'Check 4 things on the receipt: Transaction ID matches, Amount is right, Receiver is your number, time is recent. Then find the same transfer in your own Whish history.'), note,
+        ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, 'AD-' + x.id + ' · ' + money(x.cents) + ' · ' + (x.points || '') + ' points'), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? 'receipt sent' : 'not paid yet')),
           h('div', { class: 'kv' }, h('div', null, h('b', null, 'Person: '), (x.nick || x.name || '?') + ' · ', wa(x.phone)), h('div', null, h('b', null, 'Transaction ID: '), x.txid || '—'), h('div', { class: 'hint' }, x.claimed_at ? 'Receipt sent ' + ago(x.claimed_at) : 'Ordered ' + ago(x.at))),
           x.receipt ? h('img', { src: x.receipt, alt: 'Receipt', style: 'max-width:100%;max-height:320px;border-radius:12px', onclick: () => { const w = window.open('', '_blank'); if (w) w.document.write('<img src="' + x.receipt + '" style="max-width:100%">'); } }) : null,
           h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject'), h('button', { class: 'btn sm', onclick: () => adjust(x) }, '± Points')))) : [h('p', { class: 'hint' }, 'No payments waiting.')]),
@@ -90,7 +90,7 @@
       const card = (p) => h('details', { class: 'inv ocard' }, h('summary', null, h('b', null, (p.nick || p.name || '?') + (p.verified ? ' ✅' : '') + (p.blocked ? ' 🚫' : '')), h('span', { class: 'hint' }, ' · ' + (p.age != null ? p.age + 'y ' : '') + p.country + ' · ⭐' + p.points + (p.paid_orders ? ' · paid ' + money(p.paid_cents) : '') + ' · ' + (p.last_seen ? ago(p.last_seen) : 'never'))),
         h('div', { class: 'kv' }, h('div', null, h('b', null, 'Name: '), p.name || '—'), h('div', null, h('b', null, 'Number: '), wa(p.phone)), h('div', null, h('b', null, 'Email: '), p.email || '—'), h('div', null, h('b', null, 'Social: '), social(p) || '—'),
           h('div', null, h('b', null, 'Groups: '), String(p.groups), h('b', null, '  Chats: '), String(p.chats), h('b', null, '  Paid orders: '), String(p.paid_orders)), h('div', { class: 'hint' }, 'Joined ' + ago(p.joined) + (p.role ? ' · role ' + p.role : ''))),
-        h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => act(p, 'points') }, '± Points'), h('button', { class: 'btn sm', onclick: () => act(p, 'verify') }, p.verified ? 'Unverify' : '✓ Verify'), h('button', { class: 'btn sm', onclick: () => act(p, 'role') }, 'Role'), h('button', { class: 'btn sm', onclick: () => act(p, 'block') }, p.blocked ? 'Unblock' : 'Block'), h('button', { class: 'btn sm danger', onclick: () => act(p, 'delete') }, 'Delete')));
+        h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => act(p, 'points') }, '± Points'), h('button', { class: 'btn sm', onclick: () => act(p, 'verify') }, p.verified ? 'Unverify' : 'Verify'), h('button', { class: 'btn sm', onclick: () => act(p, 'role') }, 'Role'), h('button', { class: 'btn sm', onclick: () => act(p, 'block') }, p.blocked ? 'Unblock' : 'Block'), h('button', { class: 'btn sm danger', onclick: () => act(p, 'delete') }, 'Delete')));
       const csv = () => { const cols = ['id', 'nick', 'name', 'phone', 'email', 'age', 'country', 'instagram', 'snapchat', 'tiktok', 'whatsapp', 'points', 'groups', 'chats', 'paid_orders', 'paid_usd', 'verified', 'blocked', 'joined', 'last_seen']; const qv = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; const body = rows.map((p) => [p.id, p.nick, p.name, p.phone, p.email, p.age, p.country, p.socials.ig, p.socials.snap, p.socials.tiktok, p.socials.wa, p.points, p.groups, p.chats, p.paid_orders, (p.paid_cents / 100).toFixed(2), p.verified, p.blocked, p.joined, p.last_seen].map(qv).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'people.csv'; a.click(); };
       async function load() {
         peopleState.filter = filter; peopleState.q = q;
@@ -100,7 +100,7 @@
         list.replaceChildren(h('small', { class: 'hint' }, rows.length + ' people'), ...(rows.length ? rows.map(card) : [h('p', { class: 'hint' }, 'Nobody here.')]));
       }
       let st; search.oninput = () => { clearTimeout(st); st = setTimeout(() => { q = search.value.trim(); load(); }, 350); };
-      c.replaceChildren(h('div', { class: 'h2' }, '👥 People'), h('p', { class: 'hint' }, 'Everyone with their details, so you can build communities later. Tap a person to open them.'), search, chips, h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: csv }, '⬇ Export CSV')), list);
+      c.replaceChildren(h('div', { class: 'h2' }, 'People'), h('p', { class: 'hint' }, 'Everyone with their details, so you can build communities later. Tap a person to open them.'), search, chips, h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: csv }, '⬇ Export CSV')), list);
       load();
     },
 
@@ -113,15 +113,15 @@
         box.replaceChildren(h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: rerender }, '← Back'), h('b', null, t.nick), h('span', { class: 'hint' }, wa(t.phone))),
           ...m.map((x) => h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' }, x.body), h('small', null, ago(x.at)))), h('div', { class: 'composer' }, inp, h('button', { class: 'btn pri', type: 'button', onclick: send }, 'Send')));
       };
-      box.replaceChildren(h('div', { class: 'h2' }, '💬 Support'), h('p', { class: 'hint' }, 'People who wrote to the ADate Team (for example when they cannot pay with Whish).'),
+      box.replaceChildren(h('div', { class: 'h2' }, 'Support'), h('p', { class: 'hint' }, 'People who wrote to the ADate Team (for example when they cannot pay with Whish).'),
         ...(d.threads.length ? d.threads.map((t) => h('button', { class: 'roomcard rowbtn', type: 'button', onclick: () => open(t) }, h('span', { class: 'rc-e' }, t.waiting ? '🔴' : '✅'), h('span', { class: 'rc-t' }, h('b', null, t.nick), h('small', null, t.last_body.slice(0, 60) + ' · ' + (t.last_at ? ago(t.last_at) : ''))))) : [h('p', { class: 'hint' }, 'Nobody wrote yet.')]));
       c.replaceChildren(box);
     },
 
     async more(c, rerender) {
       const sub = h('div', { class: 'stack' }), menu = h('div', { class: 'row ochips' });
-      const draw = () => { menu.replaceChildren(...[['prices', '⭐ Prices'], ['settings', '🔧 Numbers'], ['selfies', '🤳 Selfies'], ['reports', '🚩 Reports']].map(([k, l]) => h('button', { class: 'chip' + (k === moreTab ? ' on' : ''), type: 'button', onclick: () => { moreTab = k; draw(); MORE[k](sub); } }, l))); };
-      c.replaceChildren(h('div', { class: 'h2' }, '⚙️ More'), menu, sub, h('a', { class: 'btn block', href: '#/admin-old' }, 'Old dashboard (invites, questions, hosts)'));
+      const draw = () => { menu.replaceChildren(...[['prices', '⭐ Prices'], ['settings', 'Numbers'], ['selfies', 'Selfies'], ['reports', 'Reports']].map(([k, l]) => h('button', { class: 'chip' + (k === moreTab ? ' on' : ''), type: 'button', onclick: () => { moreTab = k; draw(); MORE[k](sub); } }, l))); };
+      c.replaceChildren(h('div', { class: 'h2' }, 'More'), menu, sub, h('a', { class: 'btn block', href: '#/admin-old' }, 'Old dashboard (invites, questions, hosts)'));
       draw(); MORE[moreTab](sub);
     }
   };

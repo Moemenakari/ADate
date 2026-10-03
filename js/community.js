@@ -12,10 +12,10 @@ window.CommunityInit = function (ui) {
   const err = (e) => (e && e.message) || 'Something went wrong';
   const timeShort = (iso) => { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   const toast = (m, kind) => { const t = h('div', { class: 'toast ' + (kind || '') }, m); document.body.append(t); setTimeout(() => t.remove(), 2600); };
-  const applyTheme = (key) => { document.body.style.background = THEMES[key] ? THEMES[key].sky : ''; };
+  const applyTheme = () => { document.body.style.background = ''; }; // one flat look for everyone: black, white and yellow
 
   const FRAME_LOOK = { halloween: ['#ff7a00', '🎃'], newyear: ['#e6b422', '🎆'], ramadan: ['#6b4fbb', '🌙'] };
-  const presence = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 150) return '🟢 Online'; if (s < 3600) return 'Last seen ' + Math.round(s / 60) + ' min ago'; if (s < 86400) return 'Last seen ' + Math.round(s / 3600) + ' h ago'; return 'Last seen ' + Math.round(s / 86400) + ' d ago'; };
+  const presence = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 150) return 'Online'; if (s < 3600) return 'Last seen ' + Math.round(s / 60) + ' min ago'; if (s < 86400) return 'Last seen ' + Math.round(s / 3600) + ' h ago'; return 'Last seen ' + Math.round(s / 86400) + ' d ago'; };
   const TICK = (ok, role, fast) => (ok ? ' ✅' : '') + ({ owner: ' 👑', agent: ' 💰', host: ' 🌟 Host', bot: ' 🤖 Bot' }[role] || '') + (fast ? ' ⚡' : '');
   /** Their social accounts shown as logos. Locked until opened: one for 10 points, all of them for 20. */
   const SOC = { ig: ['📸', 'Instagram', (v) => 'https://instagram.com/' + v, (v) => '@' + v], snap: ['👻', 'Snapchat', (v) => 'https://www.snapchat.com/add/' + v, (v) => '@' + v], tiktok: ['🎵', 'TikTok', (v) => 'https://www.tiktok.com/@' + v, (v) => '@' + v], wa: ['💬', 'WhatsApp', (v) => 'https://wa.me/' + v, (v) => '+' + v] };
@@ -23,11 +23,11 @@ window.CommunityInit = function (ui) {
     const box = h('div', { class: 'stack socbox' });
     const draw = () => {
       const have = p.socials_have || [], open = p.socials_open || {}, left = have.filter((k) => !open[k]);
-      box.replaceChildren(h('b', null, '🔗 Their accounts'),
+      box.replaceChildren(h('b', null, 'Their accounts'),
         ...have.map((k) => { const m = SOC[k] || ['🔗', k, (v) => '#', (v) => v]; return open[k]
           ? h('a', { class: 'setrow', href: m[2](open[k]), target: '_blank', rel: 'noopener noreferrer' }, h('span', null, m[0] + ' ' + m[1]), h('b', null, m[3](open[k])))
           : h('button', { class: 'setrow socl', type: 'button', onclick: () => unlock(k, p.soc_price[k] || 10) }, h('span', null, m[0] + ' ' + m[1]), h('b', null, '🔒 ' + (p.soc_price[k] || 10) + ' ⭐')); }),
-        left.filter((k) => k !== 'wa').length > 1 ? h('button', { class: 'btn pri block', type: 'button', onclick: () => unlock('*', p.soc_price.all) }, '🔓 Open all · ' + p.soc_price.all + ' ⭐') : null);
+        left.filter((k) => k !== 'wa').length > 1 ? h('button', { class: 'btn pri block', type: 'button', onclick: () => unlock('*', p.soc_price.all) }, 'Open all · ' + p.soc_price.all + ' ⭐') : null);
     };
     const unlock = async (key, price) => { if (!confirm('Open ' + (key === '*' ? 'all their accounts' : (SOC[key] || [0, key])[1]) + ' for ' + price + ' points?')) return; try { const r = await API.socialView(p.id, key); ME.points = r.balance; p.socials_open = r.socials_open; draw(); toast('Opened ✓'); } catch (x) { toast(err(x), 'bad'); } };
     draw(); return box;
@@ -47,7 +47,7 @@ window.CommunityInit = function (ui) {
     if (isStandalone()) return null;
     try { if (localStorage.getItem('adate.installHide')) return null; } catch (e) { /* ok */ } // shown once: after the X it never comes back (Settings still explains it)
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const box = h('div', { class: 'installbar' }, h('div', null, h('b', null, '📲 Add ADate to your Home Screen'), h('small', null, ios ? 'Tap the Share button, then “Add to Home Screen”. You get notifications and +10 points.' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. You get notifications and +10 points.')),
+    const box = h('div', { class: 'installbar' }, h('div', null, h('b', null, 'Add ADate to your Home Screen'), h('small', null, ios ? 'Tap the Share button, then “Add to Home Screen”. You get notifications and +10 points.' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. You get notifications and +10 points.')),
       deferredInstall ? h('button', { class: 'btn pri sm', onclick: async () => { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch (e) { /* ignore */ } box.remove(); } }, 'Install') : null,
       h('button', { class: 'btn sm', 'aria-label': 'Close', onclick: () => { try { localStorage.setItem('adate.installHide', '1'); } catch (e) { /* ok */ } box.remove(); } }, '✕'));
     return box;
@@ -60,11 +60,21 @@ window.CommunityInit = function (ui) {
       const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
       if (!('Notification' in window) || Notification.permission !== 'default' || !ui.pushControl || (ios && !isStandalone())) return slot;
       if (localStorage.getItem('adate.pushAsked')) return slot; localStorage.setItem('adate.pushAsked', '1'); // asked once, not on every visit
-      ui.pushControl().then((el) => { if (el && Notification.permission === 'default') slot.append(h('div', { class: 'pushbar' }, h('small', null, '🔔 Get a message when a friend writes or invites you to play'), el)); }).catch(() => {});
+      ui.pushControl().then((el) => { if (el && Notification.permission === 'default') slot.append(h('div', { class: 'pushbar' }, h('small', null, 'Get a message when a friend writes or invites you to play'), el)); }).catch(() => {});
     } catch (e) { /* optional */ }
     return slot;
   }
-  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', '🏠', 'Home'], ['#/match', '💜', 'Match'], ['#/rooms', '👥', 'Groups'], ['#/dms', '💬', 'Chats'], ['#/views', '👀', 'Views'], ['#/shop', '🛒', 'Shop']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', null, e), h('small', null, l))));
+  /** Flat line icons for the tab bar (no emoji). */
+  const ICONS = {
+    home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    match: '<path d="M12 21s-7-4.5-9.3-9A5.4 5.4 0 0 1 12 6a5.4 5.4 0 0 1 9.3 6c-2.3 4.5-9.3 9-9.3 9z"/>',
+    groups: '<circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M15.5 14.5c3 0 5.5 1.8 5.5 5"/>',
+    chats: '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-5 4v-4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>',
+    views: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    shop: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>'
+  };
+  const icon = (name) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('width', '24'); s.setAttribute('height', '24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = ICONS[name] || ''; return s; };
+  const bar = (active, points) => h('nav', { class: 'tabbar' }, [['#/', 'home', 'Home'], ['#/match', 'match', 'Match'], ['#/rooms', 'groups', 'Groups'], ['#/dms', 'chats', 'Chats'], ['#/views', 'views', 'Views'], ['#/shop', 'shop', 'Shop']].map(([href, e, l]) => h('a', { href, class: active === href ? 'on' : '' }, h('span', { class: 'ti' }, icon(e)), h('small', null, l))));
   /** My own avatar: the real photo when I have one, otherwise the cartoon. */
   const myAvatar = (size) => avatar(ME && ME.avatar, ME && ME.nick, size, ME && ME.frame, ME && ME.photo);
   /** One reminder at the top that slides in, most important first: install, notifications, then things that earn points. Hidden for a day with the X. */
@@ -82,13 +92,13 @@ window.CommunityInit = function (ui) {
   function page(active, ...kids) {
     document.title = 'ADate';
     const me = ME ? h('a', { class: 'mechip', href: '#/me' }, myAvatar(34), h('span', null, h('b', null, ME.nick || 'Me'), h('small', null, '◯ ' + (ME.age_band || '')))) : h('a', { class: 'pill', href: '#/points' }, '⭐ …');
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, backBar(active), h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('div', { class: 'topright' }, ME ? h('a', { class: 'coinring', href: '#/shop', 'aria-label': ME.points + ' stars. Get more' }, h('span', null, '⭐'), h('b', null, String(ME.points))) : null, me)), installBanner(), pushPrompt(), todoBanner(), ...kids), bar(active, ME && ME.points));
   }
   /** When something costs more points than the person has, say so kindly and show the way to get more (the server answers 402). */
   window.addEventListener('adate:needpoints', (e) => {
     if (document.querySelector('.needpts')) return;
     const box = h('div', { class: 'needpts sheet-over', role: 'dialog', 'aria-label': 'You need more points' }, h('div', { class: 'sheet stack' }, h('div', { class: 'bigemoji' }, '⭐'), h('h2', { class: 'wz-h' }, 'You need more points'), h('p', { class: 'hint' }, (e.detail || '').slice(0, 160)),
-      h('a', { class: 'btn pri block', href: '#/shop', onclick: () => box.remove() }, '⭐ Buy more points'), h('a', { class: 'btn block', href: '#/', onclick: () => { try { localStorage.setItem('adate.homeTab', 'act'); } catch (x) { /* ok */ } box.remove(); } }, '✨ Earn free points'), h('button', { class: 'btn block', type: 'button', onclick: () => box.remove() }, 'Not now')));
+      h('a', { class: 'btn pri block', href: '#/shop', onclick: () => box.remove() }, '⭐ Buy more points'), h('a', { class: 'btn block', href: '#/', onclick: () => { try { localStorage.setItem('adate.homeTab', 'act'); } catch (x) { /* ok */ } box.remove(); } }, 'Earn free points'), h('button', { class: 'btn block', type: 'button', onclick: () => box.remove() }, 'Not now')));
     document.body.append(box);
   });
   async function load() { // who am I; also earns the +1 that comes every 6 hours
@@ -102,18 +112,18 @@ window.CommunityInit = function (ui) {
   async function hub() {
     page('#/', h('p', { class: 'hint spark' }, 'Loading…'));
     const d = await load(), rs = (await API.rooms()).rooms, notices = ((await API.notices().catch(() => ({ notices: [] }))).notices) || [];
-    const boxCard = h('div'); API.boxState().then((s) => { if (!s.available) return; const bx = h('div', { class: 'teamnote boxnote' }, h('b', null, '🎁 Your daily surprise'), h('p', null, 'Free every day. 1 to 5 points.'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.boxOpen(); ME.points = r.balance; toast('🎁 +' + r.prize + ' points!'); bx.remove(); } catch (e) { toast(err(e), 'bad'); } } }, 'Open')); boxCard.append(bx); }).catch(() => {});
+    const boxCard = h('div'); API.boxState().then((s) => { if (!s.available) return; const bx = h('div', { class: 'teamnote boxnote' }, h('b', null, 'Your daily surprise'), h('p', null, 'Free every day. 1 to 5 points.'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.boxOpen(); ME.points = r.balance; toast('🎁 +' + r.prize + ' points!'); bx.remove(); } catch (e) { toast(err(e), 'bad'); } } }, 'Open')); boxCard.append(bx); }).catch(() => {});
     const mine = rs.filter((r) => r.member), suggest = rs.filter((r) => !r.member && (r.score || 0) > 0).slice(0, 5);
     const roomRow = (r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '💬'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, `${r.members} here · ${r.msgs24} messages today`)), r.member ? h('span', { class: 'badge ok' }, 'Joined') : h('span', { class: 'badge' }, r.price ? '⭐ ' + r.price : 'Free'));
     const nickBox = ME.nick ? null : (() => { const inp = h('input', { type: 'text', maxlength: 20, placeholder: 'Your nickname', 'aria-label': 'Nickname' }), msg = h('div'); return h('div', { class: 'note' }, h('b', null, 'Choose your nickname'), h('p', { class: 'hint' }, 'This is the name people see in rooms. Not your real name.'), inp, h('button', { class: 'btn pri block', onclick: async () => { try { await API.nickSet('*', inp.value); hub(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Save nickname'), msg); })();
     page('#/', h('div', { class: 'hello' }, myAvatar(52), h('div', null, h('b', null, 'Hi ' + (ME.nick || 'there') + ' ' + (FLAG[ME.country] || '')), h('small', { class: 'hint' }, 'Age circles: ' + ME.circles.join(' · ')))), nickBox,
       homeTabs(),
       ...[homeToday, homeGames, homeRooms, homeActivities].map((f) => f()));
-    function homeToday() { return h('div', { class: 'stack hsec', 'data-sec': 'today' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, '📩 ADate Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }), d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null, h('p', { class: 'hint' }, 'Nothing else new right now. Check Activities to earn points.')); }
-    function homeGames() { return h('div', { class: 'stack hsec', 'data-sec': 'games' }, h('div', { class: 'h2' }, 'Games'), h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, '💌 Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, '🎲 Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))), h('a', { class: 'gamecard c3', href: '#/match' }, h('b', null, '💜 Meet people'), h('small', null, 'Swipe, play 3 quick games together and become friends'))); }
+    function homeToday() { return h('div', { class: 'stack hsec', 'data-sec': 'today' }, boxCard, ...notices.map((n) => { const box = h('div', { class: 'teamnote' }, h('b', null, 'ADate Team'), h('p', null, n.body), n.points ? h('b', { class: n.points > 0 ? 'pos' : 'neg' }, (n.points > 0 ? '+' : '') + n.points + ' ⭐') : null, h('button', { class: 'btn sm', onclick: async () => { await API.noticeRead(n.id).catch(() => {}); box.remove(); load().then(() => {}); } }, 'OK')); return box; }), d.dm_requests ? h('a', { class: 'note', href: '#/dms' }, '💬 ' + d.dm_requests + ' message request' + (d.dm_requests > 1 ? 's' : '') + ' waiting') : null, h('p', { class: 'hint' }, 'Nothing else new right now. Check Activities to earn points.')); }
+    function homeGames() { return h('div', { class: 'stack hsec', 'data-sec': 'games' }, h('div', { class: 'h2' }, 'Games'), h('div', { class: 'grid2' }, h('a', { class: 'gamecard c1', href: '#/date' }, h('b', null, 'Truth Date'), h('small', null, 'Ask someone out with a game they cannot say no to')), h('a', { class: 'gamecard c2', href: '#/tod' }, h('b', null, 'Truth or Dare'), h('small', null, 'Five levels, from friendly to spicy'))), h('a', { class: 'gamecard c3', href: '#/match' }, h('b', null, 'Meet people'), h('small', null, 'Swipe, play 3 quick games together and become friends'))); }
     function homeRooms() { return h('div', { class: 'stack hsec', 'data-sec': 'rooms' }, ...(mine.length ? [h('div', { class: 'h2' }, 'My rooms'), ...mine.slice(0, 6).map(roomRow)] : []), h('div', { class: 'h2' }, mine.length ? 'More for you' : 'Rooms picked for you'), ...suggest.map(roomRow), h('a', { class: 'btn block', href: '#/rooms' }, 'See all rooms')); }
-    function homeActivities() { return h('div', { class: 'stack hsec', 'data-sec': 'act' }, h('div', { class: 'h2' }, '✨ Earn points'), h('p', { class: 'hint' }, 'Small things you can do now. Points open Truth or Dare, chats and more.'), ...(ME.todo || []).map((t) => h('a', { class: 'roomcard', href: t.href }, h('span', { class: 'rc-e' }, '⭐'), h('span', { class: 'rc-t' }, h('b', null, t.text), h('small', null, 'Get ' + t.points + ' points')), h('span', { class: 'badge' }, '+' + t.points))), h('a', { class: 'btn pri block', href: '#/shop' }, '⭐ Get more points')); }
-    function homeTabs() { const names = [['today', '🔔 Today'], ['games', '🎮 Games'], ['rooms', '💬 My rooms'], ['act', '✨ Activities']]; let cur = 'today'; try { cur = localStorage.getItem('adate.homeTab') || 'today'; } catch (e) { /* ok */ } const row = h('div', { class: 'hometabs', role: 'tablist' }); const paint = () => { row.replaceChildren(...names.map(([k, l]) => h('button', { class: 'chip' + (k === cur ? ' on' : ''), type: 'button', role: 'tab', onclick: () => { cur = k; try { localStorage.setItem('adate.homeTab', k); } catch (e) { /* ok */ } paint(); } }, l))); document.querySelectorAll('.hsec').forEach((x) => { x.style.display = x.dataset.sec === cur ? '' : 'none'; }); }; setTimeout(paint, 0); return row; }
+    function homeActivities() { return h('div', { class: 'stack hsec', 'data-sec': 'act' }, h('div', { class: 'h2' }, 'Earn points'), h('p', { class: 'hint' }, 'Small things you can do now. Points open Truth or Dare, chats and more.'), ...(ME.todo || []).map((t) => h('a', { class: 'roomcard', href: t.href }, h('span', { class: 'rc-e' }, '⭐'), h('span', { class: 'rc-t' }, h('b', null, t.text), h('small', null, 'Get ' + t.points + ' points')), h('span', { class: 'badge' }, '+' + t.points))), h('a', { class: 'btn pri block', href: '#/shop' }, '⭐ Get more points')); }
+    function homeTabs() { const names = [['today', 'Today'], ['games', 'Games'], ['rooms', 'My rooms'], ['act', 'Activities']]; let cur = 'today'; try { cur = localStorage.getItem('adate.homeTab') || 'today'; } catch (e) { /* ok */ } const row = h('div', { class: 'hometabs', role: 'tablist' }); const paint = () => { row.replaceChildren(...names.map(([k, l]) => h('button', { class: 'chip' + (k === cur ? ' on' : ''), type: 'button', role: 'tab', onclick: () => { cur = k; try { localStorage.setItem('adate.homeTab', k); } catch (e) { /* ok */ } paint(); } }, l))); document.querySelectorAll('.hsec').forEach((x) => { x.style.display = x.dataset.sec === cur ? '' : 'none'; }); }; setTimeout(paint, 0); return row; }
   }
 
   /* ---------------------------------------------------------------- rooms */
@@ -136,7 +146,7 @@ window.CommunityInit = function (ui) {
       list.replaceChildren(...others.map(card), ...order.flatMap((c) => [h('div', { class: 'h2 country' }, (FLAG[c] || '📍') + ' ' + (CNAME[c] || c)), ...byCountry[c].map(card)]));
     };
     const search = h('input', { type: 'text', placeholder: 'Search a place or a group', 'aria-label': 'Search rooms', oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } });
-    const chips = h('div', { class: 'row' }, [['all', 'All'], ['foryou', 'For you'], ['mine', 'Joined'], ['region', '📍 Places'], ['interest', 'Interests'], ['school', '🏫 Schools'], ['season', '🎃 Seasonal']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': id === filter ? 'true' : 'false', onclick: (e) => { filter = id; chips.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); draw(); } }, l)));
+    const chips = h('div', { class: 'row' }, [['all', 'All'], ['foryou', 'For you'], ['mine', 'Joined'], ['region', 'Places'], ['interest', 'Interests'], ['school', 'Schools'], ['season', 'Seasonal']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': id === filter ? 'true' : 'false', onclick: (e) => { filter = id; chips.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false')); draw(); } }, l)));
     page('#/rooms', h('div', { class: 'h2' }, 'Groups'), h('p', { class: 'hint' }, 'Text only, like a WhatsApp group. Search by place: city or country. Places are free; some interest groups cost 10 to 25 points.'), search, chips, list); draw();
   }
 
@@ -148,8 +158,8 @@ window.CommunityInit = function (ui) {
     m.append(h('div', { class: 'sheet stack' }, h('div', { class: 'hello' }, avatar(p.avatar, p.nick, 56, p.frame, p.photo), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, `Age ${p.age} · ${p.zodiac}` + (p.verified ? ' · ✅ checked' : '')))),
       p.interests.length ? h('div', { class: 'row' }, p.interests.map((i) => h('span', { class: 'chip static' }, i))) : null,
       p.me ? null : [p.can_dm ? h('div', { class: 'stack' }, h('input', { type: 'text', maxlength: 300, placeholder: 'Say hi (text only)', 'aria-label': 'First message' }), h('button', { class: 'btn pri block', onclick: async (e) => {
-        const body = e.currentTarget.parentNode.querySelector('input').value; try { const r = await API.dmStart(p.id, body); m.remove(); location.hash = '#/dm/' + r.thread; } catch (x) { dm.replaceChildren(h('div', { class: 'note' }, err(x))); } } }, '💬 Send message request')) : h('p', { class: 'hint' }, 'Private messages are only between people in the same age circles.'), dm,
-        h('button', { class: 'btn block danger', onclick: async () => { if (!confirm(p.blocked ? 'Unblock this person?' : 'Block this person? You will not see each other.')) return; await API.userBlock(p.id, p.blocked); toast(p.blocked ? 'Unblocked' : 'Blocked'); m.remove(); } }, p.blocked ? 'Unblock' : '🚫 Block')],
+        const body = e.currentTarget.parentNode.querySelector('input').value; try { const r = await API.dmStart(p.id, body); m.remove(); location.hash = '#/dm/' + r.thread; } catch (x) { dm.replaceChildren(h('div', { class: 'note' }, err(x))); } } }, 'Send message request')) : h('p', { class: 'hint' }, 'Private messages are only between people in the same age circles.'), dm,
+        h('button', { class: 'btn block danger', onclick: async () => { if (!confirm(p.blocked ? 'Unblock this person?' : 'Block this person? You will not see each other.')) return; await API.userBlock(p.id, p.blocked); toast(p.blocked ? 'Unblocked' : 'Blocked'); m.remove(); } }, p.blocked ? 'Unblock' : 'Block')],
       p.can_socials && !p.me ? socialsBox(p) : null,
       h('button', { class: 'btn block', onclick: () => m.remove() }, 'Close')));
     document.body.append(m);
@@ -159,7 +169,7 @@ window.CommunityInit = function (ui) {
   const muteBtn = (kind, id) => { const b = h('button', { class: 'btn sm', 'aria-label': 'Notifications' }, '🔔'); let off = false; const paint = () => { b.textContent = off ? '🔕' : '🔔'; }; API.muteGet(kind, id).then((r) => { off = !!r.muted; paint(); }).catch(() => {}); b.onclick = async () => { try { await API.muteSet(kind, id, !off); off = !off; paint(); toast(off ? 'Notifications are off for this chat' : 'Notifications are on'); } catch (e) { toast(err(e), 'bad'); } }; return b; };
   /** The sticker button: opens the sticker keyboard above the message box. */
   function stickerButton(slot, onPick) {
-    const b = h('button', { class: 'btn sm stkopen', type: 'button', 'aria-label': 'Stickers' }, '🌟 Stickers'); let open = false;
+    const b = h('button', { class: 'btn sm stkopen', type: 'button', 'aria-label': 'Stickers' }, 'Stickers'); let open = false;
     b.onclick = () => { open = !open; if (open && window.ChatStickers) slot.replaceChildren(window.ChatStickers.picker((tok) => { slot.replaceChildren(); open = false; onPick(tok); })); else slot.replaceChildren(); };
     return b;
   }
@@ -170,7 +180,7 @@ window.CommunityInit = function (ui) {
     const bubble = (m) => h('div', { class: 'cmsg' + (m.mine ? ' mine' : '') }, m.mine ? null : h('button', { class: 'who', onclick: () => m.user_id && card(m.user_id) }, m.nick || ''), h('div', { class: 'bub' + (window.ChatStickers && window.ChatStickers.isSticker(m.body) ? ' stkmsg' : '') }, window.ChatStickers ? window.ChatStickers.body(m.body) : m.body), h('small', null, timeShort(m.at), ' ', m.mine || !report ? '' : h('button', { class: 'flag', title: 'Report', 'aria-label': 'Report this message', onclick: async () => { if (!confirm('Report this message?')) return; try { const r = await report(m.id); toast(r.muted ? 'Reported. Thank you.' : 'Reported. Thank you.'); } catch (e) { toast(err(e), 'bad'); } } }, '🚩')));
     const add = (rows) => { if (!rows.length) return; const near = list.scrollHeight - list.scrollTop - list.clientHeight < 140; rows.forEach((m) => { last = Math.max(last, m.id); list.append(bubble(m)); }); if (near || last === rows[rows.length - 1].id && list.children.length === rows.length) list.scrollTop = list.scrollHeight; };
     async function tick(first) {
-      try { const d = first ? await fetchFirst() : await fetchAfter(last); if (first && d.room) head.querySelector('small').textContent = `${d.room.members} members`; if (d.other) { const nm = (d.other.nick || 'Chat') + (d.other.fast ? ' ⚡' : ''); head.querySelector('b').textContent = nm + (d.other.tick ? ' ✅' : ''); { const ct = head.querySelector('.ct'), hv = head.querySelector('.hav'); if (hv && !hv.dataset.id) { hv.dataset.id = d.other.id; hv.replaceChildren(avatar(d.other.avatar, d.other.nick, 36, d.other.frame)); } if (ct && !ct.dataset.link) { ct.dataset.link = '1'; ct.style.cursor = 'pointer'; ct.setAttribute('role', 'button'); ct.setAttribute('aria-label', 'Open profile'); const open = () => card(d.other.id); ct.onclick = open; if (hv) { hv.style.cursor = 'pointer'; hv.onclick = open; } } } head.querySelector('small').textContent = presence(d.other.last_seen) + (d.thread && d.thread.streak >= 2 ? ' · 🔥 ' + d.thread.streak : ''); } if (extraTick) { try { extraTick(d, first); } catch (e) { /* the chat still works */ } } mutedUntil = d.muted_until || null; banner.textContent = mutedUntil ? '🔇 You are muted for a while. You can still read.' : ''; banner.style.display = mutedUntil ? '' : 'none'; if (first) list.replaceChildren(); add(d.messages || []); if (first && d.other) head.querySelector('b').textContent = d.other.nick; } catch (e) { if (/log in/i.test(err(e))) location.hash = '#/login'; }
+      try { const d = first ? await fetchFirst() : await fetchAfter(last); if (first && d.room) head.querySelector('small').textContent = `${d.room.members} members`; if (d.other) { const nm = (d.other.nick || 'Chat') + (d.other.fast ? ' ⚡' : ''); head.querySelector('b').textContent = nm + (d.other.tick ? ' ✅' : ''); { const ct = head.querySelector('.ct'), hv = head.querySelector('.hav'); if (hv && !hv.dataset.id) { hv.dataset.id = d.other.id; hv.replaceChildren(avatar(d.other.avatar, d.other.nick, 36, d.other.frame)); } if (ct && !ct.dataset.link) { ct.dataset.link = '1'; ct.style.cursor = 'pointer'; ct.setAttribute('role', 'button'); ct.setAttribute('aria-label', 'Open profile'); const open = () => card(d.other.id); ct.onclick = open; if (hv) { hv.style.cursor = 'pointer'; hv.onclick = open; } } } head.querySelector('small').textContent = presence(d.other.last_seen) + (d.thread && d.thread.streak >= 2 ? ' · 🔥 ' + d.thread.streak : ''); } if (extraTick) { try { extraTick(d, first); } catch (e) { /* the chat still works */ } } mutedUntil = d.muted_until || null; banner.textContent = mutedUntil ? 'You are muted for a while. You can still read.' : ''; banner.style.display = mutedUntil ? '' : 'none'; if (first) list.replaceChildren(); add(d.messages || []); if (first && d.other) head.querySelector('b').textContent = d.other.nick; } catch (e) { if (/log in/i.test(err(e))) location.hash = '#/login'; }
     }
     async function go() { const body = inp.value.trim(); if (!body) return; sendBtn.disabled = true; try { await send(body); inp.value = ''; msg.replaceChildren(); await tick(false); list.scrollTop = list.scrollHeight; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } sendBtn.disabled = false; inp.focus(); }
     sendBtn.onclick = go; inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
@@ -221,7 +231,7 @@ window.CommunityInit = function (ui) {
     const slot = h('div', { class: 'dmslot' }), tools = h('div', { class: 'dmtools' }), status = h('div');
     const pack = (d) => d.messages.map((m) => ({ ...m, user_id: m.mine ? ME.id : d.other.id, nick: d.other.nick }));
     const doAct = async (o) => { const r = await API.fgameAct(id, o); showGame(r.game); return r; };
-    const H = { move: (cell) => doAct({ cell }), stroke: (stroke) => doAct({ stroke }), clear: () => doAct({ clear: true }), guess: async (guess) => { const r = await doAct({ guess }); if (r.correct) toast('🎉 Correct!'); }, pick: (pick) => doAct({ pick }), todPick: (kind) => doAct({ tod: 'pick', kind }), todDone: () => doAct({ tod: 'done' }) };
+    const H = { move: (cell) => doAct({ cell }), stroke: (stroke) => doAct({ stroke }), clear: () => doAct({ clear: true }), guess: async (guess) => { const r = await doAct({ guess }); if (r.correct) toast('Correct!'); }, pick: (pick) => doAct({ pick }), todPick: (kind) => doAct({ tod: 'pick', kind }), todDone: () => doAct({ tod: 'done' }) };
     function showGame(g) {
       slot.querySelectorAll('.gamectl').forEach((x) => x.remove());
       const ctl = h('div', { class: 'gamectl' });
@@ -229,22 +239,22 @@ window.CommunityInit = function (ui) {
       tools.style.display = 'none';
       if (g.status === 'invited') {
         if (board) board.clear();
-        ctl.append(g.by_me ? h('div', { class: 'note' }, '🎮 Waiting for them to join ' + g.label + '…', h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, false); showGame(null); } }, 'Cancel'))
-          : h('div', { class: 'teamnote' }, h('b', null, '🎮 Invitation'), h('p', null, 'Your friend wants to play ' + g.label), h('div', { class: 'row' }, h('button', { class: 'btn pri sm', onclick: async () => { const r = await API.fgameAccept(id); showGame(r.game); } }, 'Play'), h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, true); showGame(null); } }, 'No thanks'))));
+        ctl.append(g.by_me ? h('div', { class: 'note' }, 'Waiting for them to join ' + g.label + '…', h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, false); showGame(null); } }, 'Cancel'))
+          : h('div', { class: 'teamnote' }, h('b', null, 'Invitation'), h('p', null, 'Your friend wants to play ' + g.label), h('div', { class: 'row' }, h('button', { class: 'btn pri sm', onclick: async () => { const r = await API.fgameAccept(id); showGame(r.game); } }, 'Play'), h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, true); showGame(null); } }, 'No thanks'))));
       } else { if (!board) board = window.GameBoard.mount(slot, null, H); board.set(g.view); ctl.append(h('button', { class: 'btn sm', onclick: async () => { await API.fgameClose(id, false); if (board) board.clear(); showGame(null); } }, g.status === 'done' || (g.view && g.view.done) ? 'Close game' : 'End game')); }
       slot.append(ctl);
     }
-    const playMenu = () => { tools.replaceChildren(h('b', { class: 'hint' }, '🎮 Play together'), h('div', { class: 'row' }, [['xo', '❌⭕ XO'], ['draw', '🎨 Draw'], ['quiz', '🎲 Question']].map(([ty, l]) => h('button', { class: 'btn sm', onclick: async () => { try { const r = await API.fgameInvite(id, ty); showGame(r.game); } catch (e) { toast(err(e), 'bad'); } } }, l)), h('a', { class: 'btn sm', href: '#/date' }, '💌 Truth Date'), h('button', { class: 'btn sm', onclick: todMenu }, '🎭 Truth or Dare'))); };
+    const playMenu = () => { tools.replaceChildren(h('b', { class: 'hint' }, 'Play together'), h('div', { class: 'row' }, [['xo', '❌⭕ XO'], ['draw', 'Draw'], ['quiz', 'Question']].map(([ty, l]) => h('button', { class: 'btn sm', onclick: async () => { try { const r = await API.fgameInvite(id, ty); showGame(r.game); } catch (e) { toast(err(e), 'bad'); } } }, l)), h('a', { class: 'btn sm', href: '#/date' }, 'Truth Date'), h('button', { class: 'btn sm', onclick: todMenu }, 'Truth or Dare'))); };
     const todMenu = async () => {
       let st = null; try { st = await API.todState(); } catch (e) { toast(err(e), 'bad'); return; }
-      tools.replaceChildren(h('b', { class: 'hint' }, '🎭 Truth or Dare: one of you pays for 24 hours'), ...st.levels.map((lv) => h('button', { class: 'btn sm block', disabled: !lv.allowed, onclick: async () => { try { const r = await API.fgameInvite(id, 'tod', lv.level); showGame(r.game); } catch (e) { toast(err(e), 'bad'); } } }, `Level ${lv.level} · ${lv.name} · ⭐ ${lv.price}` + (lv.allowed ? '' : ' · ' + lv.min_age + '+'))), h('button', { class: 'btn sm', onclick: playMenu }, '← Back'));
+      tools.replaceChildren(h('b', { class: 'hint' }, 'Truth or Dare: one of you pays for 24 hours'), ...st.levels.map((lv) => h('button', { class: 'btn sm block', disabled: !lv.allowed, onclick: async () => { try { const r = await API.fgameInvite(id, 'tod', lv.level); showGame(r.game); } catch (e) { toast(err(e), 'bad'); } } }, `Level ${lv.level} · ${lv.name} · ⭐ ${lv.price}` + (lv.allowed ? '' : ' · ' + lv.min_age + '+'))), h('button', { class: 'btn sm', onclick: playMenu }, '← Back'));
     };
     function banners(d) {
       const th = d.thread; status.replaceChildren();
       if (th.status === 'pending' && th.started_by === ME.id) status.append(h('div', { class: 'note stack' }, h('span', null, 'They have not answered yet. Open the chat right now for 5 ⭐?'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.dmPayOpen(id); ME.points = r.balance; toast('Chat opened'); dm(id); } catch (e) { toast(err(e), 'bad'); } } }, 'Pay 5 ⭐ and open')));
       if (th.streak >= 2 && th.streak_pending) status.append(h('small', { class: 'hint' }, '🔥 ' + th.streak + ' days together. Write today to keep it going.'));
-      if (th.locked) status.append(h('div', { class: 'note stack' }, h('span', null, '⏳ The free hour is over. One of you can unlock the chat for 3 ⭐ (you have ' + d.balance + ').'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.dmUnlock(id); ME.points = r.balance; toast('Unlocked'); dm(id); } catch (e) { toast(err(e), 'bad'); } } }, 'Unlock for 3 ⭐')));
-      else if (th.source === 'match' && !th.unlocked && th.unlock_until) { const min = Math.max(0, Math.round((new Date(th.unlock_until) - Date.now()) / 60000)); status.append(h('small', { class: 'hint' }, '⏳ Free chat: ' + min + ' min left')); }
+      if (th.locked) status.append(h('div', { class: 'note stack' }, h('span', null, 'The free hour is over. One of you can unlock the chat for 3 ⭐ (you have ' + d.balance + ').'), h('button', { class: 'btn pri sm', onclick: async () => { try { const r = await API.dmUnlock(id); ME.points = r.balance; toast('Unlocked'); dm(id); } catch (e) { toast(err(e), 'bad'); } } }, 'Unlock for 3 ⭐')));
+      else if (th.source === 'match' && !th.unlocked && th.unlock_until) { const min = Math.max(0, Math.round((new Date(th.unlock_until) - Date.now()) / 60000)); status.append(h('small', { class: 'hint' }, 'Free chat: ' + min + ' min left')); }
     }
     chat({ title: 'Chat', backHref: '#/dms', headerExtra: muteBtn('dm', id),
       afterLayout: ({ banner }) => { banner.after(status, tools, slot); playMenu(); },
@@ -261,12 +271,12 @@ window.CommunityInit = function (ui) {
   /* ---------------------------------------------------------------- random match (text only) */
   const MEET = [['m', '👦', 'Guys'], ['both', '👥', 'Both'], ['f', '👧', 'Girls']], IAM = [['m', '👦', 'I am a guy'], ['f', '👧', 'I am a girl']];
   const seg = (on) => h('div', { class: 'seg' }, [['#/match', 'Swipe', 'swipe'], ['#/match/near', 'Near you', 'near'], ['#/match/random', 'Random', 'random'], ['#/match/online', 'Online', 'online']].map(([href, l, k]) => h('a', { href, class: on === k ? 'on' : '' }, l)));
-  const GRADS = ['linear-gradient(160deg,#7b4dff,#ff6bb5)', 'linear-gradient(160deg,#00b4d8,#7b4dff)', 'linear-gradient(160deg,#ff9a3c,#ff4d6a)', 'linear-gradient(160deg,#27d3a2,#2a7bff)', 'linear-gradient(160deg,#ffd60a,#ff7a00)', 'linear-gradient(160deg,#a259ff,#3a1c71)', 'linear-gradient(160deg,#ff5e98,#ffb36b)', 'linear-gradient(160deg,#2b5876,#4e4376)'];
+  const GRADS = ['#2563eb', '#db2777', '#16a34a', '#7c3aed', '#ea580c', '#0891b2', '#334155']; // flat colours, no gradients
   const gradOf = (id) => GRADS[Number(id) % GRADS.length];
   async function swipe() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }), msg = h('input', { type: 'text', maxlength: 300, placeholder: 'Send a message', 'aria-label': 'Send a message', enterkeyhint: 'send' });
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('swipe'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('swipe'), box), bar('#/match', ME && ME.points));
     let card = null;
     function prefsView() {
       const pr = { gender: '', meet: 'both' };
@@ -276,17 +286,17 @@ window.CommunityInit = function (ui) {
     }
     function show(c) {
       card = c; msg.value = '';
-      if (!c) return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🌙'), h('h1', { class: 'wz-h' }, 'No one new right now'), h('p', { class: 'hint' }, 'Come back later, or try Random to chat with someone online.')), h('a', { class: 'btn pri block', href: '#/match/random' }, '🎲 Try Random'), h('button', { class: 'btn block', onclick: next }, '↻ Check again'));
+      if (!c) return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🌙'), h('h1', { class: 'wz-h' }, 'No one new right now'), h('p', { class: 'hint' }, 'Come back later, or try Random to chat with someone online.')), h('a', { class: 'btn pri block', href: '#/match/random' }, 'Try Random'), h('button', { class: 'btn block', onclick: next }, '↻ Check again'));
       const an = (window.ANIMALS || []).find((x) => 'animal:' + x[0] === c.avatar);
       const face = c.photo ? h('img', { class: 'sw-photo', src: c.photo, alt: '' }) : h('div', { class: 'sw-face' }, an ? an[1] : (c.nick || '?').slice(0, 1).toUpperCase());
       const more = h('button', { class: 'sw-more', 'aria-label': 'More', onclick: async () => { if (!confirm('Report and block ' + c.nick + '?')) return; try { await API.discoverReport(c.id); toast('Reported and blocked'); next(); } catch (e) { toast(err(e), 'bad'); } } }, '•••');
-      const send = async () => { try { const r = await API.discoverAct(c.id, 'invite', msg.value.trim()); toast(r.state === 'friends' ? '🎉 It is a match! Open Chats' : r.state === 'waiting' ? 'Your message is waiting. They have to reply first.' : 'Message sent 💜'); next(); } catch (e) { toast(err(e), 'bad'); } };
-      const boost = async () => { if (!confirm('Boost this message for 5 points? They get a notification and it goes first in their list.')) return; try { const r = await API.discoverAct(c.id, 'boost', msg.value.trim()); toast(r.boosted ? '🚀 Boosted' : 'Sent'); next(); } catch (e) { toast(err(e), 'bad'); } };
+      const send = async () => { try { const r = await API.discoverAct(c.id, 'invite', msg.value.trim()); toast(r.state === 'friends' ? 'It is a match! Open Chats' : r.state === 'waiting' ? 'Your message is waiting. They have to reply first.' : 'Message sent 💜'); next(); } catch (e) { toast(err(e), 'bad'); } };
+      const boost = async () => { if (!confirm('Boost this message for 5 points? They get a notification and it goes first in their list.')) return; try { const r = await API.discoverAct(c.id, 'boost', msg.value.trim()); toast(r.boosted ? 'Boosted' : 'Sent'); next(); } catch (e) { toast(err(e), 'bad'); } };
       msg.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
       box.replaceChildren(h('div', { class: 'swcard', style: 'background:' + gradOf(c.id) }, more, face,
-        h('div', { class: 'sw-info' }, h('div', { class: 'sw-name' }, h('b', null, c.nick + TICK(c.selfie_ok, c.role, c.fast)), h('span', null, c.age_band), h('span', null, FLAG[c.country] || '')), h('div', { class: 'row' }, (c.shared.length ? c.shared : c.interests).slice(0, 5).map((x) => h('span', { class: 'sw-tag' }, (c.shared.includes(x) ? '✨ ' : '') + x))), c.langs && c.langs.length ? h('small', null, '🗣 ' + c.langs.join(' · ')) : null, c.last_seen ? h('small', null, presence(c.last_seen)) : null)),
+        h('div', { class: 'sw-info' }, h('div', { class: 'sw-name' }, h('b', null, c.nick + TICK(c.selfie_ok, c.role, c.fast)), h('span', null, c.age_band), h('span', null, FLAG[c.country] || '')), h('div', { class: 'row' }, (c.shared.length ? c.shared : c.interests).slice(0, 5).map((x) => h('span', { class: 'sw-tag' }, x))), c.langs && c.langs.length ? h('small', null, '🗣 ' + c.langs.join(' · ')) : null, c.last_seen ? h('small', null, presence(c.last_seen)) : null)),
         h('div', { class: 'sw-actions' }, msg, h('button', { class: 'sw-send', 'aria-label': 'Send one message', onclick: send }, '💬'), h('button', { class: 'sw-send boost', 'aria-label': 'Boost message, 5 points', onclick: boost }, '🚀')),
-        h('div', { class: 'sw-actions2' }, h('button', { class: 'sw-skip', 'aria-label': 'Skip', onclick: async () => { try { await API.discoverAct(c.id, 'skip'); } catch (e) { /* ignore */ } next(); } }, '✕'), h('button', { class: 'btn pri sw-play', onclick: async () => { try { const r = await API.inviteGame(c.id); location.hash = '#/play/' + r.match; } catch (e) { toast(err(e), 'bad'); } } }, '🎮 Invite to play')), h('small', { class: 'hint' }, '💬 one message, free · 🚀 boost, 5 ⭐: a notification and first in their list · 🎮 games: 2 Yes out of 3 and you can chat'));
+        h('div', { class: 'sw-actions2' }, h('button', { class: 'sw-skip', 'aria-label': 'Skip', onclick: async () => { try { await API.discoverAct(c.id, 'skip'); } catch (e) { /* ignore */ } next(); } }, '✕'), h('button', { class: 'btn pri sw-play', onclick: async () => { try { const r = await API.inviteGame(c.id); location.hash = '#/play/' + r.match; } catch (e) { toast(err(e), 'bad'); } } }, 'Invite to play')), h('small', { class: 'hint' }, 'one message, free · 🚀 boost, 5 ⭐: a notification and first in their list · 🎮 games: 2 Yes out of 3 and you can chat'));
     }
     async function next() { try { const d = await API.discoverNext(); show(d.card); } catch (e) { if (/who you are/i.test(err(e))) return prefsView(); toast(err(e), 'bad'); } }
     next();
@@ -294,11 +304,11 @@ window.CommunityInit = function (ui) {
   async function online() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('online'), box), bar('#/match', ME && ME.points));
     async function draw() {
       try {
         const d = await API.onlineList();
-        box.replaceChildren(h('p', { class: 'hint' }, 'People online now. Invite someone to play 3 games together: XO, a drawing and a question.'), ...(d.online.length ? d.online.map((p) => h('div', { class: 'roomcard' }, avatar(p.avatar, p.nick, 44, p.frame), h('span', { class: 'rc-t' }, h('b', null, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' ' + (FLAG[p.country] || '')), h('small', null, (p.friend ? '💜 Friend · ' : '') + '🟢 Online · Age ' + p.age_band + (p.shared.length ? ' · ' + p.shared.slice(0, 2).join(', ') : ''))), h('button', { class: 'btn sm pri', onclick: async () => { try { const r = await API.inviteGame(p.id); location.hash = '#/play/' + r.match; } catch (e) { toast(err(e), 'bad'); } } }, '🎮 Play'))) : [h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🌙'), h('p', { class: 'hint' }, 'Nobody else is online right now.'), h('a', { class: 'btn pri block', href: '#/match' }, 'Browse in Swipe'))]));
+        box.replaceChildren(h('p', { class: 'hint' }, 'People online now. Invite someone to play 3 games together: XO, a drawing and a question.'), ...(d.online.length ? d.online.map((p) => h('div', { class: 'roomcard' }, avatar(p.avatar, p.nick, 44, p.frame), h('span', { class: 'rc-t' }, h('b', null, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' ' + (FLAG[p.country] || '')), h('small', null, (p.friend ? 'Friend · ' : '') + 'Online · Age ' + p.age_band + (p.shared.length ? ' · ' + p.shared.slice(0, 2).join(', ') : ''))), h('button', { class: 'btn sm pri', onclick: async () => { try { const r = await API.inviteGame(p.id); location.hash = '#/play/' + r.match; } catch (e) { toast(err(e), 'bad'); } } }, 'Play'))) : [h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🌙'), h('p', { class: 'hint' }, 'Nobody else is online right now.'), h('a', { class: 'btn pri block', href: '#/match' }, 'Browse in Swipe'))]));
       } catch (e) { if (/who you are/i.test(err(e))) { box.replaceChildren(h('a', { class: 'btn pri block', href: '#/match' }, 'Tell us who you want to meet first')); return; } box.replaceChildren(h('div', { class: 'note' }, err(e))); }
     }
     draw(); ui.setPoll(() => { if (document.visibilityState === 'visible') draw(); }, 6000);
@@ -306,7 +316,7 @@ window.CommunityInit = function (ui) {
   async function near() {
     if (!ME) await load();
     const box = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
-    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('near'), box), bar('#/match', ME && ME.points));
+    $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), seg('near'), box), bar('#/match', ME && ME.points));
     const d = await API.discoverNear(), q = h('input', { type: 'text', placeholder: 'Search a place', 'aria-label': 'Search a place' }), list = h('div');
     const draw = () => { const t = q.value.trim().toLowerCase(); const rs = d.rooms.filter((r) => !t || r.title.toLowerCase().includes(t)); list.replaceChildren(...(rs.length ? rs.map((r) => h('a', { class: 'roomcard', href: '#/room/' + r.id }, h('span', { class: 'rc-e' }, r.emoji || '📍'), h('span', { class: 'rc-t' }, h('b', null, r.title), h('small', null, r.members + ' here')), h('span', { class: 'badge' }, 'Open'))) : [h('p', { class: 'hint' }, 'No place found.')])); };
     q.oninput = draw;
@@ -316,7 +326,7 @@ window.CommunityInit = function (ui) {
     if (!ME) await load();
     let stop = false, shown = '', lastId = 0, cur = null, prefs = { gender: '', meet: 'both' };
     const box = h('div', { class: 'matchbox stack' });
-    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
+    const shell = () => $app.replaceChildren(h('div', { class: 'wrap cm' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('a', { class: 'pill', href: '#/points' }, '⭐ ' + (ME ? ME.points : '…'))), (fixedId ? h('a', { class: 'btn sm', href: '#/dms' }, '← Chats') : seg('random')), box), bar('#/match', ME && ME.points));
     const peerHead = (p) => h('div', { class: 'peer' }, avatar(p.avatar, p.nick, 52, p.frame), h('div', null, h('b', null, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' ' + (FLAG[p.country] || '')), h('small', { class: 'hint' }, presence(p.last_seen) + ' · Age ' + p.age_band + (p.langs && p.langs.length ? ' · ' + p.langs.join(', ') : '')), p.shared.length ? h('div', { class: 'row' }, p.shared.slice(0, 4).map((x) => h('span', { class: 'badge' }, x))) : null));
     function prefsView(first) {
       const pick = (arr, key) => h('div', { class: 'pickrow' }, arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (prefs[key] === v ? ' on' : ''), onclick: () => { prefs[key] = v; prefsView(first); } }, h('span', null, e), h('b', null, l))));
@@ -327,8 +337,8 @@ window.CommunityInit = function (ui) {
     function idleView(d) {
       prefs = { gender: d.gender, meet: d.meet || 'both' };
       box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '💜'), h('h1', { class: 'wz-h' }, 'Meet someone new'), h('p', { class: 'hint' }, 'We match you by interests, then you play 3 quick games. Two Yes out of three from both of you and you are friends.')),
-        h('button', { class: 'btn pri block', onclick: async () => { try { const r = await API.matchJoin(); if (r.state === 'matched') shown = ''; tick(); } catch (e) { toast(err(e), 'bad'); } } }, '🔍 Find someone'),
-        h('button', { class: 'btn block', onclick: () => { shown = 'prefs'; prefsView(false); } }, '⚙️ Who I want to meet'));
+        h('button', { class: 'btn pri block', onclick: async () => { try { const r = await API.matchJoin(); if (r.state === 'matched') shown = ''; tick(); } catch (e) { toast(err(e), 'bad'); } } }, 'Find someone'),
+        h('button', { class: 'btn block', onclick: () => { shown = 'prefs'; prefsView(false); } }, 'Who I want to meet'));
     }
     function waitView() {
       box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji pulse' }, '💜'), h('h1', { class: 'wz-h' }, 'Looking for someone…'), h('p', { class: 'hint' }, 'Stay on this page. It can take up to 2 minutes.')),
@@ -338,13 +348,13 @@ window.CommunityInit = function (ui) {
       const m = d.match, p = d.peer; lastId = 0;
       const list = h('div', { class: 'chatlist matchlist' }), inp = h('input', { type: 'text', maxlength: 300, placeholder: 'Say something (text only)', 'aria-label': 'Message', enterkeyhint: 'send' }), msg = h('div'), ctl = h('div', { class: 'matchctl' });
       let gameN = 0;
-      const bubble = (x) => x.kind === 'game' ? h('div', { class: 'gamebub' }, h('small', null, '🎲 Round ' + (++gameN) + ' of ' + m.rounds), h('b', null, x.body)) : h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' + (window.ChatStickers && window.ChatStickers.isSticker(x.body) ? ' stkmsg' : '') }, window.ChatStickers ? window.ChatStickers.body(x.body) : x.body));
+      const bubble = (x) => x.kind === 'game' ? h('div', { class: 'gamebub' }, h('small', null, 'Round ' + (++gameN) + ' of ' + m.rounds), h('b', null, x.body)) : h('div', { class: 'cmsg' + (x.mine ? ' mine' : '') }, h('div', { class: 'bub' + (window.ChatStickers && window.ChatStickers.isSticker(x.body) ? ' stkmsg' : '') }, window.ChatStickers ? window.ChatStickers.body(x.body) : x.body));
       const draw = (st) => {
         cur = st; ctl.replaceChildren();
         if (st.state !== 'chat') return;
         if (st.round >= 1 && !st.voted) ctl.append(h('div', { class: 'votebar' }, h('span', null, (st.kind === 'invite' ? 'Do you want to chat with ' + p.nick + '? (' : 'Do you want to be friends? (') + st.round + '/' + st.rounds + ')'), h('button', { class: 'btn pri', onclick: () => vote(true) }, '✅ Yes'), h('button', { class: 'btn', onclick: () => vote(false) }, '❌ No')));
         else if (st.round >= 1 && st.voted && !st.their_voted) ctl.append(h('p', { class: 'hint' }, 'Waiting for their answer…'));
-        if (st.kind === 'invite' && st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const nxt = ['❌⭕ XO', '🎨 Drawing', '🎲 Question'][st.round]; ctl.append(h('button', { class: 'btn pri block', onclick: async () => { try { await API.matchGame(m.id); poll(); } catch (e) { toast(err(e), 'bad'); } } }, 'Game ' + (st.round + 1) + ' of ' + st.rounds + ': ' + nxt)); } else if (st.kind !== 'invite' && st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('quiz') }, '🎲 Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, '🎨 Draw')))); }
+        if (st.kind === 'invite' && st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const nxt = ['❌⭕ XO', 'Drawing', 'Question'][st.round]; ctl.append(h('button', { class: 'btn pri block', onclick: async () => { try { await API.matchGame(m.id); poll(); } catch (e) { toast(err(e), 'bad'); } } }, 'Game ' + (st.round + 1) + ' of ' + st.rounds + ': ' + nxt)); } else if (st.kind !== 'invite' && st.round < st.rounds && (st.round === 0 || (st.voted && st.their_voted))) { const start = (type) => async () => { try { await API.matchGame(m.id, type); poll(); } catch (e) { toast(err(e), 'bad'); } }; ctl.append(h('div', { class: 'gamepick' }, h('b', null, st.round === 0 ? 'Pick a game' : 'Next game'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: start('quiz') }, 'Question'), h('button', { class: 'btn', onclick: start('xo') }, '❌⭕ XO'), h('button', { class: 'btn', onclick: start('draw') }, 'Draw')))); }
         if (board) board.set(st.game);
       };
       let board = null;
@@ -355,12 +365,12 @@ window.CommunityInit = function (ui) {
       const stkSlot = h('div'), stkBtn = stickerButton(stkSlot, async (tok) => { try { await API.matchSend(m.id, tok); msg.replaceChildren(); poll(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } });
       const menu = h('button', { class: 'btn sm', 'aria-label': 'More', onclick: () => { const ch = prompt('Type 1 to report and block this person, 2 to just leave the chat.'); if (ch === '1') API.matchReport(m.id, true).then(() => { shown = ''; tick(); }); else if (ch === '2') API.matchLeave(m.id).then(() => { shown = ''; tick(); }); } }, '⋯');
       box.replaceChildren(h('div', { class: 'chathead' }, peerHead(p), menu), list, msg, ctl, stkSlot, h('div', { class: 'composer' }, stkBtn, inp, h('button', { class: 'btn pri', onclick: go }, 'Send')));
-      board = window.GameBoard.mount(box, ctl, { move: async (cell) => { const r = await API.matchMove(m.id, cell); draw(r.match); }, stroke: (k) => API.matchDraw(m.id, k), clear: () => API.matchDraw(m.id, null, true), guess: async (t) => { const r = await API.matchGuess(m.id, t); if (r.correct) toast('🎉 Correct!'); poll(); }, pick: async (i) => { const r = await API.matchPick(m.id, i); draw(r.match); } });
+      board = window.GameBoard.mount(box, ctl, { move: async (cell) => { const r = await API.matchMove(m.id, cell); draw(r.match); }, stroke: (k) => API.matchDraw(m.id, k), clear: () => API.matchDraw(m.id, null, true), guess: async (t) => { const r = await API.matchGuess(m.id, t); if (r.correct) toast('Correct!'); poll(); }, pick: async (i) => { const r = await API.matchPick(m.id, i); draw(r.match); } });
       draw(m); poll(); ui.setPoll(() => { if (document.visibilityState === 'visible') poll(); }, 2500);
     }
     function invitedView(d) {
       const p = d.peer;
-      if (d.match.is_judge) return box.replaceChildren(h('div', { class: 'matchhero' }, avatar(p.avatar, p.nick, 88, p.frame), h('h1', { class: 'wz-h' }, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' invited you'), h('p', { class: 'hint' }, 'Three quick games: XO, a drawing and a question. After each one you say Yes or No. Two Yes out of three and they can chat with you.')), h('button', { class: 'btn pri block', onclick: async () => { await API.inviteRespond(d.match.id, true); shown = ''; tick(); } }, '🎮 Play'), h('button', { class: 'btn block', onclick: async () => { await API.inviteRespond(d.match.id, false); location.hash = '#/dms'; } }, 'No thanks'));
+      if (d.match.is_judge) return box.replaceChildren(h('div', { class: 'matchhero' }, avatar(p.avatar, p.nick, 88, p.frame), h('h1', { class: 'wz-h' }, p.nick + TICK(p.selfie_ok, p.role, p.fast) + ' invited you'), h('p', { class: 'hint' }, 'Three quick games: XO, a drawing and a question. After each one you say Yes or No. Two Yes out of three and they can chat with you.')), h('button', { class: 'btn pri block', onclick: async () => { await API.inviteRespond(d.match.id, true); shown = ''; tick(); } }, 'Play'), h('button', { class: 'btn block', onclick: async () => { await API.inviteRespond(d.match.id, false); location.hash = '#/dms'; } }, 'No thanks'));
       box.replaceChildren(h('div', { class: 'matchhero' }, avatar(p.avatar, p.nick, 88, p.frame), h('h1', { class: 'wz-h' }, 'Waiting for ' + p.nick), h('p', { class: 'hint' }, 'We told them. You can leave this page: you get a notification when they join.')), h('a', { class: 'btn block', href: '#/dms' }, '← Back to chats'));
     }
     function doneView(d) {
@@ -368,11 +378,11 @@ window.CommunityInit = function (ui) {
       if (d.match.kind === 'invite') {
         const inviter = d.match.invited_by_me;
         if (friends && inviter) return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '🎉'), h('h1', { class: 'wz-h' }, 'They said Yes!'), h('p', { class: 'hint' }, 'You passed the games. Open the chat for 2 ⭐.')), h('button', { class: 'btn pri block', onclick: async () => { try { await API.dmUnlock(d.match.thread); location.hash = '#/dm/' + d.match.thread; } catch (e) { toast(err(e), 'bad'); } } }, 'Open the chat · 2 ⭐'), h('a', { class: 'btn block', href: '#/dm/' + d.match.thread }, 'Later'));
-        return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, friends ? '🎉' : '👋'), h('h1', { class: 'wz-h' }, friends ? 'You are friends!' : 'The games are over'), h('p', { class: 'hint' }, friends ? 'Your chat is open.' : 'It was not a match this time.')), friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread }, '💬 Open our chat') : h('a', { class: 'btn pri block', href: '#/match' }, '🔍 Find someone'));
+        return box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, friends ? '🎉' : '👋'), h('h1', { class: 'wz-h' }, friends ? 'You are friends!' : 'The games are over'), h('p', { class: 'hint' }, friends ? 'Your chat is open.' : 'It was not a match this time.')), friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread }, 'Open our chat') : h('a', { class: 'btn pri block', href: '#/match' }, 'Find someone'));
       }
       box.replaceChildren(h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, friends ? '🎉' : '👋'), h('h1', { class: 'wz-h' }, friends ? 'You are friends!' : 'This chat is over'), h('p', { class: 'hint' }, friends ? 'You both said Yes. Your private chat is open.' : 'You did not both say Yes enough times. Try someone new.')),
-        friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread, onclick: () => API.matchLeave(d.match.id) }, '💬 Open our chat') : null,
-        h('button', { class: friends ? 'btn block' : 'btn pri block', onclick: async () => { await API.matchLeave(d.match.id); shown = ''; tick(); } }, '🔍 Find someone new'));
+        friends ? h('a', { class: 'btn pri block', href: '#/dm/' + d.match.thread, onclick: () => API.matchLeave(d.match.id) }, 'Open our chat') : null,
+        h('button', { class: friends ? 'btn block' : 'btn pri block', onclick: async () => { await API.matchLeave(d.match.id); shown = ''; tick(); } }, 'Find someone new'));
     }
     async function tick() {
       if (stop) return;
@@ -398,7 +408,7 @@ window.CommunityInit = function (ui) {
     const [acct, bl, mp] = await Promise.all([API.me().then((r) => r.user || {}).catch(() => ({})), API.blocksList().catch(() => ({ blocked: [] })), API.matchState().catch(() => ({}))]);
     const pr = { gender: mp.gender || '', meet: mp.meet || 'both', langs: new Set(mp.langs || []) };
     const LANGS = ['English', 'العربية', 'Français', 'Türkçe', 'Español', 'Deutsch', 'Italiano', 'Русский', 'Kurdî', 'Հայերեն'];
-    const sec = (icon, title, ...kids) => h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, icon), h('b', null, title)), ...kids);
+    const sec = (_icon, title, ...kids) => h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('b', null, title)), ...kids);
     const row = (label, val) => h('div', { class: 'setrow' }, h('span', null, label), h('b', null, val || '—'));
     const link = (icon, label, href, hint) => h('a', { class: 'setlink', href }, h('span', null, icon), h('div', null, h('b', null, label), hint ? h('small', null, hint) : null), h('i', null, '›'));
     const pickRow = (arr, key) => { const el = h('div', { class: 'pickrow' }); const draw = () => el.replaceChildren(...arr.map(([v, e, l]) => h('button', { type: 'button', class: 'pickcard' + (pr[key] === v ? ' on' : ''), onclick: () => { pr[key] = v; draw(); } }, h('span', null, e), h('b', null, l)))); draw(); return el; };
@@ -409,14 +419,14 @@ window.CommunityInit = function (ui) {
     const selfieBox = h('div', { class: 'stack' }, h('p', { class: 'hint spark' }, 'Loading…'));
     API.selfieState().then((st) => {
       if (st.ok) return selfieBox.replaceChildren(h('p', null, '✅ You are verified by selfie.'));
-      if (st.state === 'pending') return selfieBox.replaceChildren(h('p', null, '⏳ Your selfie is waiting to be checked. We will tell you.'));
+      if (st.state === 'pending') return selfieBox.replaceChildren(h('p', null, 'Your selfie is waiting to be checked. We will tell you.'));
       const f = h('input', { type: 'file', accept: 'image/*', capture: 'user', 'aria-label': 'Take a selfie' }), ok = h('input', { type: 'checkbox', 'aria-label': 'I agree' }), msg2 = h('div');
       selfieBox.replaceChildren(h('p', null, 'Get a ✅ next to your name and ' + st.reward + ' points.'), ...(st.state === 'rejected' ? [h('div', { class: 'note' }, 'Your last selfie was not accepted. Try again.')] : []),
         h('p', null, '1. Hold up ', h('b', { style: 'font-size:1.4rem' }, st.code + (st.code === 1 ? ' finger' : ' fingers')), ' next to your face.'), h('p', null, '2. Take the selfie.'), f,
         h('label', { class: 'row', style: 'gap:8px;align-items:flex-start' }, ok, h('span', { class: 'hint' }, 'I agree that the site owner looks at this selfie once to check that I am a real person. It is deleted right after. It is never shown to anyone.')),
         h('button', { class: 'btn pri block', onclick: async () => { const file = f.files[0]; if (!file) return msg2.replaceChildren(h('div', { class: 'note' }, 'Take the selfie first.')); if (!ok.checked) return msg2.replaceChildren(h('div', { class: 'note' }, 'Please agree first.')); try { const data = await ui.shrinkImage(file, 480, 0.7, true); await API.selfieSubmit(data); toast('Sent. We will check it soon.'); settings(); } catch (e) { msg2.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'Send my selfie'), msg2);
     }).catch(() => selfieBox.replaceChildren(h('p', { class: 'hint' }, 'Not available now.')));
-    const viewsSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '👀'), h('b', null, 'Views')), h('a', { class: 'btn block', href: '#/views' }, 'See who looked at my profile'), h('a', { class: 'btn block', href: '#/me' }, '📷 Real photo and avatar'));
+    const viewsSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '👀'), h('b', null, 'Views')), h('a', { class: 'btn block', href: '#/views' }, 'See who looked at my profile'), h('a', { class: 'btn block', href: '#/me' }, 'Real photo and avatar'));
     const socialSec = h('section', { class: 'setsec' }, h('div', { class: 'sethead' }, h('span', null, '🔗'), h('b', null, 'My social accounts')), h('p', { class: 'hint spark' }, 'Loading…'));
     API.socialGet().then((s) => {
       const f = (k, label, ph) => h('label', { class: 'f' }, label + ' · ' + (s.earn[k] || 0) + ' ⭐', h('input', { type: 'text', value: (s.socials || {})[k] || '', placeholder: ph, autocapitalize: 'none', 'data-k': k }));
@@ -436,12 +446,12 @@ window.CommunityInit = function (ui) {
       sec('🤳', 'Verified by selfie', selfieBox),
       socialSec,
       sec('🔔', 'Notifications', pc || h('p', { class: 'hint' }, 'Not available on this phone.'), h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: !ME.nudge_off, onchange: async (e) => { try { await API.nudgeSet(!e.target.checked); ME.nudge_off = !e.target.checked; toast('Saved ✓'); } catch (x) { toast(err(x), 'bad'); } } }), h('span', null, 'Reminders when I have been away (one a day at most)'))),
-      sec('🌓', 'Look', h('button', { class: 'btn block', onclick: () => { ui.toggleMode(); } }, 'Switch light / dark')),
+      sec('', 'Look', h('button', { class: 'btn block', type: 'button', onclick: (e) => { const m = ui.toggleMode(); e.currentTarget.textContent = 'Look: ' + ({ auto: 'Automatic (follows your phone)', light: 'Light', dark: 'Dark' })[m] + '. Tap to change'; } }, 'Look: ' + ({ auto: 'Automatic (follows your phone)', light: 'Light', dark: 'Dark' })[ui.modePref()] + '. Tap to change')),
       sec('🛡️', 'Safety', h('p', { class: 'hint' }, 'Chats are text only. Links, phone numbers and usernames are blocked. Three people reporting someone mutes them for 24 hours.'), h('b', null, 'People I blocked'), blockedList),
       sec('⭐', 'Points', link('⭐', 'My points: ' + ME.points, '#/points', 'History and invite links'), link('🛒', 'Get more points', '#/shop'), link('🎲', 'Truth or Dare levels', '#/tod')),
-      sec('❓', 'Help', h('button', { class: 'setrow', type: 'button', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { toast(err(e), 'bad'); } } }, h('span', null, '💬 Contact the ADate Team'), h('small', { class: 'hint' }, 'Questions, payments, problems')), link('🔑', 'I forgot my password', '#/recover'), link('📄', 'Privacy', '#/privacy'), link('📬', 'My invites (Truth Date)', '#/mine')),
+      sec('❓', 'Help', h('button', { class: 'setrow', type: 'button', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { toast(err(e), 'bad'); } } }, h('span', null, 'Contact the ADate Team'), h('small', { class: 'hint' }, 'Questions, payments, problems')), link('🔑', 'I forgot my password', '#/recover'), link('📄', 'Privacy', '#/privacy'), link('📬', 'My invites (Truth Date)', '#/mine')),
       h('button', { class: 'btn block', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out'),
-      h('details', { class: 'setsec dangerbox' }, h('summary', null, '🗑️ Delete my account'), h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'This erases your profile, chats, points and everything else for good. It cannot be undone.'), acct.has_password === false ? null : dpw, dtx,
+      h('details', { class: 'setsec dangerbox' }, h('summary', null, 'Delete my account'), h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'This erases your profile, chats, points and everything else for good. It cannot be undone.'), acct.has_password === false ? null : dpw, dtx,
         h('button', { class: 'btn danger block', onclick: async () => { if (!confirm('Delete your account for good?')) return; try { await API.deleteAccount(dpw.value, dtx.value); location.hash = '#/'; } catch (e) { toast(err(e), 'bad'); } } }, 'Delete for good'))));
   }
   /* ---------------------------------------------------------------- points and invites */
@@ -454,9 +464,9 @@ window.CommunityInit = function (ui) {
     page('#/points', h('div', { class: 'bigpts' }, h('small', null, 'Your points'), h('b', null, '⭐ ' + d.balance)),
       h('div', { class: 'note' }, '⏱ You get +1 every 6 hours when you open ADate (up to 4 a day). Next: ' + (new Date(d.next_tick_at) > new Date() ? 'at ' + timeShort(d.next_tick_at) : 'now')),
       h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Invite a friend: +5 points'), h('p', { class: 'hint' }, 'You earn 5 when your friend joins and sends their first message. Up to 10 friends a day.'), h('input', { type: 'text', readonly: '', value: link, onfocus: (e) => e.target.select(), 'aria-label': 'Your invite link' }),
-        h('div', { class: 'row' }, h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://wa.me/?text=' + encodeURIComponent(text) }, '💬 WhatsApp'), navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text }).catch(() => {}) }, 'Share…') : null, h('button', { class: 'btn', onclick: async (e) => { try { await navigator.clipboard.writeText(link); e.currentTarget.textContent = 'Copied ✓'; } catch (x) { /* select it */ } } }, 'Copy'))),
-      h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Share your card: +2 points'), h('p', { class: 'hint' }, 'Share a card on your Snapchat story or in any app. You earn 2 points each time, up to 3 times a day.'), h('button', { class: 'btn pri block', onclick: () => shareCard(link, text) }, '📸 Share my card')),
-      h('a', { class: 'btn block', href: '#/shop' }, '🛒 Get more points'),
+        h('div', { class: 'row' }, h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://wa.me/?text=' + encodeURIComponent(text) }, 'WhatsApp'), navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text }).catch(() => {}) }, 'Share…') : null, h('button', { class: 'btn', onclick: async (e) => { try { await navigator.clipboard.writeText(link); e.currentTarget.textContent = 'Copied ✓'; } catch (x) { /* select it */ } } }, 'Copy'))),
+      h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Share your card: +2 points'), h('p', { class: 'hint' }, 'Share a card on your Snapchat story or in any app. You earn 2 points each time, up to 3 times a day.'), h('button', { class: 'btn pri block', onclick: () => shareCard(link, text) }, 'Share my card')),
+      h('a', { class: 'btn block', href: '#/shop' }, 'Get more points'),
       h('div', { class: 'h2' }, 'History'), ...(d.history.length ? d.history.map((x) => h('div', { class: 'hist' }, h('span', null, reasons[x.reason] || x.reason), h('b', { class: x.delta < 0 ? 'neg' : 'pos' }, (x.delta > 0 ? '+' : '') + x.delta))) : [h('p', { class: 'hint' }, 'Nothing yet.')]));
   }
 
@@ -492,23 +502,22 @@ window.CommunityInit = function (ui) {
     const avs = Object.keys(STICKERS).slice(0, 18).map((k) => { const b = h('button', { class: 'avbtn' + (ME.avatar === 'cartoon:' + k ? ' on' : ''), 'aria-label': k, onclick: async () => { await API.meSet({ avatar: 'cartoon:' + k }); ME.avatar = 'cartoon:' + k; me(); } }); b.innerHTML = STICKERS[k].svg; return b; });
     const pc = ui.pushControl ? await ui.pushControl() : null;
     const photoBox = () => {
-      if (!ME.photo_ok) return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, 'The animal avatar is free. A real photo shows on your profile card for 30 days.'), h('button', { class: 'btn', onclick: async () => { if (!confirm(`Use a real photo for ${ME.photo_price} points a month?`)) return; try { await API.photoBuy(); me(); } catch (e) { toast(err(e), 'bad'); } } }, `📷 Real photo · ⭐ ${ME.photo_price} / month`));
+      if (!ME.photo_ok) return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), h('p', { class: 'hint' }, 'The animal avatar is free. A real photo shows on your profile card for 30 days.'), h('button', { class: 'btn', onclick: async () => { if (!confirm(`Use a real photo for ${ME.photo_price} points a month?`)) return; try { await API.photoBuy(); me(); } catch (e) { toast(err(e), 'bad'); } } }, `Real photo · ⭐ ${ME.photo_price} / month`));
       const f = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Choose a photo', onchange: async (e) => { const file = e.target.files[0]; if (!file) return; try { const data = await ui.shrinkImage(file, 320, 0.8, true); await API.photoSet(data); toast('Photo saved'); me(); } catch (x) { toast(err(x), 'bad'); } } });
       return h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Real photo'), ME.photo ? h('div', { class: 'photoprev' }, avatar('', ME.nick, 96, ME.frame, ME.photo)) : null, h('p', { class: 'hint' }, ME.has_photo ? 'Your photo is on your profile card until ' + String(ME.photo_until || '').slice(0, 10) + '.' : 'Choose a photo of yourself.'), f, ME.has_photo ? h('button', { class: 'btn sm danger', onclick: async () => { await API.photoSet('', true); me(); } }, 'Remove my photo') : null);
     };
     const frameBox = () => h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Season frames'), h('p', { class: 'hint' }, 'A frame around your picture. 5 points each, while the season lasts. You keep it.'), ...ME.frame_shop.map((f) => h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, f.emoji), h('span', { class: 'rc-t' }, h('b', null, f.name), h('small', null, f.own ? (ME.frame === f.key ? 'Using it' : 'You own it') : f.open ? '⭐ ' + f.price : 'Not on sale now')),
       f.own ? h('button', { class: 'btn sm' + (ME.frame === f.key ? '' : ' pri'), onclick: async () => { await API.meSet({ frame: ME.frame === f.key ? '' : f.key }); me(); } }, ME.frame === f.key ? 'Remove' : 'Use') : f.open ? h('button', { class: 'btn sm', onclick: async () => { if (!confirm(`Buy the ${f.name} frame for ${f.price} points?`)) return; try { await API.frameBuy(f.key); me(); } catch (x) { toast(err(x), 'bad'); } } }, 'Buy') : h('span', { class: 'badge' }, '🔒'))));
     page('#/me', h('div', { class: 'hello' }, myAvatar(56), h('div', null, h('b', null, ME.nick || 'No nickname yet'), h('small', { class: 'hint' }, 'Your public profile'))),
-      h('a', { class: 'btn pri block', href: '#/settings' }, '⚙️ Settings'),
-      h('button', { class: 'btn', onclick: () => { ui.toggleMode(); me(); } }, '🌓 Light / dark'),
+      h('a', { class: 'btn pri block', href: '#/settings' }, 'Settings'),
+      h('button', { class: 'btn', onclick: () => { ui.toggleMode(); me(); } }, 'Light / dark'),
       h('div', { class: 'h2' }, 'Nickname'), nickIn, h('button', { class: 'btn sm pri', onclick: saveNick(() => '*', nickIn) }, 'Save'),
       h('details', null, h('summary', { class: 'hint' }, 'A different nickname for another country'), h('div', { class: 'stack' }, cSel, cIn, h('button', { class: 'btn sm', onclick: saveNick(() => cSel.value, cIn) }, 'Save for that country'),
         ...(d.me.nicks || []).filter((n) => n.country !== '*').map((n) => h('div', { class: 'hint' }, (FLAG[n.country] || '') + ' ' + n.country + ': ' + n.nick)))), msg,
-      h('div', { class: 'h2' }, 'My wallpaper'), h('div', { class: 'themes' }, themes),
       h('div', { class: 'h2' }, 'My avatar'), h('div', { class: 'avs' }, animalBtns, avs),
       photoBox(), frameBox(),
       pc ? h('div', { class: 'stack' }, h('div', { class: 'h2' }, 'Notifications'), pc) : null,
-      h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/mine' }, '📬 My invites'), h('button', { class: 'btn danger', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')));
+      h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/mine' }, 'My invites'), h('button', { class: 'btn danger', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')));
   }
 
 
@@ -522,20 +531,20 @@ window.CommunityInit = function (ui) {
     const play = (lv) => {
       const box = h('div', { class: 'todcard' }, h('small', null, 'Pick Truth or Dare'), h('b', { class: 'todq' }, '🎲'));
       const ask = async (kind) => {
-        try { const q = await API.todNext(lv.level, kind, seen[lv.level] || []); (seen[lv.level] = seen[lv.level] || []).push(q.id); box.replaceChildren(h('small', null, q.kind === 'truth' ? '💬 TRUTH' : '🔥 DARE'), h('b', { class: 'todq' }, q.text)); }
+        try { const q = await API.todNext(lv.level, kind, seen[lv.level] || []); (seen[lv.level] = seen[lv.level] || []).push(q.id); box.replaceChildren(h('small', null, q.kind === 'truth' ? 'TRUTH' : '🔥 DARE'), h('b', { class: 'todq' }, q.text)); }
         catch (e) { box.replaceChildren(h('div', { class: 'note' }, err(e))); }
       };
       page('#/tod', h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: tod }, '← Levels')), h('div', { class: 'h2' }, `Level ${lv.level}: ${lv.name}`), h('p', { class: 'hint' }, 'Read it out loud to your friends and play together. Be kind and keep it fun.'), box,
-        h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: () => ask('truth') }, 'Truth'), h('button', { class: 'btn pri', onclick: () => ask('dare') }, 'Dare'), h('button', { class: 'btn', onclick: () => ask(null) }, '🎲 Random')));
+        h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: () => ask('truth') }, 'Truth'), h('button', { class: 'btn pri', onclick: () => ask('dare') }, 'Dare'), h('button', { class: 'btn', onclick: () => ask(null) }, 'Random')));
     };
     const row = (lv) => {
       const open = lv.price === 0 || lv.until, msg = h('div');
-      const btn = !lv.allowed ? h('span', { class: 'badge' }, `🔒 ages ${lv.min_age}+`) : open ? h('button', { class: 'btn sm pri', onclick: () => play(lv) }, 'Play') : h('button', { class: 'btn sm', onclick: async (e) => {
+      const btn = !lv.allowed ? h('span', { class: 'badge' }, `ages ${lv.min_age}+`) : open ? h('button', { class: 'btn sm pri', onclick: () => play(lv) }, 'Play') : h('button', { class: 'btn sm', onclick: async (e) => {
         if (!confirm(`Open level ${lv.level} for today (24 hours) for ${lv.price} points? You have ${d.balance}.`)) return; e.currentTarget.disabled = true;
         try { await API.todUnlock(lv.level); tod(); } catch (x) { toast(err(x), 'bad'); e.currentTarget.disabled = false; } } }, `Open · ⭐ ${lv.price}`);
       return h('div', { class: 'roomcard' }, h('span', { class: 'rc-e' }, ['', '😊', '🙂', '😉', '😏', '🌶️'][lv.level]), h('span', { class: 'rc-t' }, h('b', null, `Level ${lv.level}: ${lv.name}`), h('small', null, LV_TXT[lv.level] + (lv.until ? ' · open until ' + timeShort(lv.until) : lv.price ? ` · ⭐ ${lv.price} for 24 hours` : ' · free'))), btn, msg);
     };
-    page('#/tod', h('div', { class: 'h2' }, '🎲 Truth or Dare'), h('p', { class: 'hint' }, 'Level 1 is free. The other levels open for 24 hours with your points. Some levels have an age limit.'), ...d.levels.map(row), h('a', { class: 'btn block', href: '#/points' }, 'Get more points'));
+    page('#/tod', h('div', { class: 'h2' }, 'Truth or Dare'), h('p', { class: 'hint' }, 'Level 1 is free. The other levels open for 24 hours with your points. Some levels have an age limit.'), ...d.levels.map(row), h('a', { class: 'btn block', href: '#/points' }, 'Get more points'));
   }
 
 
@@ -544,7 +553,7 @@ window.CommunityInit = function (ui) {
     page('#/shop', h('p', { class: 'hint spark' }, 'Loading…'));
     if (!ME) await load();
     const d = await API.shop(), msg = h('div');
-    const STATUS = { pending: '⏳ waiting for your payment', claimed: '🔎 being checked', paid: '✅ paid', rejected: '❌ not accepted' };
+    const STATUS = { pending: 'waiting for your payment', claimed: 'being checked', paid: '✅ paid', rejected: '❌ not accepted' };
     const money = (c) => '$' + (c / 100).toFixed(2);
     const back = h('a', { class: 'btn sm backbtn', href: '#/', 'aria-label': 'Back', onclick: (e) => { if (history.length > 1) { e.preventDefault(); history.back(); } } }, '← Back');
     const open = d.orders.find((o) => o.status === 'pending' || o.status === 'claimed');
@@ -555,7 +564,7 @@ window.CommunityInit = function (ui) {
     let receipt = '';
     const txid = h('input', { type: 'text', maxlength: 24, placeholder: 'Transaction ID (numbers, like 648584461)', 'aria-label': 'Whish transaction ID', autocomplete: 'off', inputmode: 'text' });
     const prev = h('div', { class: 'receiptprev' }), file = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Screenshot of the Whish receipt', onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { receipt = await ui.shrinkImage(f, 1000, 0.75); prev.replaceChildren(h('img', { src: receipt, alt: 'Receipt preview' })); } catch (x) { msg.replaceChildren(h('div', { class: 'note' }, err(x))); } } });
-    const copyBtn = h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText('+' + num); toast('Number copied ✓'); } catch (e) { toast('Copy it by hand: +' + num, 'bad'); } } }, '📋 Copy');
+    const copyBtn = h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText('+' + num); toast('Number copied ✓'); } catch (e) { toast('Copy it by hand: +' + num, 'bad'); } } }, 'Copy');
     const payCard = open && open.status === 'pending' ? h('div', { class: 'stack paycard' },
       h('div', { class: 'note' }, h('b', null, `${pk(open.kind).label || ''} · ${money(open.cents)}`), h('p', { class: 'hint' }, 'Order AD-' + open.id)),
       h('b', null, '1️⃣ Send the money on Whish'), num ? h('div', { class: 'row numrow' }, h('span', { class: 'bignum' }, '+' + num), copyBtn) : h('p', { class: 'hint' }, 'The Whish number is not set yet. Chat with the team below.'),
@@ -565,11 +574,11 @@ window.CommunityInit = function (ui) {
       h('button', { class: 'btn pri block', type: 'button', onclick: async () => { if (!receipt) return msg.replaceChildren(h('div', { class: 'note' }, 'Add the screenshot of your Whish receipt first.')); try { await API.orderPaid(open.id, txid.value, receipt); toast('Sent. We will check it now.'); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '✅ I paid, check it'),
       h('p', { class: 'hint' }, 'No receipt, no points. Each transaction ID counts once. A fake receipt means lost points and a ban.'),
       h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await API.orderCancel(open.id); } catch (e) { /* ignore */ } shopPage(); } }, 'Choose a different pack'))
-      : open ? h('div', { class: 'note stack' }, h('b', null, '🔎 We are checking your payment'), h('p', { class: 'hint' }, `Order AD-${open.id} · ${money(open.cents)}. This usually takes a few minutes. You will get a notification when your points arrive.`)) : null;
-    page('#/shop', h('div', { class: 'h2' }, '🛒 Get more points'), !open && d.first_bonus ? h('div', { class: 'note' }, '🎁 Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null,
+      : open ? h('div', { class: 'note stack' }, h('b', null, 'We are checking your payment'), h('p', { class: 'hint' }, `Order AD-${open.id} · ${money(open.cents)}. This usually takes a few minutes. You will get a notification when your points arrive.`)) : null;
+    page('#/shop', h('div', { class: 'h2' }, 'Get more points'), !open && d.first_bonus ? h('div', { class: 'note' }, 'Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null,
       open ? payCard : h('div', { class: 'packs' }, ...packs),
-      msg, h('button', { class: 'btn block', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '💬 No Whish? Chat with the team'), h('div', { class: 'h2' }, 'My orders'), ...(d.orders.length ? d.orders.map((o) => h('div', { class: 'hist' }, h('span', null, `AD-${o.id} · ${STATUS[o.status] || o.status}`), h('b', null, money(o.cents)))) : [h('p', { class: 'hint' }, 'No orders yet.')]));
-    if (open && open.status === 'claimed') ui.setPoll(async () => { try { const x = await API.shop(); if (!x.orders.find((o) => o.id === open.id && (o.status === 'pending' || o.status === 'claimed'))) { const me2 = await API.points(); ME.points = me2.balance; shopPage(); toast(x.orders.find((o) => o.id === open.id && o.status === 'paid') ? '🎉 Congratulations! Your points arrived.' : 'Your payment was not accepted.'); } } catch (e) { /* next time */ } }, 4000);
+      msg, h('button', { class: 'btn block', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'No Whish? Chat with the team'), h('div', { class: 'h2' }, 'My orders'), ...(d.orders.length ? d.orders.map((o) => h('div', { class: 'hist' }, h('span', null, `AD-${o.id} · ${STATUS[o.status] || o.status}`), h('b', null, money(o.cents)))) : [h('p', { class: 'hint' }, 'No orders yet.')]));
+    if (open && open.status === 'claimed') ui.setPoll(async () => { try { const x = await API.shop(); if (!x.orders.find((o) => o.id === open.id && (o.status === 'pending' || o.status === 'claimed'))) { const me2 = await API.points(); ME.points = me2.balance; shopPage(); toast(x.orders.find((o) => o.id === open.id && o.status === 'paid') ? 'Congratulations! Your points arrived.' : 'Your payment was not accepted.'); } } catch (e) { /* next time */ } }, 4000);
   }
 
   /* ---------------------------------------------------------------- referral landing */
@@ -583,14 +592,14 @@ window.CommunityInit = function (ui) {
     page('#/views', h('p', { class: 'hint spark' }, 'Loading…'));
     let d; try { d = await API.viewsFeed(); } catch (e) { return page('#/views', h('p', { class: 'hint' }, err(e))); }
     const list = h('div', { class: 'stack' });
-    const write = async (p) => { const body = prompt('Say hi to ' + p.nick + ' (they will see it first and can accept)', 'Hi! 👋'); if (!body) return; try { await API.dmStart(p.id, body); toast('Sent ✓'); } catch (e) { toast(err(e), 'bad'); } };
+    const write = async (p) => { const body = prompt('Say hi to ' + p.nick + '. They see it first and can accept. You can also open the chat at once for 5 stars.', 'Hi! 👋'); if (!body) return; try { const r = await API.dmStart(p.id, body); location.hash = '#/dm/' + r.thread; } catch (e) { toast(err(e), 'bad'); } };
     const draw = () => list.replaceChildren(...(d.views.length ? d.views.map((v) => {
-      const what = (v.liked === 'boost' ? '🚀 boosted you' : v.liked === 'invite' ? '💜 liked you' : '') + (v.viewed && v.liked ? ' · ' : '') + (v.viewed ? '👀 viewed your profile' : '');
-      if (v.revealed) return h('div', { class: 'roomcard' }, avatar(v.avatar, v.nick, 44, v.frame, v.photo), h('span', { class: 'rc-t' }, h('b', null, v.nick + TICK(v.selfie_ok, v.role)), h('small', null, what + ' · ' + ui.ago(v.at))), h('button', { class: 'btn sm pri', type: 'button', onclick: () => write(v) }, '💬 Message'));
-      return h('div', { class: 'roomcard' }, h('span', { class: 'avatar blurav', style: 'width:44px;height:44px' }, '🙂'), h('span', { class: 'rc-t' }, h('b', null, 'Someone · ' + v.age_band + ' ' + (FLAG[v.country] || '')), h('small', null, what + ' · ' + ui.ago(v.at))), h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.viewReveal(v.id); ME.points = r.balance; Object.assign(v, r.person, { revealed: true }); draw(); } catch (e) { toast(err(e), 'bad'); } } }, '👁 See who · ' + d.price + ' ⭐'));
+      const what = (v.liked === 'boost' ? 'boosted you' : v.liked === 'invite' ? 'liked you' : '') + (v.viewed && v.liked ? ' · ' : '') + (v.viewed ? 'viewed your profile' : '');
+      if (v.revealed) return h('div', { class: 'roomcard' }, avatar(v.avatar, v.nick, 44, v.frame, v.photo), h('span', { class: 'rc-t' }, h('b', null, v.nick + TICK(v.selfie_ok, v.role)), h('small', null, what + ' · ' + ui.ago(v.at))), h('button', { class: 'btn sm pri', type: 'button', onclick: () => write(v) }, 'Message'));
+      return h('div', { class: 'roomcard' }, h('span', { class: 'avatar blurav', style: 'width:44px;height:44px' }, '🙂'), h('span', { class: 'rc-t' }, h('b', null, 'Someone · ' + v.age_band + ' ' + (FLAG[v.country] || '')), h('small', null, what + ' · ' + ui.ago(v.at))), h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.viewReveal(v.id); ME.points = r.balance; Object.assign(v, r.person, { revealed: true }); draw(); } catch (e) { toast(err(e), 'bad'); } } }, 'See who · ' + d.price + ' ⭐'));
     }) : [h('div', { class: 'matchhero' }, h('div', { class: 'bigemoji' }, '👀'), h('p', { class: 'hint' }, 'Nobody yet. When people open your profile or like you in Swipe, they show up here.'))]));
     draw();
-    page('#/views', h('div', { class: 'h2' }, '👀 Views'), h('p', { class: 'hint' }, d.today + ' today. Seeing who it is costs ' + d.price + ' ⭐, once. Then you can write to them.'), list);
+    page('#/views', h('div', { class: 'h2' }, 'Views'), h('p', { class: 'hint' }, d.today + ' today. Seeing who it is costs ' + d.price + ' ⭐, once. Then you can write to them.'), list);
   }
   return function route(hash) {
     if (!API.enabled) return null;

@@ -418,3 +418,5 @@ update users set is_admin = false where is_admin;
 insert into users (phone, pass_salt, pass_hash, nick, role, profile_done, gender, meet, birthdate, country, interests, avatar, last_seen)
   select 'team-account', 'x', 'x', 'ADate Team', 'team', false, 'm', 'both', '2008-01-01', 'LB', array['support'], 'animal:cat', now() where not exists (select 1 from users where phone = 'team-account');
 update users set profile_done = false where phone = 'team-account';
+
+create table if not exists swipe_views (viewer bigint not null references users(id) on delete cascade, target bigint not null references users(id) on delete cascade, day date not null, primary key (viewer, target, day));

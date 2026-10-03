@@ -64,7 +64,7 @@ function waPicker(cc0, onChange) {
   const tel = h('input', { type: 'tel', inputmode: 'numeric', maxlength: 16, 'aria-label': 'WhatsApp number' });
   const row = h('div', { class: 'fieldrow' }, sel, tel);
   const igIn = h('input', { type: 'text', maxlength: 80, placeholder: '@username (optional)', autocapitalize: 'none', autocomplete: 'off', spellcheck: false, 'aria-label': 'Instagram account' });
-  const paint = () => { status.textContent = st.contact ? '✓ +' + st.contact + (st.src === 'contact' ? ' · from your contacts' : '') : (canPick ? 'Tap the button and choose your own contact card.' : st.phone ? '✗ That number doesn’t look right yet.' : 'Your number without the country code.'); status.style.color = !st.contact && st.phone ? '#c0392b' : ''; onChange(out()); };
+  const paint = () => { status.textContent = st.contact ? '✓ +' + st.contact + (st.src === 'contact' ? ' · from your contacts' : '') : (canPick ? 'Tap the button and choose your own contact card.' : st.phone ? 'That number doesn’t look right yet.' : 'Your number without the country code.'); status.style.color = !st.contact && st.phone ? '#c0392b' : ''; onChange(out()); };
   tel.oninput = () => { st.phone = digits(tel.value); st.contact = normalizePhone(st.cc, st.phone); st.src = st.contact ? 'typed' : ''; paint(); };
   sel.onchange = () => { st.cc = sel.value; tel.oninput(); };
   igIn.oninput = () => { st.ig = igIn.value; paint(); };
@@ -73,9 +73,9 @@ function waPicker(cc0, onChange) {
       const r = await navigator.contacts.select(['tel'], { multiple: false }), raw = r && r[0] && r[0].tel && r[0].tel[0]; if (!raw) return;
       const d = digits(raw), n = /^\s*(\+|00)/.test(raw) ? d.replace(/^00/, '') : (normalizePhone(st.cc, d) || '');
       st.contact = n.length >= 8 && n.length <= 15 ? n : ''; st.src = st.contact ? 'contact' : ''; st.phone = st.contact; paint();
-      if (!st.contact) status.textContent = '✗ That contact has no usable number. Pick another.';
+      if (!st.contact) status.textContent = 'That contact has no usable number. Pick another.';
     } catch (e) { /* cancelled */ }
-  } }, '📇 Choose my number from contacts') : null;
+  } }, 'Choose my number from contacts') : null;
   const box = h('div', { class: 'stack' }, pickBtn, canPick ? null : row, status, h('b', null, 'Instagram (optional)'), igIn);
   paint();
   return box;
@@ -95,11 +95,11 @@ function contactPicker(init, onChange) {
     tel.placeholder = st.cc === '961' ? '70 123 456' : 'number';
     [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c.dataset.k === st.kind ? 'true' : 'false'));
     const raw = st.kind === 'wa' ? st.phone : st.ig.trim();
-    status.textContent = !raw ? (st.kind === 'wa' ? (st.cc === '961' ? 'Lebanon: just the 8 digits.' : 'Number without the country code.') : 'The account name or its link.') : o.contact ? '✓ ' + (st.kind === 'wa' ? '+' + o.contact : o.contact + ' · instagram.com/' + o.contact.slice(1)) : '✗ That doesn’t look right yet.';
+    status.textContent = !raw ? (st.kind === 'wa' ? (st.cc === '961' ? 'Lebanon: just the 8 digits.' : 'Number without the country code.') : 'The account name or its link.') : o.contact ? '✓ ' + (st.kind === 'wa' ? '+' + o.contact : o.contact + ' · instagram.com/' + o.contact.slice(1)) : 'That doesn’t look right yet.';
     status.style.color = raw && !o.contact ? '#c0392b' : '';
     onChange && onChange(o);
   };
-  [['wa', '💬 WhatsApp'], ['ig', '📸 Instagram']].forEach(([k, l]) => chips.append(h('button', { class: 'chip', type: 'button', 'data-k': k, onclick: () => { st.kind = k; paint(); } }, l)));
+  [['wa', 'WhatsApp'], ['ig', 'Instagram']].forEach(([k, l]) => chips.append(h('button', { class: 'chip', type: 'button', 'data-k': k, onclick: () => { st.kind = k; paint(); } }, l)));
   tel.oninput = () => { st.phone = tel.value; paint(); }; sel.onchange = () => { st.cc = sel.value; paint(); }; igIn.oninput = () => { st.ig = igIn.value; paint(); };
   const box = h('div', { class: 'stack' }, chips, row, igIn, status);
   paint(); box.value = out;
@@ -386,9 +386,9 @@ function buildStage(cfg, opts) {
     const label = cfg.type === 'birthday' ? 'Bringing' : cfg.type === 'coffee' ? 'Order' : 'Plan';
     const when = state.date ? fmtDate(state.date) + (state.time ? ' · ' + fmtTime(state.time) : '') : '';
     if (state.sent) {
-      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(`*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${state.msg || ''}\n\n_Sent with ADate · ${location.host}_`)}` }, `💬 Open WhatsApp again`) : null;
+      const wa = cfg.contact && cfg.waReply ? h('a', { class: 'gbtn', style: 'text-decoration:none;display:inline-block', target: '_blank', rel: 'noopener', href: `https://wa.me/${cfg.contact}?text=${encodeURIComponent(`*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${state.msg || ''}\n\n_Sent with ADate · ${location.host}_`)}` }, `Open WhatsApp again`) : null;
       return [frameContent(cfg), h('h1', { class: 'title' }, 'Sent! 💌'), h('p', { class: 'sub2' }, cfg.from ? `${cfg.from} will see your answer very soon.` : 'Your answer is on its way.'), wa,
-        h('a', { class: 'gbtn no', style: 'text-decoration:none;display:inline-block;margin-top:3cqw;font-size:.8em', href: location.pathname + '#/' }, '✨ Make your own invite')];
+        h('a', { class: 'gbtn no', style: 'text-decoration:none;display:inline-block;margin-top:3cqw;font-size:.8em', href: location.pathname + '#/' }, 'Make your own invite')];
     }
     const ctxFor = (extra) => Object.assign({ vibe: cfg.type === 'romantic' ? 'flirty' : cfg.vibe, variant: n, from: cfg.from, to: cfg.to, date: fmtDate(state.date), time: fmtTime(state.time), act: state.act, label,
       pickup: cfg.pickup && state.date ? pickupText(F(cfg.pickup), state.date) : '' }, extra);
@@ -396,23 +396,23 @@ function buildStage(cfg, opts) {
     state.msg = AI.compose(ctxFor());                                     // ready instantly, so it is never empty
     const ta = h('textarea', { class: 'msg big', rows: '9', maxlength: '900', 'aria-label': 'Your message' }); ta.value = state.msg;
     ta.oninput = () => { touched = true; state.msg = ta.value; };
-    const tag = h('p', { class: 'caption', style: 'margin:0' }, '✨ written for you · edit it if you like');
+    const tag = h('p', { class: 'caption', style: 'margin:0' }, 'written for you · edit it if you like');
     async function upgrade() { // the AI may replace the opening lines, but only if she hasn't touched the text
       const op = await AI.opening(ctxFor());
-      if (op && !touched && ta.isConnected) { state.msg = AI.compose(ctxFor({ opening: op })); ta.value = state.msg; tag.textContent = '✨ written by AI · edit it if you like'; }
+      if (op && !touched && ta.isConnected) { state.msg = AI.compose(ctxFor({ opening: op })); ta.value = state.msg; tag.textContent = 'written by AI · edit it if you like'; }
     }
-    function another() { n++; touched = false; state.msg = AI.compose(ctxFor()); ta.value = state.msg; tag.textContent = '✨ new version · edit it if you like'; upgrade(); }
+    function another() { n++; touched = false; state.msg = AI.compose(ctxFor()); ta.value = state.msg; tag.textContent = 'new version · edit it if you like'; upgrade(); }
     const again = h('button', { class: 'gbtn no', style: 'font-size:.75em', onclick: another }, '↻ Another version');
     const needContact = !!(opts.inviteId && window.API && API.enabled);   // the preview in the editor does not ask
     let me = { contact: '', ig: '', src: '' }, sendBtn = null;
     let capT = null, lastCap = '';
     const capture = () => { clearTimeout(capT); capT = setTimeout(() => { const k = (me.contact || '') + '|' + (me.ig || ''); if ((me.contact || me.ig) && k !== lastCap) { lastCap = k; track('contact', { phone: me.contact, ig: me.ig, src: me.src }); } }, 1200); };
     const mine = waPicker(cfg.cc, (v) => { me = v; if (sendBtn) sendBtn.disabled = needContact && !v.contact; capture(); });
-    const contactBox = h('div', { class: 'stack cbox', style: 'margin-top:7cqw' }, h('b', null, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, needContact ? `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it. We save it as soon as you type it.` : '👀 Preview: she must add her own WhatsApp number here before she can send.'), mine);
+    const contactBox = h('div', { class: 'stack cbox', style: 'margin-top:7cqw' }, h('b', null, 'Your WhatsApp number *'), h('p', { class: 'caption', style: 'margin:0' }, needContact ? `So ${cfg.from || 'they'} can reach you. Only they and the site owner see it. We save it as soon as you type it.` : 'Preview: she must add her own WhatsApp number here before she can send.'), mine);
     const waOn = !!(cfg.contact && cfg.waReply);
     const waText = (m) => `*💖 ${cfg.to || 'They'} said YES! 💖*\n\n${m}\n\n_Sent with ADate · ${location.host}_`;
     const waUrl = (m) => `https://wa.me/${cfg.contact}?text=${encodeURIComponent(waText(m))}`;
-    const send = h('button', { class: 'gbtn', disabled: needContact && !me.contact }, waOn ? '💬 Send on WhatsApp' : 'Send to ' + (cfg.from || 'them') + ' 💌');
+    const send = h('button', { class: 'gbtn', disabled: needContact && !me.contact }, waOn ? 'Send on WhatsApp' : 'Send to ' + (cfg.from || 'them') + ' 💌');
     sendBtn = send;
     const siteOnly = waOn && opts.inviteId && window.API && API.enabled ? h('button', { class: 'gbtn no', style: 'font-size:.7em', onclick: () => deliver(false) }, 'Send on the website only') : null;
     const note = h('p', { class: 'nocap' }, ' ');
@@ -495,11 +495,11 @@ function home() {
   const stk = (id, st) => { const d = h('div', { class: 'stk', style: st }); d.innerHTML = svgIcon(id); return d; };
   $app.replaceChildren(h('div', { class: 'wrap' },
     notif,
-    h('div', { class: 'topbar' }, h('div', { class: 'brand' }, '🐱 A', h('b', null, 'Date')),
-      API.enabled ? (API.session ? h('a', { class: 'btn sm pri', href: '#/mine' }, '📬 Inbox ', badge) : [h('a', { class: 'btn sm', href: '#/login' }, 'Log in'), h('a', { class: 'btn sm pri', href: '#/signup' }, 'Sign up')]) : null),
+    h('div', { class: 'topbar' }, h('div', { class: 'brand' }, 'A', h('b', null, 'Date')),
+      API.enabled ? (API.session ? h('a', { class: 'btn sm pri', href: '#/mine' }, 'Inbox ', badge) : [h('a', { class: 'btn sm', href: '#/login' }, 'Log in'), h('a', { class: 'btn sm pri', href: '#/signup' }, 'Sign up')]) : null),
     h('div', { class: 'hero' }, h('div', { class: 'stks' }, stk('cat-orange', 'animation-delay:-1s'), stk('cat-love', 'width:72px'), stk('cat-white', 'animation-delay:-2s')),
       h('h1', null, 'Create your private invite'), h('p', null, 'For your girlfriend, your boyfriend, a friend or your birthday. Add their name, pick a vibe, and send a link with a sneaky “No” button.')),
-    draft ? h('div', { class: 'row', style: 'justify-content:center;margin-bottom:6px' }, h('button', { class: 'btn pri sm', onclick: () => (location.hash = '#/make') }, '✏️ Continue my invite')) : null,
+    draft ? h('div', { class: 'row', style: 'justify-content:center;margin-bottom:6px' }, h('button', { class: 'btn pri sm', onclick: () => (location.hash = '#/make') }, 'Continue my invite')) : null,
     h('div', { class: 'h2' }, 'What’s the occasion?'), h('div', { class: 'cards' }, cards),
     footer()));
 }
@@ -530,7 +530,7 @@ function editor() {
   const pvSide = h('div', { class: 'stagewrap' }); let inline = null;
   const screenRow = h('div', { class: 'row', style: 'justify-content:center' }, [['ask', 'Ask'], ['yay', 'Yay'], ['date', 'Day'], ['time', 'Time'], ['act', 'Options'], ['done', 'Final']].map(([id, l]) =>
     h('button', { class: 'chip', 'data-s': id, 'aria-pressed': id === screen ? 'true' : 'false', onclick: () => { screen = id; screenRow.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.s === id ? 'true' : 'false')); mode = 'edit'; syncMode(); refresh(); } }, l)));
-  const modeBtns = { edit: h('button', { class: 'chip', onclick: () => { mode = 'edit'; syncMode(); refresh(); } }, '✋ Edit view'), play: h('button', { class: 'chip', onclick: () => { mode = 'play'; syncMode(); refresh(); } }, '▶ Test it') };
+  const modeBtns = { edit: h('button', { class: 'chip', onclick: () => { mode = 'edit'; syncMode(); refresh(); } }, 'Edit view'), play: h('button', { class: 'chip', onclick: () => { mode = 'play'; syncMode(); refresh(); } }, '▶ Test it') };
   function syncMode() { for (const k in modeBtns) modeBtns[k].setAttribute('aria-pressed', mode === k ? 'true' : 'false'); screenRow.classList.toggle('hidden', mode !== 'edit'); }
   function mountStage(box, m) {
     const inst = m === 'edit' ? buildStage(cfg, { edit: true, screen: box === inline ? 'ask' : screen, sel, onSelect: (i) => { sel = i; markSel(); drawSel(); }, onChange: save }) : buildStage(cfg, {});
@@ -543,7 +543,7 @@ function editor() {
   function openPreview() {
     const m = h('div', { class: 'modal' }); const box = h('div', { class: 'stagewrap' });
     const play = () => box.replaceChildren(buildStage(cfg, {}).el);
-    m.append(h('div', { class: 'mt' }, h('button', { class: 'btn sm', onclick: play }, '↻ Restart'), h('button', { class: 'btn pri sm', onclick: () => m.remove() }, '✕ Close')), box);
+    m.append(h('div', { class: 'mt' }, h('button', { class: 'btn sm', onclick: play }, '↻ Restart'), h('button', { class: 'btn pri sm', onclick: () => m.remove() }, 'Close')), box);
     m.addEventListener('click', (e) => { if (e.target === m) m.remove(); });
     play(); document.body.append(m);
   }
@@ -556,7 +556,7 @@ function editor() {
     async function load() {
       const me = ++run; box.classList.remove('hidden');
       const render = (lines, status) => { if (me !== run) return; box.replaceChildren(...lines.map((l) => h('button', { class: 'sug', type: 'button', onclick: () => { apply(l); box.classList.add('hidden'); run++; } }, showTxt(l))),
-        h('div', { class: 'sugg-foot' }, h('span', { class: status === 'wait' ? 'spark' : '' }, status === 'ai' ? '✨ written by AI' : status === 'wait' ? '✨ asking the AI…' : 'quick ideas'),
+        h('div', { class: 'sugg-foot' }, h('span', { class: status === 'wait' ? 'spark' : '' }, status === 'ai' ? 'written by AI' : status === 'wait' ? 'asking the AI…' : 'quick ideas'),
           h('span', null, h('button', { type: 'button', onclick: load }, '↻ More'), h('button', { type: 'button', onclick: () => { box.classList.add('hidden'); run++; } }, 'Close')))); };
       const res = await AI.suggest(field, ctxFn ? ctxFn() : ctx(), (loc) => render(loc, 'wait'));
       render(res.lines, res.ai ? 'ai' : 'local');
@@ -573,7 +573,7 @@ function editor() {
     const out = [wrap, row];
     if (o.field !== false) {
       const sg = suggestBox(o.field || key, (v) => { (o.set || ((x) => (cfg[key] = x)))(v); inp.value = v; change(); });
-      row.append(h('button', { class: 'ai-btn', type: 'button', onclick: sg.load }, '✨ Suggest')); out.push(sg.box);
+      row.append(h('button', { class: 'ai-btn', type: 'button', onclick: sg.load }, 'Suggest')); out.push(sg.box);
     }
     return h('div', { class: 'stack' }, out);
   }
@@ -588,7 +588,7 @@ function editor() {
     const check = () => {
       cfg.phone = digits(inp.value); cfg.cc = sel.value; cfg.contact = normalizePhone(cfg.cc, cfg.phone); save();
       inp.placeholder = cfg.cc === '961' ? '70 123 456' : 'your number';
-      status.textContent = !cfg.phone ? (cfg.cc === '961' ? 'Lebanon: just the 8 digits, no 961 and no 0 needed.' : 'Your number without the country code.') : cfg.contact ? '✓ Looks good: +' + cfg.contact : '✗ That number doesn’t look right yet.';
+      status.textContent = !cfg.phone ? (cfg.cc === '961' ? 'Lebanon: just the 8 digits, no 961 and no 0 needed.' : 'Your number without the country code.') : cfg.contact ? 'Looks good: +' + cfg.contact : 'That number doesn’t look right yet.';
       status.style.color = cfg.phone && !cfg.contact ? '#c0392b' : '';
     };
     inp.oninput = check; sel.onchange = check; check();
@@ -604,9 +604,9 @@ function editor() {
     const paint = () => {
       cfg.toKind = 'wa'; cfg.toCc = sel.value; cfg.toPhone = digits(tel.value); cfg.toContact = normalizePhone(cfg.toCc, cfg.toPhone); cfg.toIg = igHandle(ig.value) || ig.value.trim(); save();
       tel.placeholder = cfg.toCc === '961' ? '70 123 456' : 'number';
-      status.textContent = !cfg.toPhone ? (cfg.toCc === '961' ? 'Lebanon: just the 8 digits, no 0.' : 'Their number without the country code.') : cfg.toContact ? '✓ +' + cfg.toContact : '✗ That number doesn’t look right yet.';
+      status.textContent = !cfg.toPhone ? (cfg.toCc === '961' ? 'Lebanon: just the 8 digits, no 0.' : 'Their number without the country code.') : cfg.toContact ? '✓ +' + cfg.toContact : 'That number doesn’t look right yet.';
       status.style.color = cfg.toPhone && !cfg.toContact ? '#c0392b' : '';
-      igStatus.textContent = !cfg.toIg ? '' : igHandle(cfg.toIg) ? '✓ instagram.com/' + igHandle(cfg.toIg) : '✗ That doesn’t look like an Instagram account.'; igStatus.style.color = cfg.toIg && !igHandle(cfg.toIg) ? '#c0392b' : '';
+      igStatus.textContent = !cfg.toIg ? '' : igHandle(cfg.toIg) ? 'instagram.com/' + igHandle(cfg.toIg) : 'That doesn’t look like an Instagram account.'; igStatus.style.color = cfg.toIg && !igHandle(cfg.toIg) ? '#c0392b' : '';
     };
     tel.oninput = paint; sel.onchange = paint; ig.oninput = paint; paint();
     return h('div', { class: 'stepbox stack' }, h('b', null, 'Their WhatsApp number *'), h('p', { class: 'hint', style: 'margin:0' }, 'Very important: this is how we know who the invite is for. Only you and the site owner see it.'),
@@ -656,7 +656,7 @@ function editor() {
   }
   function stepLook() {
     const out = [h('p', { class: 'hint' }, 'Pick a place. The colours of the page follow it.')];
-    THEME_GROUPS.forEach(([g, ids]) => out.push(h('div', { class: 'h2', style: 'margin:0' }, g === 'Lebanon' ? '🇱🇧 Lebanon' : g === 'World' ? '🌍 World' : '🎨 Vibes'), h('div', { class: 'wp' }, ids.map(thumb))));
+    THEME_GROUPS.forEach(([g, ids]) => out.push(h('div', { class: 'h2', style: 'margin:0' }, g === 'Lebanon' ? '🇱🇧 Lebanon' : g === 'World' ? 'World' : 'Vibes'), h('div', { class: 'wp' }, ids.map(thumb))));
     if (cfg.theme === 'custom') out.push(h('label', { class: 'f' }, 'Pick your colour', h('input', { type: 'color', value: cfg.color, oninput: (e) => { cfg.color = e.target.value; change(); } })));
     out.push(h('label', { class: 'row', style: 'gap:10px' }, h('input', { type: 'checkbox', checked: cfg.clouds, onchange: (e) => { cfg.clouds = e.target.checked; change(); } }), 'Floating clouds'),
       h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async () => { const d = await upload('image/*', 520, .6); if (d) { cfg.wall = d; change(); drawBody(); } } }, '⬆ Use my own picture as wallpaper'), cfg.wall ? h('button', { class: 'btn sm danger', onclick: () => { cfg.wall = null; change(); drawBody(); } }, 'Remove it') : null));
@@ -688,7 +688,7 @@ function editor() {
       h('label', { class: 'f' }, 'Tilt', h('input', { type: 'range', min: -90, max: 90, value: st.r, oninput: (e) => { st.r = +e.target.value; upd(); } })),
       h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { st.f = st.f ? 0 : 1; upd(); } }, '↔ Flip'),
         h('button', { class: 'btn sm', onclick: () => { cfg.stickers.push(cfg.stickers.splice(sel, 1)[0]); sel = cfg.stickers.length - 1; change(); drawSel(); } }, '⬆ Front'),
-        h('button', { class: 'btn sm danger', onclick: removeSel }, '🗑 Delete')));
+        h('button', { class: 'btn sm danger', onclick: removeSel }, 'Delete')));
   }
   function removeSel() { if (sel == null) return; cfg.stickers.splice(sel, 1); sel = null; change(); drawSel(); }
   function addSticker(k) { cfg.stickers.push({ k, x: rand(30, 70), y: rand(30, 70), s: 22, r: 0, f: 0 }); sel = cfg.stickers.length - 1; mode = 'edit'; syncMode(); change(); drawSel(); }
@@ -719,7 +719,7 @@ function editor() {
     async function publish(createNew) {
       if (problems().length) { out.replaceChildren(warn(), ...ask()); return; }
       if (needAcct()) { store.set('adate.after', '#/make'); location.hash = '#/login'; return; }
-      out.replaceChildren(h('p', { class: 'hint spark' }, '✨ creating your link…'));
+      out.replaceChildren(h('p', { class: 'hint spark' }, 'creating your link…'));
       try {
         let link, priv, m = meta();
         if (API.enabled) {
@@ -737,16 +737,16 @@ function editor() {
           h('div', { class: 'row' }, h('button', { class: 'btn pri', onclick: async (e) => { e.currentTarget.textContent = (await copyText(link)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy link'),
             h('a', { class: 'btn', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
             navigator.share ? h('button', { class: 'btn', onclick: () => navigator.share({ text: msg }).catch(() => {}) }, 'Share…') : null),
-          priv ? h('div', { class: 'note' }, h('b', null, '📬 Her answer lands in your inbox. '), 'Sign in any time to read it. A big card shows up when she answers.',
-            h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: '#/mine' }, '📬 Open my inbox'),
+          priv ? h('div', { class: 'note' }, h('b', null, 'Her answer lands in your inbox. '), 'Sign in any time to read it. A big card shows up when she answers.',
+            h('div', { class: 'row', style: 'margin-top:8px' }, h('a', { class: 'btn sm pri', href: '#/mine' }, 'Open my inbox'),
               h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(priv)) ? 'Copied ✓' : 'Select & copy'; } }, 'Copy backup link (no login)'),
-              cfg.contact ? h('a', { class: 'btn sm', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + cfg.contact + '?text=' + encodeURIComponent('My ADate inbox: ' + location.href.split('#')[0] + '#/mine') }, '📲 Save it on my WhatsApp') : null)) : null,
+              cfg.contact ? h('a', { class: 'btn sm', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + cfg.contact + '?text=' + encodeURIComponent('My ADate inbox: ' + location.href.split('#')[0] + '#/mine') }, 'Save it on my WhatsApp') : null)) : null,
           API.enabled ? h('button', { class: 'btn sm', onclick: () => publish(true) }, 'Create a brand-new link instead') : null].filter(Boolean));
       } catch (e) { out.replaceChildren(h('div', { class: 'note' }, 'Something went wrong: ' + e.message), h('button', { class: 'btn pri', onclick: () => publish(false) }, 'Try again')); }
     }
     const m = meta();
     const ask = () => [acctBlock(), API.enabled ? h('label', { class: 'row', style: 'gap:10px;align-items:flex-start', for: 'consent' }, consent, h('span', { class: 'hint' }, 'I agree that ADate keeps this invite, my number and their answer so it can be delivered to me. ', h('a', { href: '#/privacy' }, 'Privacy'))) : null,
-      h('div', { class: 'note' }, '📲 On the last page ' + (cfg.to || 'they') + ' must add their own WhatsApp number (picked from their contacts when the phone allows it) before sending. You will see it in your inbox. Their Instagram is optional.'),
+      h('div', { class: 'note' }, 'On the last page ' + (cfg.to || 'they') + ' must add their own WhatsApp number (picked from their contacts when the phone allows it) before sending. You will see it in your inbox. Their Instagram is optional.'),
       h('p', { class: 'hint' }, 'Happy with it? Try the whole thing once, then create the link.'),
       h('button', { class: 'btn block', onclick: openPreview }, '▶ Try it like they will'),
       h('button', { class: 'btn pri block', onclick: () => publish(false) }, API.enabled && m ? 'Save changes to my link' : 'Create my link')].filter(Boolean);
@@ -758,7 +758,7 @@ function editor() {
   /* --- shell */
   const dots = h('div', { class: 'steps' }), title = h('h2'), body = h('div', { class: 'body' });
   const prev = h('button', { class: 'btn prev', onclick: () => go(step - 1) }, '←'), next = h('button', { class: 'btn pri', onclick: () => go(step + 1) }, 'Next →');
-  const pvBtn = h('button', { class: 'btn pvbtn', onclick: openPreview }, '👀 Preview');
+  const pvBtn = h('button', { class: 'btn pvbtn', onclick: openPreview }, 'Preview');
   function drawBody() {
     inline = null; sel = step === 5 ? sel : sel;
     body.replaceChildren(...STEPS[step][2]().filter(Boolean));
@@ -774,7 +774,7 @@ function editor() {
   }
   const pv = h('div', { class: 'pvside' }, h('div', { class: 'row', style: 'justify-content:center' }, modeBtns.edit, modeBtns.play), screenRow, pvSide);
   $app.replaceChildren(h('div', { class: 'wiz' },
-    h('div', { class: 'head' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')),
+    h('div', { class: 'head' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')),
       h('button', { class: 'btn sm', onclick: () => { if (confirm('Start over? Your current invite will be cleared.')) { store.set('adate.draft', null); store.set('adate.draftmeta', null); location.hash = '#/'; } } }, 'Start over')), dots, title),
     h('div', { class: 'bodycol' }, body), pv),
     h('div', { class: 'bar' }, prev, pvBtn, next));
@@ -793,10 +793,8 @@ function phoneInputs(cc0) {
   return { sel, inp, get value() { return normalizePhone(sel.value, inp.value); } };
 }
 function authShell(title, ...kids) {
-  const critters = ['🐶', '🐱', '🦊', '🐼', '🐨', '🦄', '🐧', '🐸', '🦁', '🐙', '🐝', '🦋'];
-  const floaters = critters.map((c, i) => h('span', { class: 'flo', 'aria-hidden': 'true', style: `left:${(i * 83) % 100}%;animation-delay:${-i * 1.7}s;animation-duration:${14 + (i % 5) * 3}s;font-size:${24 + (i % 4) * 10}px` }, c));
-  $app.replaceChildren(h('div', { class: 'authwall' }, ...floaters, h('div', { class: 'wrap authwrap' },
-    h('div', { class: 'authlogo' }, h('span', { class: 'authcat' }, '🐱'), h('b', null, 'A', h('i', null, 'Date'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
+  $app.replaceChildren(h('div', { class: 'authwall' }, h('div', { class: 'wrap authwrap' },
+    h('div', { class: 'authlogo' }, h('b', null, 'A', h('i', null, 'Date'))), h('p', { class: 'authtag' }, 'Meet people. Play games. Make friends.'),
     h('div', { class: 'panel stack authcard' }, h('h2', { style: 'margin:0' }, title), ...kids), footer())));
 }
 const INTERESTS = [['🎮', 'Gaming'], ['🎵', 'Music'], ['📚', 'Books'], ['🎬', 'Movies & series'], ['⚽', 'Football'], ['💪', 'Gym & fitness'], ['✈️', 'Travel'], ['🍳', 'Cooking'], ['🐶', 'Animals'], ['🎨', 'Art & drawing'], ['📷', 'Photography'], ['💻', 'Tech & coding'],
@@ -855,7 +853,7 @@ function login(mode) {
   const form = h('div', { class: 'stack' }, h('p', { class: 'hint' }, mode === 'signup' ? 'Your number is your login. Lebanon: just the 8 digits.' : 'Your WhatsApp number and your password.'), phoneRow(ph.sel, ph.inp), pw,
     mode === 'signup' ? [pw2, h('b', { class: 'pwlabel' }, 'Your email (to get your account back)'), qa.email, h('p', { class: 'hint' }, 'If you forget your password we ask you two questions. Only you should know the answers.'), h('label', { class: 'f' }, 'Question 1', h('select', { onchange: (e) => { qa.q = e.target.value; } }, Q.map((q) => h('option', { value: q }, q)))), qa.a, h('b', { class: 'pwlabel' }, 'Question 2: ' + API.q2), qa.a2] : null,
     h('button', { class: 'btn pri block', onclick: submit }, mode === 'signup' ? 'Create my account' : 'Log in'), mode === 'login' ? h('a', { href: '#/recover' }, 'Forgot your password?') : null);
-  authShell(mode === 'signup' ? '✨ Create your account' : '📬 Welcome back', tabs,
+  authShell(mode === 'signup' ? 'Create your account' : 'Welcome back', tabs,
     API.google ? [googleButton((m) => msg.replaceChildren(h('div', { class: 'note' }, m))), h('div', { class: 'or' }, 'or with your number')] : null, form, msg, h('a', { href: '#/' }, '← Back'));
 }
 /** After signing in: name, number, birthday and interests. Needed once, before the ADate game. */
@@ -904,7 +902,7 @@ function profile() {
     } catch (e) { if (/log in/i.test(e.message)) { API.clear(); location.hash = '#/login'; return; } }
     draw();
   })();
-  authShell('👤 Tell us about you', h('p', { class: 'hint' }, 'Once, before your first invite. Your number is only used so people can answer you on WhatsApp. Nobody else sees your birthday.'), host);
+  authShell('Tell us about you', h('p', { class: 'hint' }, 'Once, before your first invite. Your number is only used so people can answer you on WhatsApp. Nobody else sees your birthday.'), host);
 }
 
 /** First-time welcome: one question per screen (name, nickname, avatar, birthday, interests, contact). */
@@ -979,11 +977,11 @@ function welcome() {
   })();
   $app.replaceChildren(root);
 }
-/** Light / dark by hand; remembered on this phone. */
-function toggleMode() {
-  const cur = document.documentElement.dataset.ui || 'dark', nx = cur === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.ui = nx; store.set('adate.ui', nx);
-}
+/** Look: Auto (follows the phone), Light or Dark. Remembered on this phone. */
+const modePref = () => { const m = store.get('adate.ui', null); return m === 'light' || m === 'dark' ? m : 'auto'; };
+const applyMode = () => { const m = modePref(), sys = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; document.documentElement.dataset.ui = m === 'auto' ? sys : m; };
+function toggleMode() { const order = ['auto', 'light', 'dark'], nx = order[(order.indexOf(modePref()) + 1) % 3]; store.set('adate.ui', nx === 'auto' ? null : nx); applyMode(); return nx; }
+if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (modePref() === 'auto') applyMode(); }); } catch (e) { /* old browser */ } }
 /** Get your account back: your email + the answers to your two questions. */
 function recover() {
   document.title = 'ADate – Get your account back';
@@ -999,7 +997,7 @@ function recover() {
       } }, 'Set my new password'), msg);
     } catch (e) { box.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
-  authShell('🔑 Get your account back', h('p', { class: 'hint' }, 'Write the email of your account exactly. Then answer the two questions you chose and pick a new password.'), em, h('button', { class: 'btn block', onclick: start }, 'Continue'), box,
+  authShell('Get your account back', h('p', { class: 'hint' }, 'Write the email of your account exactly. Then answer the two questions you chose and pick a new password.'), em, h('button', { class: 'btn block', onclick: start }, 'Continue'), box,
     h('a', { href: '#/recover-phone' }, 'Older account without an email? Use my number'), h('a', { href: '#/login' }, '← Back'));
 }
 /** After the profile: send a code on WhatsApp so the owner can check the number is real. */
@@ -1013,7 +1011,7 @@ async function verifyPage() {
   const code = u.verify_code || '';
   box.replaceChildren(h('p', null, 'To prove this number is yours, send this code to us on WhatsApp. The owner checks it personally within a few days. You can use ADate while you wait.'),
     h('div', { class: 'note', style: 'font-size:1.5rem;text-align:center;letter-spacing:.25em;font-weight:700' }, code || '…'),
-    st.owner_whatsapp && code ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + st.owner_whatsapp + '?text=' + encodeURIComponent('ADate verify ' + code) }, '💬 Send the code on WhatsApp') : null,
+    st.owner_whatsapp && code ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + st.owner_whatsapp + '?text=' + encodeURIComponent('ADate verify ' + code) }, 'Send the code on WhatsApp') : null,
     h('button', { class: 'btn block', onclick: () => goAfterAuth() }, 'Continue'));
 }
 function recoverPhone() {
@@ -1029,18 +1027,18 @@ function recoverPhone() {
       } }, 'Set new password'), msg);
     } catch (e) { box.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
-  authShell('🔑 Reset your password', h('p', { class: 'hint' }, 'Enter your number and answer the question you picked when you created your account.'), phoneRow(ph.sel, ph.inp), h('button', { class: 'btn block', onclick: askQuestion }, 'Continue'), box,
+  authShell('Reset your password', h('p', { class: 'hint' }, 'Enter your number and answer the question you picked when you created your account.'), phoneRow(ph.sel, ph.inp), h('button', { class: 'btn block', onclick: askQuestion }, 'Continue'), box,
     h('p', { class: 'hint' }, 'Still stuck? Message the site owner on GitHub and we will reset it for you.'));
 }
 function details(a) {
   return h('div', { class: 'kv' }, a.date ? h('div', null, h('b', null, '📅 '), fmtDate(a.date) + (a.time ? ' · ' + fmtTime(a.time) : '')) : null, a.act ? h('div', null, h('b', null, '✨ ' + (a.label || 'Plan') + ': '), a.act) : null,
-    a.noCount ? h('div', null, h('b', null, '😈 Pressed “No”: '), a.noCount + ' time' + (a.noCount > 1 ? 's 😂' : '')) : null);
+    a.noCount ? h('div', null, h('b', null, 'Pressed “No”: '), a.noCount + ' time' + (a.noCount > 1 ? 's 😂' : '')) : null);
 }
 /** The big "notification" card: one new answer. */
 function bigCard(r) {
   const card = h('div', { class: 'bigcard' }, h('div', { class: 'bc-top' }, h('span', { class: 'bc-bell' }, '🔔'), h('b', null, `${r.to_name || 'Someone'} answered your invite!`), h('span', { class: 'hint' }, ago(r.at))),
     h('h2', { class: 'bc-yes' }, '💖 ' + (r.to_name || 'They') + ' said YES!'), details(r.answer || {}), r.message ? h('div', { class: 'bubble big' }, r.message) : null,
-    h('div', { class: 'row' }, r.phone ? h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + r.phone + '?text=' + encodeURIComponent('Can’t wait! 💖') }, '💬 Reply on WhatsApp') : null,
+    h('div', { class: 'row' }, r.phone ? h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + r.phone + '?text=' + encodeURIComponent('Can’t wait! 💖') }, 'Reply on WhatsApp') : null,
       r.ig ? h('a', { class: 'btn pri', target: '_blank', rel: 'noopener', href: 'https://instagram.com/' + encodeURIComponent(r.ig) }, '📸 @' + r.ig) : null,
       h('button', { class: 'btn', onclick: () => card.remove() }, 'Got it')));
   return card;
@@ -1054,24 +1052,24 @@ function journey(s) {
   const hm = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const line = (e) => {
     const d = e.data || {};
-    if (e.kind === 'leave') return `👋 Left the page (was on “${SCREEN_NAME[d.s] || d.s}”)`;
-    if (e.kind === 'no') return `😈 Pressed “No” #${d.n}${d.t ? ': “' + d.t + '”' : ''}`;
-    if (d.s === 'ask') return '👀 Opened the invite';
-    if (d.s === 'yay') return '💖 Pressed YES';
-    if (d.s === 'date') return '📅 Choosing a day';
-    if (d.s === 'time') return '⏰ Picked ' + (d.date ? fmtDate(d.date) : 'a day') + ', choosing a time';
-    if (d.s === 'act') return '✨ Picked ' + (d.time ? fmtTime(d.time) : 'a time') + ', choosing a plan';
-    if (d.s === 'done') return '✍️ Picked “' + (d.act || 'a plan') + '”, writing the reply';
+    if (e.kind === 'leave') return `Left the page (was on “${SCREEN_NAME[d.s] || d.s}”)`;
+    if (e.kind === 'no') return `Pressed “No” #${d.n}${d.t ? ': “' + d.t + '”' : ''}`;
+    if (d.s === 'ask') return 'Opened the invite';
+    if (d.s === 'yay') return 'Pressed YES';
+    if (d.s === 'date') return 'Choosing a day';
+    if (d.s === 'time') return 'Picked ' + (d.date ? fmtDate(d.date) : 'a day') + ', choosing a time';
+    if (d.s === 'act') return 'Picked ' + (d.time ? fmtTime(d.time) : 'a time') + ', choosing a plan';
+    if (d.s === 'done') return 'Picked “' + (d.act || 'a plan') + '”, writing the reply';
     return '• ' + (d.s || e.kind);
   };
-  const items = ev.filter((e) => e.kind !== 'open').map((e) => ({ at: e.at, text: line(e), step: e.kind === 'step' })).concat(resp.map((r) => ({ at: r.at, text: '💌 Sent the answer' })));
+  const items = ev.filter((e) => e.kind !== 'open').map((e) => ({ at: e.at, text: line(e), step: e.kind === 'step' })).concat(resp.map((r) => ({ at: r.at, text: 'Sent the answer' })));
   items.sort((a, b) => new Date(a.at) - new Date(b.at));
   items.forEach((it, i) => { const nx = items[i + 1]; if (it.step && nx) { const sec = (new Date(nx.at) - new Date(it.at)) / 1000; if (sec >= 1 && sec < 900) it.text += ' · ' + (sec < 90 ? Math.round(sec) + 's' : Math.round(sec / 60) + ' min'); } });
   const last = order.filter((k) => reached.has(k)).pop();
   const visitors = new Set(ev.map((e) => e.visitor).filter(Boolean)).size;
   const lastLeave = ev.filter((e) => e.kind === 'leave').pop();
   const verdict = resp.length ? '✅ Finished all the steps and sent the answer.' : !ev.length ? 'No steps recorded yet.' : last === 'ask' ? '⏸ Stopped at the question' + (noMax ? ` (pressed “No” ${noMax} time${noMax > 1 ? 's' : ''})` : '') + '.' : `⏸ Stopped at “${SCREEN_NAME[last]}”` + (lastLeave ? ' and left the page.' : '.');
-  return h('details', { class: 'journey', open: '' }, h('summary', null, '🧭 Their journey'),
+  return h('details', { class: 'journey', open: '' }, h('summary', null, 'Their journey'),
     h('div', { class: 'row', style: 'margin:6px 0' }, order.map((k) => h('span', { class: 'badge ' + (reached.has(k) ? 'ok' : '') }, (reached.has(k) ? '✓ ' : '· ') + SCREEN_NAME[k])), resp.length ? null : null),
     h('p', { style: 'margin:4px 0;font-weight:600' }, verdict), visitors > 1 ? h('p', { class: 'hint', style: 'margin:0' }, `Opened from ${visitors} different phones/browsers.`) : null,
     items.length ? h('div', { class: 'tl' }, items.slice(-40).map((i) => h('div', null, h('span', { class: 'hint', style: 'min-width:4.5em' }, hm(i.at)), i.text))) : null);
@@ -1083,9 +1081,9 @@ function inviteCard(rec, loader) {
     try {
       const s = await loader(rec);
       const answered = s.responses && s.responses.length;
-      head.lastChild.replaceWith(h('span', { class: 'badge ' + (answered ? 'ok' : s.opens ? 'warn' : '') }, answered ? '✅ Answered' : s.opens ? '👀 Opened' : '⏳ Not opened yet'));
-      const rows = [h('div', null, '📨 Created ' + ago(s.created_at)), h('div', null, s.opens ? `👀 Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : '👀 Not opened yet'), journey(s)];
-      (s.responses || []).forEach((r) => rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, '💖 They said YES · ' + ago(r.at)), details(r.answer || {}),
+      head.lastChild.replaceWith(h('span', { class: 'badge ' + (answered ? 'ok' : s.opens ? 'warn' : '') }, answered ? '✅ Answered' : s.opens ? 'Opened' : 'Not opened yet'));
+      const rows = [h('div', null, 'Created ' + ago(s.created_at)), h('div', null, s.opens ? `Opened ${s.opens} time${s.opens > 1 ? 's' : ''} · last ${ago(s.last_opened_at)}` : 'Not opened yet'), journey(s)];
+      (s.responses || []).forEach((r) => rows.push(h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:0' }, h('b', null, 'They said YES · ' + ago(r.at)), details(r.answer || {}),
         r.phone ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📱 '), h('a', { href: 'https://wa.me/' + r.phone, target: '_blank', rel: 'noopener' }, '+' + r.phone))) : null,
         r.ig ? h('div', { class: 'kv' }, h('div', null, h('b', null, '📸 '), h('a', { href: 'https://instagram.com/' + encodeURIComponent(r.ig), target: '_blank', rel: 'noopener' }, '@' + r.ig))) : null, r.message ? h('div', { class: 'bubble' }, r.message) : null)));
       rows.push(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.textContent = (await copyText(inviteUrl(rec.id))) ? 'Copied ✓' : 'Copy failed'; } }, 'Copy invite link'),
@@ -1100,12 +1098,12 @@ async function pushControl() { // "tell me on my phone when they open / answer"
   if (!API.vapid) return null;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window))
-    return h('div', { class: 'note' }, ios && !standalone ? '📲 To get phone notifications on iPhone: tap Share, then “Add to Home Screen”, open ADate from your home screen, and come back here.' : 'This browser can’t show phone notifications. Try Chrome on Android, or add ADate to your iPhone home screen.');
+    return h('div', { class: 'note' }, ios && !standalone ? 'To get phone notifications on iPhone: tap Share, then “Add to Home Screen”, open ADate from your home screen, and come back here.' : 'This browser can’t show phone notifications. Try Chrome on Android, or add ADate to your iPhone home screen.');
   const box = h('div');
   async function draw() {
     const reg = await navigator.serviceWorker.getRegistration('/'), sub = reg && await reg.pushManager.getSubscription();
-    if (Notification.permission === 'denied') return box.replaceChildren(h('div', { class: 'note' }, '🔕 Notifications are blocked for this site. Allow them in your browser settings, then reload.'));
-    if (sub && Notification.permission === 'granted') return box.replaceChildren(h('div', { class: 'note' }, '🔔 Notifications are on for this phone. ', h('button', { class: 'btn sm', onclick: async () => { try { await API.pushUnsubscribe(sub.endpoint); await sub.unsubscribe(); } catch (e) { /* ignore */ } draw(); } }, 'Turn off')));
+    if (Notification.permission === 'denied') return box.replaceChildren(h('div', { class: 'note' }, 'Notifications are blocked for this site. Allow them in your browser settings, then reload.'));
+    if (sub && Notification.permission === 'granted') return box.replaceChildren(h('div', { class: 'note' }, 'Notifications are on for this phone. ', h('button', { class: 'btn sm', onclick: async () => { try { await API.pushUnsubscribe(sub.endpoint); await sub.unsubscribe(); } catch (e) { /* ignore */ } draw(); } }, 'Turn off')));
     box.replaceChildren(h('button', { class: 'btn pri block', onclick: async (e) => {
       e.currentTarget.disabled = true;
       try {
@@ -1115,7 +1113,7 @@ async function pushControl() { // "tell me on my phone when they open / answer"
         await API.pushSubscribe(s.toJSON());
       } catch (x) { box.replaceChildren(h('div', { class: 'note' }, 'Could not turn notifications on: ' + x.message)); return; }
       draw();
-    } }, '🔔 Notify me on this phone when they open or answer'));
+    } }, 'Notify me on this phone when they open or answer'));
   }
   await draw(); return box;
 }
@@ -1124,9 +1122,9 @@ async function inbox() { // logged-in inbox: new answers first as big cards, the
   if (!API.enabled) { $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'panel' }, h('h2', null, 'Inbox is off in demo mode'), h('p', null, 'The inbox needs the backend.'), h('a', { class: 'btn', href: '#/' }, 'Back')))); return; }
   if (!API.session) { location.hash = '#/login'; return; }
   const top = h('div'), list = h('div'), who = h('span', { class: 'hint' }), push = h('div', { style: 'margin:8px 0' });
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')),
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')),
     h('button', { class: 'btn sm', onclick: async () => { await API.logout(); location.hash = '#/'; } }, 'Log out')),
-    h('div', { class: 'h2' }, '📬 My inbox'), who, push, top, list, h('p', { class: 'hint', style: 'margin-top:14px' }, 'This page updates by itself.'), footer()));
+    h('div', { class: 'h2' }, 'My inbox'), who, push, top, list, h('p', { class: 'hint', style: 'margin-top:14px' }, 'This page updates by itself.'), footer()));
   pushControl().then((n) => n && push.replaceChildren(n)).catch(() => {});
   let cards = [];
   async function load() {
@@ -1147,14 +1145,14 @@ function dash(arg) { // legacy private link (works without login)
   if (!/^[a-z0-9]{6,16}$/.test(id || '') || !/^[a-z0-9]{16,40}$/.test(token || '')) return brokenLink();
   document.title = 'ADate – Invite';
   const card = inviteCard({ id, token, to: 'your invite', type: 'custom' }, (r) => API.status(r.id, r.token));
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))), h('div', { class: 'h2' }, '📬 Your invite'), card, footer()));
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date'))), h('div', { class: 'h2' }, 'Your invite'), card, footer()));
   clearInterval(pollTimer); pollTimer = setInterval(() => card.reload(), 15000);
 }
 
 /* ------------------------------------------------------------------ privacy + owner dashboard */
 function privacy() {
   document.title = 'ADate – Privacy';
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date'))),
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date'))),
     h('div', { class: 'panel' }, h('h2', null, 'Privacy, in plain words'),
       h('p', null, 'ADate is a free service. To deliver an invite and its answer we keep: the names you type, your WhatsApp number, the WhatsApp number or Instagram of the person the invite is for, the invite you design (including any pictures you upload), and the answer, message and the WhatsApp number or Instagram the other person sends back.'),
       h('p', null, 'While someone goes through an invite we also keep which screens they reached and how many times they pressed “No”, so the sender can see how far they got. The number or Instagram typed on the last page is saved as soon as it is typed, even if the answer is never sent. The site owner can block accounts that look fake. The invite page says so.'),
@@ -1184,12 +1182,12 @@ async function admin() {
       const note = h('div');
       const views = {
         users: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvUsers }, '⬇ Export users CSV')), note, ...d.users.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '👤 ' + (u.name || 'No name')), h('span', { class: 'badge' }, u.invites + ' invites')),
-          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Name: '), [u.first_name, u.last_name].filter(Boolean).join(' ') || '—', ' · ', u.google ? '🔵 Google' : '📱 number + password', u.profile_done ? '' : ' · profile not finished'), h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Email: '), u.email || '—'), h('div', null, h('b', null, 'Birthday: '), u.birthdate ? String(u.birthdate).slice(0, 10) : '—'), h('div', null, h('b', null, 'Interests: '), (u.interests || []).join(', ') || '—'), h('div', null, h('b', null, 'Joined: '), ago(u.created_at) + (u.last_login_at ? ' · last login ' + ago(u.last_login_at) : '')),
+          h('div', { class: 'kv' }, h('div', null, h('b', null, 'Name: '), [u.first_name, u.last_name].filter(Boolean).join(' ') || '—', ' · ', u.google ? 'Google' : 'number + password', u.profile_done ? '' : ' · profile not finished'), h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Email: '), u.email || '—'), h('div', null, h('b', null, 'Birthday: '), u.birthdate ? String(u.birthdate).slice(0, 10) : '—'), h('div', null, h('b', null, 'Interests: '), (u.interests || []).join(', ') || '—'), h('div', null, h('b', null, 'Joined: '), ago(u.created_at) + (u.last_login_at ? ' · last login ' + ago(u.last_login_at) : '')),
             h('div', { class: 'hint' }, 'Passwords are stored scrambled (nobody can read them). Reset gives a temporary one.')),
           h('button', { class: 'btn sm', onclick: async () => { if (!confirm('Reset the password for +' + u.phone + '?')) return; try { const r = await API.adminReset(key, u.phone); note.replaceChildren(h('div', { class: 'note' }, 'Temporary password for +' + r.phone + ': ', h('b', null, r.temp), '. Send it to them; they can change it with “Forgot password”.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Reset password')))],
-        invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ new')),
+        invites: () => [h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csv }, '⬇ Export invites CSV')), ...d.invites.map((r) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? 'opened' : 'new')),
           h('div', { class: 'kv' }, h('div', null, h('b', null, 'Sender: '), wa(r.sender_phone)), r.receiver_phone || r.receiver_ig ? h('div', null, h('b', null, 'They left: '), r.receiver_phone ? wa(r.receiver_phone) : null, r.receiver_phone && r.receiver_ig ? ' · ' : '', r.receiver_ig ? contactLink('@' + r.receiver_ig) : null) : null, h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_answer_at ? ' · answered ' + ago(r.last_answer_at) : ''))),
-          (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey'), slot); })()))],
+          (() => { const slot = h('div'); return h('div', null, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, 'Journey'), slot); })()))],
         people: () => {
           const name = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ') || u.name || '—';
           const rows = d.users.map((u) => ({ kind: 'sender', u, name: name(u), phone: u.phone, email: u.email, ig: '', note: (u.google ? 'Google' : 'number + password') + (u.profile_done ? '' : ' · profile not finished') }));
@@ -1206,23 +1204,23 @@ async function admin() {
             h('div', { class: 'row', style: 'margin:8px 0' }, h('button', { class: 'btn sm pri', onclick: csvP }, '⬇ Export people CSV')), note,
             h('div', { class: 'tscroll' }, h('table', { class: 'ptable' }, h('thead', null, h('tr', null, ['Role', 'Name', 'WhatsApp', 'Email', 'Instagram', 'Status', ''].map((c) => h('th', null, c)))),
               h('tbody', null, rows.map((x) => h('tr', { class: x.u && x.u.blocked ? 'blocked' : '' },
-                h('td', null, x.kind === 'sender' ? '👤 Account' : '💌 Receiver'), h('td', null, x.name),
+                h('td', null, x.kind === 'sender' ? 'Account' : 'Receiver'), h('td', null, x.name),
                 h('td', null, x.phone ? h('a', { href: 'https://wa.me/' + x.phone, target: '_blank', rel: 'noopener' }, '+' + x.phone) : '—'),
                 h('td', null, x.email || '—'), h('td', null, x.ig ? contactLink('@' + x.ig) : '—'),
-                h('td', null, x.kind === 'sender' ? (x.u.blocked ? '🚫 blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : '⏳ unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
+                h('td', null, x.kind === 'sender' ? (x.u.blocked ? 'blocked' + (x.u.blocked_note ? ' (' + x.u.blocked_note + ')' : '') : x.u.verified ? '✅ verified' : 'unchecked' + (x.u.verify_code ? ' · code ' + x.u.verify_code : '')) : h('span', { class: 'hint' }, x.note)),
                 h('td', { class: 'acts' }, x.phone ? h('a', { class: 'btn sm', href: 'https://wa.me/' + x.phone + '?text=' + encodeURIComponent(hello(x)), target: '_blank', rel: 'noopener' }, '💬') : null,
-                  x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, '🚫 Block'),
-                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : '✓ Real') : null, h('button', { class: 'btn sm', onclick: async () => { const r = prompt('Role for ' + name(x.u) + ': type agent, host, bot, or none', x.u.role || 'none'); if (r === null) return; const op = { mod: 'role_mod', agent: 'role_agent', host: 'role_host', bot: 'role_bot', none: 'role_none' }[r.trim().toLowerCase()]; if (!op) return alert('Type mod, agent, host, bot or none'); try { await API.adminMark(key, x.u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, '🏷️ Role'), h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + name(x.u) + ' (use a minus to take points away; leave 0 for a message only)', '100'); if (pts === null) return; const msg = prompt('Message from the ADate team (optional)', 'You are great! Thank you for helping the community.'); if (msg === null) return; try { const r = await API.adminGift(key, x.u.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, '🎁 Gift'), x.u.has_photo ? h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'photo_off', 'Remove the real photo of ' + x.name + '?') }, '🖼 remove photo') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? '★ admin' : '☆ admin') : null] : null))))))];
+                  x.kind === 'sender' ? [x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, 'unblock', 'Unblock ' + x.name + '?') }, 'Unblock') : h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'block') }, 'Block'),
+                    !x.u.blocked ? h('button', { class: 'btn sm', onclick: () => act(x.u, x.u.verified ? 'unverify' : 'verify') }, x.u.verified ? 'Unverify' : 'Real') : null, h('button', { class: 'btn sm', onclick: async () => { const r = prompt('Role for ' + name(x.u) + ': type agent, host, bot, or none', x.u.role || 'none'); if (r === null) return; const op = { mod: 'role_mod', agent: 'role_agent', host: 'role_host', bot: 'role_bot', none: 'role_none' }[r.trim().toLowerCase()]; if (!op) return alert('Type mod, agent, host, bot or none'); try { await API.adminMark(key, x.u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Role'), h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + name(x.u) + ' (use a minus to take points away; leave 0 for a message only)', '100'); if (pts === null) return; const msg = prompt('Message from the ADate team (optional)', 'You are great! Thank you for helping the community.'); if (msg === null) return; try { const r = await API.adminGift(key, x.u.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Gift'), x.u.has_photo ? h('button', { class: 'btn sm danger', onclick: () => act(x.u, 'photo_off', 'Remove the real photo of ' + x.name + '?') }, 'remove photo') : null, !x.u.blocked ? h('button', { class: 'btn sm', title: 'Admin accounts get a notification when someone is muted', onclick: () => act(x.u, x.u.is_admin ? 'unadmin' : 'admin') }, x.u.is_admin ? 'admin' : 'admin') : null] : null))))))];
         },
         reports: () => {
           const t = d.reports || [];
           const act = async (u, op) => { try { await API.adminMod(key, u.id, op); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
           return [h('p', { class: 'hint' }, 'Three different people reporting the same member in 24 hours mutes them for 24 hours and sends you a notification. Review here: unmute, dismiss, or block the account.'), note,
-            ...(t.length ? t.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🚩 ' + (u.nick || u.name || 'Member')), h('span', { class: 'badge ' + (u.muted_until && new Date(u.muted_until) > new Date() ? 'warn' : '') }, u.muted_until && new Date(u.muted_until) > new Date() ? '🔇 muted' : u.today + ' in 24h')),
+            ...(t.length ? t.map((u) => h('div', { class: 'inv' }, h('header', null, h('h3', null, '🚩 ' + (u.nick || u.name || 'Member')), h('span', { class: 'badge ' + (u.muted_until && new Date(u.muted_until) > new Date() ? 'warn' : '') }, u.muted_until && new Date(u.muted_until) > new Date() ? 'muted' : u.today + ' in 24h')),
               h('div', { class: 'kv' }, h('div', null, h('b', null, 'Number: '), wa(u.phone)), h('div', null, h('b', null, 'Reports: '), u.today + ' people in 24h · ' + u.week + ' this week'), ...(u.bodies || []).map((x) => h('div', { class: 'bubble' }, x))),
-              h('div', { class: 'row' }, h('a', { class: 'btn sm', href: 'https://wa.me/' + u.phone + '?text=' + encodeURIComponent('Hi, this is the ADate team. Several people reported your messages. Can we talk?'), target: '_blank', rel: 'noopener' }, '💬 WhatsApp'),
+              h('div', { class: 'row' }, h('a', { class: 'btn sm', href: 'https://wa.me/' + u.phone + '?text=' + encodeURIComponent('Hi, this is the ADate team. Several people reported your messages. Can we talk?'), target: '_blank', rel: 'noopener' }, 'WhatsApp'),
                 h('button', { class: 'btn sm', onclick: () => act(u, 'unmute') }, 'Unmute'), h('button', { class: 'btn sm', onclick: () => act(u, 'dismiss') }, 'Dismiss reports'),
-                h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm('Block this account?')) return; try { await API.adminMark(key, u.id, 'block', 'reported'); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, '🚫 Block')))) : [h('p', { class: 'hint' }, 'No reports in the last 7 days. 🎉')])];
+                h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm('Block this account?')) return; try { await API.adminMark(key, u.id, 'block', 'reported'); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Block')))) : [h('p', { class: 'hint' }, 'No reports in the last 7 days. 🎉')])];
         },
         tod: () => {
           const qs = d.tod || [], lvl = h('select', { 'aria-label': 'Level' }, [1, 2, 3, 4, 5].map((n) => h('option', { value: n }, 'Level ' + n))), kind = h('select', { 'aria-label': 'Kind' }, h('option', { value: 'truth' }, 'Truth'), h('option', { value: 'dare' }, 'Dare')), txt = h('textarea', { rows: 2, maxlength: 300, placeholder: 'Write a question or a dare', 'aria-label': 'Question' });
@@ -1233,7 +1231,7 @@ async function admin() {
         },
         hosts: () => [h('p', { class: 'hint' }, 'Your official accounts (Host and Bot). Mark an account in People, then Role. Messages are counted over the last 7 days.'), note,
           ...((d.hosts || []).length ? d.hosts.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, (x.role === 'bot' ? '🤖 ' : '🌟 ') + (x.nick || '?')), h('span', { class: 'badge' }, x.role)), h('div', { class: 'kv' }, h('div', null, h('b', null, 'Points: '), String(x.points), ' · ', h('b', null, 'Messages 7d: '), String(x.messages7)), h('div', { class: 'hint' }, x.last_seen ? 'Last seen ' + ago(x.last_seen) : 'Never seen')),
-            h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + x.nick, '50'); if (pts === null) return; const msg = prompt('Message from the team (optional)', 'Thank you for being a great host!'); if (msg === null) return; try { const r = await API.adminGift(key, x.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Balance: ' + r.balance)); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, '🎁 Gift'))) : [h('p', { class: 'hint' }, 'No hosts yet. In People, press Role and type host.')])],
+            h('button', { class: 'btn sm', onclick: async () => { const pts = prompt('Gift points to ' + x.nick, '50'); if (pts === null) return; const msg = prompt('Message from the team (optional)', 'Thank you for being a great host!'); if (msg === null) return; try { const r = await API.adminGift(key, x.id, Number(pts) || 0, msg || ''); note.replaceChildren(h('div', { class: 'note' }, 'Sent. Balance: ' + r.balance)); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } } }, 'Gift'))) : [h('p', { class: 'hint' }, 'No hosts yet. In People, press Role and type host.')])],
         selfies: () => {
           const decide = async (x, ok) => { if (!confirm(ok ? 'Approve and give the badge and points?' : 'Reject this selfie?')) return; try { await API.adminSelfieDecide(key, x.id, ok); await load(); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
           return [h('p', { class: 'hint' }, 'Check that the face is real and the person shows the right number of fingers. The picture is erased as soon as you decide, and after 7 days if you do not.'), note,
@@ -1247,7 +1245,7 @@ async function admin() {
           const adjust = async (x) => { const pts = prompt('Add (+) or remove (-) points for ' + (x.nick || x.name || 'this person') + '. Example: 50 or -50', '10'); if (pts === null) return; const msg = prompt('Message to show them (optional)', '') || ''; try { const r = await API.adminGift(key, x.user_id, Number(pts) || 0, msg); note.replaceChildren(h('div', { class: 'note' }, 'Done. Their balance is now ' + r.balance + ' points.')); } catch (e) { note.replaceChildren(h('div', { class: 'note' }, e.message)); } };
           const view = (img) => { const w = window.open('', '_blank'); if (w) { w.document.write('<img src="' + img + '" style="max-width:100%">'); w.document.title = 'Receipt'; } };
           return [h('p', { class: 'hint' }, 'People who paid with Whish. Check 4 things on the receipt: the Transaction ID matches what they typed, the Amount is right, the Receiver is your number, and the time is recent. Then find the same transfer in your own Whish history and approve. Wrong or fake? Reject. You can also add or remove points for anyone.'), note,
-            ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `AD-${x.id} · $${(x.cents / 100).toFixed(2)} · ${({ points5: 5, points12: 12, points25: 25, points29: 29, points100: 100 })[x.kind] || ''} points`), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? '🔎 sent a receipt' : '⏳ not paid yet')),
+            ...(o.orders.length ? o.orders.map((x) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `AD-${x.id} · $${(x.cents / 100).toFixed(2)} · ${({ points5: 5, points12: 12, points25: 25, points29: 29, points100: 100 })[x.kind] || ''} points`), h('span', { class: 'badge ' + (x.status === 'claimed' ? 'warn' : '') }, x.status === 'claimed' ? 'sent a receipt' : 'not paid yet')),
               h('div', { class: 'kv' }, h('div', null, h('b', null, 'Person: '), (x.name || x.nick || '?') + ' · ', wa(x.phone)), h('div', null, h('b', null, 'Transaction ID: '), x.txid || '—'), h('div', { class: 'hint' }, x.claimed_at ? 'Receipt sent ' + ago(x.claimed_at) : 'Ordered ' + ago(x.at))),
               x.receipt ? h('img', { src: x.receipt, alt: 'Receipt', style: 'max-width:100%;max-height:300px;border-radius:12px;cursor:zoom-in', onclick: () => view(x.receipt) }) : null,
               h('div', { class: 'row' }, h('button', { class: 'btn sm pri', onclick: () => decide(x, true) }, '✅ Approve'), h('button', { class: 'btn sm danger', onclick: () => decide(x, false) }, 'Reject'), h('button', { class: 'btn sm', onclick: () => adjust(x) }, '± Points')))) : [h('p', { class: 'hint' }, 'No orders waiting.')]),
@@ -1269,7 +1267,7 @@ async function admin() {
             ...rows.map(({ r, got }) => {
               const ans = byInvite[r.id] || [], when = r.answers ? 'answered before this was required' : 'has not answered yet';
               const slot = h('div');
-              return h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? '👀 opened' : '⏳ not opened')),
+              return h('div', { class: 'inv' }, h('header', null, h('h3', null, `${(PRESETS[r.type] || {}).emoji || '💌'} ${r.sender_name || '?'} → ${r.to_name || '?'}`), h('span', { class: 'badge ' + (r.answers ? 'ok' : r.opens ? 'warn' : '') }, r.answers ? '✅ answered' : r.opens ? 'opened' : 'not opened')),
                 h('div', { class: 'kv' },
                   h('div', null, h('b', null, 'Sender: '), (r.account_name || r.sender_name || '?') + ' · ', wa(r.sender_phone), r.account_email ? ' · ' + r.account_email : ''),
                   h('div', null, h('b', null, 'Receiver: '), r.to_name || '?'),
@@ -1277,8 +1275,8 @@ async function admin() {
                   h('div', null, h('b', null, 'Receiver WhatsApp: '), r.receiver_phone ? [wa(r.receiver_phone), r.receiver_src ? (r.receiver_src === 'contact' ? ' 📇 from contacts' : ' ⌨️ typed') : ''] : r.typed_phone ? [wa(r.typed_phone), h('span', { class: 'hint' }, ' ✍️ typed on the last page, not sent')] : none('— ' + when)),
                   h('div', null, h('b', null, 'Receiver Instagram: '), r.receiver_ig ? contactLink('@' + r.receiver_ig) : r.typed_ig ? [contactLink('@' + r.typed_ig), h('span', { class: 'hint' }, ' ✍️ typed, not sent')] : none('— not given')),
                   h('div', null, h('b', null, 'Created: '), ago(r.created_at) + ' · opened ' + r.opens + '×' + (r.last_opened_at ? ' · last ' + ago(r.last_opened_at) : ''))),
-                ...ans.map((a) => h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:6px 0 0' }, h('b', null, '💖 Answered ' + ago(a.at)), details(a.answer || {}), a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.'))),
-                h('div', { class: 'row', style: 'margin-top:6px' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, '🧭 Journey')), slot);
+                ...ans.map((a) => h('div', { class: 'inv', style: 'box-shadow:none;background:var(--bg);margin:6px 0 0' }, h('b', null, 'Answered ' + ago(a.at)), details(a.answer || {}), a.message ? h('div', { class: 'bubble' }, a.message) : h('div', { class: 'note' }, 'No message was saved.'))),
+                h('div', { class: 'row', style: 'margin-top:6px' }, h('button', { class: 'btn sm', onclick: async (e) => { e.currentTarget.disabled = true; try { slot.replaceChildren(journey(await API.adminInvite(key, r.id))); } catch (x) { slot.replaceChildren(h('div', { class: 'note' }, x.message)); } } }, 'Journey')), slot);
             })];
         },
         answers: () => d.answers.map((a) => h('div', { class: 'inv' }, h('header', null, h('h3', null, `💖 ${a.to_name || '?'} → ${a.sender_name || '?'}`), h('span', { class: 'hint' }, ago(a.at))),
@@ -1292,18 +1290,18 @@ async function admin() {
           const slot = h('div'), res = h('small', { class: 'hint' });
           if (perm === 'default') pushControl().then((n) => n && slot.replaceChildren(n)).catch(() => {});
           const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-          return h('div', { class: 'note stack' }, h('b', null, '📲 Alerts on your phone'),
-            h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : '⚠️ Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, and open ADate from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications are on.' : perm === 'denied' ? '❌ Notifications are blocked: allow them in your phone settings for this site.' : perm === 'default' ? 'Notifications are not on yet: tap the button below.' : '⚠️ This browser cannot show notifications.')),
-            slot, h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.adminTestPush(inp.value.trim()); res.textContent = r.devices ? 'Sent to ' + r.devices + ' device(s). Did it arrive?' : 'No phone is registered yet. Log in with your own account on this phone, turn on notifications, then try again.'; } catch (e) { res.textContent = e.message; } } }, '🔔 Send me a test alert'), res,
+          return h('div', { class: 'note stack' }, h('b', null, 'Alerts on your phone'),
+            h('small', { class: 'hint' }, (standalone ? '✅ Installed on the Home Screen. ' : 'Not installed yet. ' + (ios ? 'Tap Share, then “Add to Home Screen”, and open ADate from the new icon. ' : 'Open the ⋮ menu, then “Install app” or “Add to Home screen”. ')) + (perm === 'granted' ? '✅ Notifications are on.' : perm === 'denied' ? '❌ Notifications are blocked: allow them in your phone settings for this site.' : perm === 'default' ? 'Notifications are not on yet: tap the button below.' : 'This browser cannot show notifications.')),
+            slot, h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { const r = await API.adminTestPush(inp.value.trim()); res.textContent = r.devices ? 'Sent to ' + r.devices + ' device(s). Did it arrive?' : 'No phone is registered yet. Log in with your own account on this phone, turn on notifications, then try again.'; } catch (e) { res.textContent = e.message; } } }, 'Send me a test alert'), res,
             h('small', { class: 'hint' }, 'You get an alert for: a payment waiting, a selfie waiting, a new report, a new member, and messages to the team.'));
         })(),
-        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', '📇 Everything'], ['people', '👥 People'], ['reports', '🚩 Reports'], ['orders', '🛒 Orders'], ['selfies', '🤳 Selfies'], ['hosts', '🌟 Hosts'], ['tod', '🎲 Questions'], ['invites', '💌 Invites'], ['settings', '⚙️ Settings'], ['answers', '💖 Answers'], ['users', '👤 Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
+        h('div', { class: 'row', style: 'margin:12px 0' }, [['contacts', 'Everything'], ['people', 'People'], ['reports', 'Reports'], ['orders', 'Orders'], ['selfies', 'Selfies'], ['hosts', 'Hosts'], ['tod', 'Questions'], ['invites', 'Invites'], ['settings', 'Settings'], ['answers', 'Answers'], ['users', 'Accounts']].map(([id, l]) => h('button', { class: 'chip', 'aria-pressed': tab === id ? 'true' : 'false', onclick: () => { tab = id; draw(); } }, l)), h('button', { class: 'btn sm', onclick: load }, '↻ Refresh')), ...views[tab]());
       draw();
     } catch (e) { out.replaceChildren(h('div', { class: 'note' }, e.message)); }
   }
   inp.onkeydown = (e) => { if (e.key === 'Enter') load(); };
-  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, '🐱 A', h('b', null, 'Date')), h('span', { class: 'pill' }, 'Owner')),
-    h('div', { class: 'h2' }, '🔐 Owner dashboard'), h('div', { class: 'fieldrow' }, inp, h('button', { class: 'btn pri', onclick: load }, 'Open')), h('label', { class: 'row' }, rem, h('span', { class: 'hint' }, 'Remember the key on this phone (only on your own phone)')), h('div', { style: 'height:12px' }), out));
+  $app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'topbar' }, h('a', { class: 'brand', href: '#/' }, 'A', h('b', null, 'Date')), h('span', { class: 'pill' }, 'Owner')),
+    h('div', { class: 'h2' }, 'Owner dashboard'), h('div', { class: 'fieldrow' }, inp, h('button', { class: 'btn pri', onclick: load }, 'Open')), h('label', { class: 'row' }, rem, h('span', { class: 'hint' }, 'Remember the key on this phone (only on your own phone)')), h('div', { style: 'height:12px' }), out));
   if (key0) load();
 }
 
@@ -1316,7 +1314,7 @@ function setRobots(index) { // invites, inboxes and the owner page must never sh
 async function route() {
   await API.ready;
   document.body.style.background = '';
-  document.body.classList.toggle('nx', !/^#\/(i|v|d|date|mine|make|admin|privacy)/.test(location.hash || '#/'));
+  document.body.classList.toggle('nx', !/^#\/((i|v|d)\/|date|mine|make|admin-old|privacy)/.test(location.hash || '#/'));
   setRobots(!/^#\/(i|v|d|mine|admin|make|login|signup|recover|recover-phone|verify|profile)/.test(location.hash || ''));
   if (editor.cleanup) { editor.cleanup(); editor.cleanup = null; }
   clearInterval(pollTimer);
@@ -1344,7 +1342,7 @@ async function route() {
   }
   return home();
 }
-window.ADATE_UI = { toggleMode, shrinkImage, h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
+window.ADATE_UI = { toggleMode, modePref, shrinkImage, h, $app, store, authShell, footer, ago, copyText, pwField, pushControl, setPoll: (fn, ms) => { clearInterval(pollTimer); pollTimer = setInterval(fn, ms); } };
 window.CommunityRoute = window.CommunityInit ? window.CommunityInit(window.ADATE_UI) : null;
 window.addEventListener('hashchange', route);
 // A tab left open for hours keeps old code. When it comes back to the front, reload if a newer build is live.
@@ -1352,6 +1350,6 @@ document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !CFG.build) return;
   try { const j = await (await fetch('/version.json', { cache: 'no-store' })).json(); if (j && j.build && j.build !== CFG.build) location.reload(); } catch (e) { /* offline: keep going */ }
 });
-{ const m = store.get('adate.ui', null); if (m) document.documentElement.dataset.ui = m; }
+applyMode();
 route();
 })();

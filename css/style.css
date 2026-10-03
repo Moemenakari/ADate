@@ -516,3 +516,59 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .stkmaker{max-height:70vh;overflow-y:auto}.stkprev{display:flex;justify-content:center;padding:6px}
 .stkemojis{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}.emo{background:none;border:0;font-size:1.4rem;padding:2px;cursor:pointer;border-radius:8px}.emo:hover{background:var(--accent-soft)}
 .dot.on{outline:3px solid #fff}.stkopen{white-space:nowrap}
+
+/* ===================== Flat design: black, white and yellow, like a teen app (no gradients, no glitter) ===================== */
+body.nx{--yel:#ffd60a;--yel-d:#f0c800;--r:16px;--bg:#0a0a0a;--bg2:#0a0a0a;--surface:#161616;--ink:#fff;--muted:#9b9b9b;--line:#2b2b2b;--accent:#ffd60a;--accent-d:#ffd60a;--accent-soft:#262200;--lav:#161616;--mint:#161616;--butter:#161616;--sky:#161616;--shadow:none;background:var(--bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+html[data-ui=light] body.nx{--bg:#fff;--bg2:#fff;--surface:#f2f2f2;--ink:#0a0a0a;--muted:#6a6a6a;--line:#e3e3e3;--accent:#ffd60a;--accent-d:#0a0a0a;--accent-soft:#fff3b0;--lav:#f2f2f2;--mint:#f2f2f2;--butter:#f2f2f2;--sky:#f2f2f2}
+body.nx a{color:var(--ink)}
+body.nx .brand{font-weight:900;letter-spacing:-.03em;font-size:1.45rem;text-decoration:none}
+body.nx .brand b{background:var(--yel);color:#0a0a0a;padding:0 7px;border-radius:9px;margin-left:3px}
+body.nx .h2,body.nx .wz-h,body.nx h1,body.nx h2{font-weight:900;letter-spacing:-.02em}
+body.nx .btn{border:0;background:var(--surface);color:var(--ink);border-radius:999px;font-weight:800;box-shadow:none}
+body.nx .btn.pri{background:var(--yel);color:#0a0a0a;border:0}
+body.nx .btn.danger{background:#ff3b30;color:#fff}
+body.nx .btn.sm{padding:8px 14px}
+body.nx input,body.nx select,body.nx textarea{background:var(--surface);color:var(--ink);border:2px solid transparent;border-radius:14px}
+body.nx input:focus,body.nx select:focus,body.nx textarea:focus{border-color:var(--yel);outline:0}
+body.nx .panel,body.nx .roomcard,body.nx .note,body.nx .hist,body.nx .inv,body.nx .setsec,body.nx .otile,body.nx .sheet,body.nx .pack,body.nx .hello{background:var(--surface);border:0;border-radius:18px;box-shadow:none}
+body.nx .pack{border:2px solid transparent}body.nx .pack.best{border-color:var(--yel)}body.nx .pack .pk-n{color:var(--ink)}
+body.nx .gamecard{border-radius:18px;background:var(--yel);color:#0a0a0a;border:0;box-shadow:none}
+body.nx .gamecard.c2{background:var(--ink);color:var(--bg)}body.nx .gamecard.c3{background:var(--surface);color:var(--ink)}
+body.nx .chip{background:var(--surface);color:var(--ink);border:0;font-weight:700}body.nx .chip.on{background:var(--yel);color:#0a0a0a}
+body.nx .badge{background:var(--yel);color:#0a0a0a}body.nx .badge.ok{background:#22c55e;color:#04210f}
+body.nx .tabbar{background:var(--bg);backdrop-filter:none;border-top:1px solid var(--line);box-shadow:none}
+body.nx .tabbar a{color:var(--muted);background:none}body.nx .tabbar a.on{color:var(--ink);background:none}
+.tabbar .ti{display:flex;align-items:center;justify-content:center;padding:3px 16px;border-radius:999px}
+body.nx .tabbar a.on .ti{background:var(--yel);color:#0a0a0a}
+body.nx .coinring{background:var(--yel);box-shadow:none;color:#0a0a0a}
+body.nx .mechip{background:var(--surface);border:0}
+body.nx .installbar,body.nx .todobar{background:var(--yel);color:#0a0a0a;border-radius:16px;box-shadow:none}body.nx .installbar *,body.nx .todobar b{color:#0a0a0a}
+body.nx .installbar .btn,body.nx .todobar .btn{background:rgba(0,0,0,.12);color:#0a0a0a}
+body.nx .pushbar{background:var(--surface);border:0}
+body.nx .cmsg .bub{background:var(--surface);color:var(--ink);box-shadow:none}body.nx .cmsg.mine .bub{background:var(--yel);color:#0a0a0a}
+body.nx .setrow{background:transparent}body.nx .sethead b{font-size:1.05rem;font-weight:900}
+body.nx .toast{background:var(--ink);color:var(--bg)}
+.authwall{background:#0a0a0a;animation:none}.authwall .flo{display:none}
+.authlogo{font-size:2.8rem;font-weight:900}.authlogo i{background:#ffd60a;color:#0a0a0a;border-radius:12px;padding:0 10px;margin-left:4px}
+.authtag{text-shadow:none;color:#bdbdbd}
+.authcard{background:#161616;backdrop-filter:none;-webkit-backdrop-filter:none;border:0;box-shadow:none;color:#fff}
+.authcard input{background:#222;color:#fff}.authcard a{color:#ffd60a}
+
+body.nx .teamnote{background:var(--yel);color:#0a0a0a;border-radius:18px}body.nx .teamnote b,body.nx .teamnote p{color:#0a0a0a}
+body.nx .swcard{box-shadow:none;border-radius:22px}body.nx .sw-tag{background:rgba(255,255,255,.18)}
+body.nx .gamepanel,body.nx .xogrid .xocell{background:var(--surface);border:0;box-shadow:none;color:var(--ink)}
+body.nx .chathead .btn{background:var(--surface)}
+body.nx .composer .btn.pri{background:var(--yel);color:#0a0a0a}
+body.nx .teamnote .btn,body.nx .teamnote .btn.pri{background:#0a0a0a;color:#fff}
+
+/* ===== Comfortable for the eyes: softer contrast, no pure white on black, calmer yellow, roomier text ===== */
+body.nx{--yel:#f2c200;--yel-d:#d9ae00;--bg:#101011;--bg2:#101011;--surface:#1b1b1d;--ink:#ececec;--muted:#a3a3a8;--line:#2d2d30;font-size:16.5px;line-height:1.5}
+html[data-ui=light] body.nx{--bg:#f7f7f5;--bg2:#f7f7f5;--surface:#ececea;--ink:#1c1c1e;--muted:#66666b;--line:#dcdcd8;--yel:#ffd60a}
+html[data-ui=dark] body.nx .installbar,html[data-ui=dark] body.nx .todobar,html[data-ui=dark] body.nx .teamnote{background:var(--surface);color:var(--ink);box-shadow:inset 4px 0 0 var(--yel)}
+html[data-ui=dark] body.nx .installbar *,html[data-ui=dark] body.nx .todobar b,html[data-ui=dark] body.nx .teamnote b,html[data-ui=dark] body.nx .teamnote p,html[data-ui=dark] body.nx .todobar a,html[data-ui=dark] body.nx .todobar a b{color:var(--ink)!important}
+html[data-ui=dark] body.nx .installbar .btn,html[data-ui=dark] body.nx .todobar .btn{background:var(--line);color:var(--ink)}
+html[data-ui=dark] body.nx .teamnote .btn,html[data-ui=dark] body.nx .teamnote .btn.pri{background:var(--yel);color:#101011}
+html[data-ui=dark] body.nx .gamecard{background:var(--surface);color:var(--ink);box-shadow:inset 0 3px 0 var(--yel)}
+html[data-ui=dark] body.nx .gamecard.c2{background:var(--surface);color:var(--ink)}
+html[data-ui=dark] body.nx .coinring{background:var(--yel)}
+.authwall{background:#101011}

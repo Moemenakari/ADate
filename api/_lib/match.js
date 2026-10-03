@@ -2,6 +2,7 @@
 // (age circle, who they want to meet, shared interests) are put in a short chat that is erased afterwards.
 // They play up to 3 rounds of Truth or Dare questions; after each round each says Yes or No.
 // If both say Yes at least 2 times out of 3 they become friends (a normal private chat opens). Otherwise they part.
+const prices = require('./prices');
 const { ageOf, shareCircle, circlesOf, bandOf, screenText, reportTarget, pushUsers, zodiac, dateStr, photoOn, tickOf, roleOf, fastOf } = require('./community');
 
 const ROUNDS = 3, NEED_YES = 2, WAIT_SECONDS = 120, COOLDOWN_HOURS = 24;
@@ -55,7 +56,6 @@ async function handle(action, ctx) {
     await sql`delete from match_queue where since < now() - ${WAIT_SECONDS + ' seconds'}::interval`;
     const cand = await sql`select q.user_id, q.since, u.birthdate, u.gender, u.meet, u.interests, u.langs from match_queue q join users u on u.id = q.user_id
       where q.user_id <> ${u.id} and u.role is distinct from 'team' and not u.blocked and (u.muted_until is null or u.muted_until < now())
-        and (${meet} = 'both' or u.gender = ${meet}) and (u.meet = 'both' or u.meet = ${u.gender})
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = q.user_id) or (bl.blocker = q.user_id and bl.blocked = ${u.id}))
         and not exists (select 1 from matches mm where ((mm.a = ${u.id} and mm.b = q.user_id) or (mm.a = q.user_id and mm.b = ${u.id})) and mm.created_at > now() - ${COOLDOWN_HOURS + ' hours'}::interval)
       order by q.since limit 50`;
@@ -187,17 +187,27 @@ async function handle(action, ctx) {
     const u = await need();
     if (!u.gender) throw bad('Tell us who you are first', 409);
     const meet = u.meet || 'both', age = ageOf(u.birthdate), mi = new Set(u.interests || []);
-    const rows = await sql`select t.id, t.nick, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, t.reply_n, t.reply_secs, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
+    const rows = await sql`select t.id, t.nick, t.gender, t.country, t.birthdate, t.interests, t.langs, t.avatar, t.frame, t.photo, t.photo_ok, t.photo_until, t.selfie_ok, t.is_admin, t.role, t.last_seen, t.reply_n, t.reply_secs, (select s.created_at from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'skip') as skipped_at from users t
       where t.role is distinct from 'team' and t.id <> ${u.id} and t.profile_done and t.nick is not null and not t.blocked and (t.muted_until is null or t.muted_until < now())
         and (${meet} = 'both' or t.gender = ${meet}) and (t.meet is null or t.meet = 'both' or t.meet = ${u.gender})
-        and not exists (select 1 from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'invite')
+        and not exists (select 1 from swipes s where s.from_user = ${u.id} and s.to_user = t.id and s.act = 'invite' and s.created_at > now() - interval '24 hours')
+        and not exists (select 1 from dm_threads d where d.status = 'open' and ((d.a = ${u.id} and d.b = t.id) or (d.b = ${u.id} and d.a = t.id)))
         and not exists (select 1 from blocks bl where (bl.blocker = ${u.id} and bl.blocked = t.id) or (bl.blocker = t.id and bl.blocked = ${u.id}))
       order by t.last_login_at desc nulls last limit 200`;
     const ok = rows.filter((t) => shareCircle(age, ageOf(t.birthdate)))
       .map((t) => ({ t, fresh: !t.skipped_at, score: (t.interests || []).filter((x) => mi.has(x)).length * 3 + (t.country && t.country === u.country ? 2 : 0) + Math.random() }))
       .sort((x, y) => (y.fresh - x.fresh) || (x.fresh ? y.score - x.score : new Date(x.t.skipped_at) - new Date(y.t.skipped_at))); // people you skipped come back, oldest skip first, once the new ones run out
     if (!ok.length) return out({ card: null });
-    const t = ok[0].t;
+    const t = ok[0].t, P = await prices.get(sql), freeUntil = new Date(new Date(u.created_at).getTime() + P.swipe_free_days * 86400000), free = Date.now() < freeUntil.getTime() || t.gender === u.gender;
+    if (!free && P.swipe_price > 0) { // after the free days, each person of the other gender costs stars (once a day per person)
+      const seen = await sql`select 1 from swipe_views where viewer = ${u.id} and target = ${t.id} and day = current_date`;
+      if (!seen.length) {
+        const bal = (await sql`select coalesce(sum(delta), 0)::int as n from points_ledger where user_id = ${u.id}`)[0].n;
+        if (bal < P.swipe_price) throw bad(`Your free days are over. Each new person costs ${P.swipe_price} star(s). You have ${bal}.`, 402);
+        const ins = await sql`insert into swipe_views (viewer, target, day) values (${u.id}, ${t.id}, current_date) on conflict do nothing returning target`;
+        if (ins.length) await sql`insert into points_ledger (user_id, delta, reason, ref) values (${u.id}, ${-P.swipe_price}, 'swipe', ${String(t.id)})`;
+      }
+    }
     return out({ card: { id: t.id, nick: t.nick, last_seen: t.last_seen, selfie_ok: tickOf(t), role: roleOf(t), fast: fastOf(t), country: t.country, age_band: bandOf(ageOf(t.birthdate)), zodiac: zodiac(dateStr(t.birthdate)), avatar: t.avatar || '', frame: t.frame || '', photo: photoOn(t) ? (t.photo || '') : '', interests: t.interests || [], shared: (t.interests || []).filter((x) => mi.has(x)), langs: t.langs || [] } });
   }
   if (action === 'discover_act') { // Skip, or Invite with an optional first message
