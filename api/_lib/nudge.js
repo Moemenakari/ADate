@@ -25,14 +25,13 @@ async function optionsFor(sql, u, online) {
   o.push({ t: '🎮 Quick game of XO?', b: 'Play with someone random in 10 seconds.', url: '/#/match' });
   o.push({ t: '🎲 The daily question is ready', b: 'Answer and see who chose like you.', url: '/#/match' });
   o.push({ t: '✨ Something new is waiting for you', b: 'Come and take a look.', url: '/#/' });
-  o.push({ t: '🤖 Come and play with Bot', b: 'Bot is online all day and replies to everyone.', url: '/#/online' });
   return o;
 }
 
 async function run(sql) {
-  const online = (await sql`select count(*)::int as n from users where last_seen > now() - interval '150 seconds' and role is distinct from 'bot'`)[0].n;
+  const online = (await sql`select count(*)::int as n from users where last_seen > now() - interval '150 seconds'`)[0].n;
   const people = await sql`select u.id, u.birthdate, u.selfie_ok, u.country from users u
-    where not u.blocked and u.profile_done and not u.nudge_off and u.role is distinct from 'bot'
+    where not u.blocked and u.profile_done and not u.nudge_off
       and (u.nudged_at is null or u.nudged_at < now() - interval '170 minutes')
       and exists (select 1 from push_subs p where p.user_id = u.id) limit 300`;
   let sent = 0;

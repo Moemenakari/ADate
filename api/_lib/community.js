@@ -423,12 +423,6 @@ async function handle(action, ctx) {
         let streak = t[0].streak || 0, newSd = sd;
         if (aDay === today && bDay === today && sd !== today) { streak = sd === yest ? streak + 1 : 1; newSd = today; }
         await sql`update dm_threads set a_day = ${aDay}, b_day = ${bDay}, streak = ${streak}, streak_day = ${newSd} where id = ${id}`; }
-      const bot = (await sql`select role from users where id = ${other}`)[0];
-      if (bot && bot.role === 'bot') { // Engy and other labelled bots are always online and answer straight away
-        const R = ['Hey! 😊 Great to hear from you. How is your day going?', 'Haha nice! Tell me more 😄', 'Want to play something? Open a game from the Play menu 🎮', 'I like that! What music are you into these days? 🎧', 'Same here! What do you do when you are bored?', 'Tell me one thing that made you smile today 🌟', 'Ooh, interesting. Truth or Dare later? 🎭', 'I am a bot, so I never sleep. Ask me anything fun! 🤖'];
-        await sql`insert into dm_messages (thread_id, from_user, body) values (${id}, ${other}, ${R[Math.floor(Math.random() * R.length)]})`;
-        return out({ ok: true });
-      }
       if (!(await sql`select 1 from notif_mutes where user_id = ${other} and kind = 'dm' and ref = ${id}`).length) await pushUsers(sql, [other], '💬 ' + (u.nick || 'Someone') + ' wrote to you', 'Open ADate to read it.', '/#/dm/' + id);
       return out({ ok: true });
     }

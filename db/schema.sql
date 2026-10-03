@@ -371,7 +371,7 @@ create index if not exists profile_views_target_idx on profile_views (target, id
 alter table users add column if not exists nudge_off boolean not null default false;
 alter table users add column if not exists nudged_at timestamptz;
 create table if not exists notif_mutes (user_id bigint not null references users(id) on delete cascade, kind text not null, ref bigint not null, primary key (user_id, kind, ref));
-update users set nick = 'Bot' where phone = 'bot-engy';
+
 
 -- ===== Schools map =====
 create table if not exists places (id bigserial primary key, name text not null, kind text not null default 'school', lat double precision not null, lng double precision not null, active boolean not null default true, created_at timestamptz not null default now());
