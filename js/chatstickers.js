@@ -13,24 +13,53 @@
   ];
   const BY = {}; P.forEach((s, i) => { BY[s[0]] = { id: s[0], emoji: s[1], text: s[2], cat: s[3], bg: G[i % G.length] }; });
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  /* Stickers people design themselves: an emoji, a short caption, a colour and a shape. Sent as the text [sk:emoji|caption|colour|shape], so chats stay text only and the normal text filter checks the caption. */
+  const SHAPES = ['blob', 'circle', 'square', 'burst'], SK = /^\[sk:([^|\]]{1,8})\|([^|\]]{0,16})\|([0-6])\|([0-3])\]$/u;
+  const skToken = (e, t, c, sh) => '[sk:' + e + '|' + t + '|' + c + '|' + sh + ']';
+  function customEl(e, text, c, sh, small) {
+    const b = mk('div', 'stk shape-' + SHAPES[sh] + (small ? ' sm' : '')); b.style.background = 'linear-gradient(135deg,' + G[c] + ')'; b.setAttribute('role', 'img'); b.setAttribute('aria-label', text || 'sticker');
+    b.append(mk('span', 'stk-e', e)); if (text) b.append(mk('span', 'stk-t', text)); return b;
+  }
+  const isSticker = (t) => /^\[st:[a-z]+\]$/.test(String(t || '')) || SK.test(String(t || ''));
+  const MINE = 'adate.mystk';
+  const loadMine = () => { try { return JSON.parse(localStorage.getItem(MINE) || '[]').filter((x) => Array.isArray(x) && x.length === 4).slice(0, 40); } catch (e) { return []; } };
+  const saveMine = (a) => { try { localStorage.setItem(MINE, JSON.stringify(a.slice(0, 40))); } catch (e) { /* ok */ } };
   function el(id, small) {
     const s = BY[id]; if (!s) return null;
     const b = mk('div', 'stk' + (small ? ' sm' : '')); b.style.background = 'linear-gradient(135deg,' + s.bg.split(',').join(',') + ')'; b.setAttribute('role', 'img'); b.setAttribute('aria-label', s.text);
     b.append(mk('span', 'stk-e', s.emoji), mk('span', 'stk-t', s.text)); return b;
   }
   /** Draws a chat message body: a sticker when it is one, plain text otherwise. */
-  function body(text) { const m = /^\[st:([a-z]+)\]$/.exec(String(text || '')); return (m && el(m[1])) || String(text || ''); }
+  function body(text) { const t = String(text || ''), k = SK.exec(t); if (k) return customEl(k[1], k[2], Number(k[3]), Number(k[4])); const m = /^\[st:([a-z]+)\]$/.exec(t); return (m && el(m[1])) || t; }
+  const EMOJIS = ['😎', '😂', '🤣', '😍', '🥰', '😘', '🤩', '🥳', '😜', '🤪', '😏', '😴', '🤔', '🙄', '😅', '😭', '😡', '🥺', '🤗', '🙈', '👍', '👌', '✌️', '🤞', '💪', '🙏', '👏', '🔥', '💯', '✨', '⭐', '💜', '❤️', '💔', '🎉', '🎮', '⚽', '🏀', '🎧', '🎤', '🍕', '🍔', '🍟', '🍦', '☕', '🥙', '🌹', '🌴', '🏖️', '☀️', '🌙', '🚗', '✈️', '📚', '✏️', '🎒', '🐱', '🐶', '🦄', '🐼', '🦁', '🐸'];
+  function maker(onSend, back) {
+    let e = '😎', c = 0, sh = 0; const text = mk('input'), prev = mk('div', 'stkprev'), emojiIn = mk('input'), grid = mk('div', 'stkemojis'), colors = mk('div', 'row'), shapes = mk('div', 'row');
+    text.type = 'text'; text.maxLength = 14; text.placeholder = 'Write on it (like "Cool hawa")'; text.setAttribute('aria-label', 'Sticker text'); emojiIn.type = 'text'; emojiIn.maxLength = 8; emojiIn.placeholder = 'or type any emoji'; emojiIn.setAttribute('aria-label', 'Sticker emoji');
+    const draw = () => { prev.replaceChildren(customEl(e, text.value.trim(), c, sh)); colors.replaceChildren(...G.map((g, i) => { const b = mk('button', 'dot' + (i === c ? ' on' : '')); b.type = 'button'; b.style.background = 'linear-gradient(135deg,' + g + ')'; b.setAttribute('aria-label', 'Colour ' + (i + 1)); b.onclick = () => { c = i; draw(); }; return b; })); shapes.replaceChildren(...SHAPES.map((n, i) => { const b = mk('button', 'chip' + (i === sh ? ' on' : ''), n); b.type = 'button'; b.onclick = () => { sh = i; draw(); }; return b; })); };
+    grid.replaceChildren(...EMOJIS.map((x) => { const b = mk('button', 'emo', x); b.type = 'button'; b.onclick = () => { e = x; emojiIn.value = ''; draw(); }; return b; }));
+    text.oninput = draw; emojiIn.oninput = () => { const v = [...emojiIn.value.trim()].slice(0, 4).join(''); if (v) { e = v; draw(); } };
+    const send = mk('button', 'btn pri', 'Send'), save = mk('button', 'btn', '💾 Save to My stickers'), cancel = mk('button', 'btn sm', '← Back'); send.type = save.type = cancel.type = 'button';
+    send.onclick = () => { const t = text.value.trim(); const tok = skToken(e, t, c, sh); if (!SK.test(tok)) return; onSend(tok); };
+    save.onclick = () => { const a = loadMine(); const t = text.value.trim(); a.unshift([e, t, c, sh]); saveMine(a); save.textContent = '✅ Saved'; };
+    cancel.onclick = back;
+    const box = mk('div', 'stkpick stkmaker'); box.append(cancel, prev, text, grid, emojiIn, mk('small', 'hint', 'Colour'), colors, mk('small', 'hint', 'Shape'), shapes, mk('div', 'row'), send, save);
+    draw(); return box;
+  }
   function picker(onPick) {
-    const cats = ['Chat', 'Fun', 'Love', 'Lebanese', 'Mood', 'School']; let cat = 'Chat', q = '';
-    const box = mk('div', 'stkpick'), search = mk('input'), chips = mk('div', 'stkcats'), grid = mk('div', 'stkgrid');
+    const cats = ['Mine', 'Chat', 'Fun', 'Love', 'Lebanese', 'Mood', 'School']; let cat = loadMine().length ? 'Mine' : 'Chat', q = '';
+    const box = mk('div', 'stkpick'), search = mk('input'), chips = mk('div', 'stkcats'), grid = mk('div', 'stkgrid'), top = mk('div', 'row');
     search.type = 'text'; search.placeholder = 'Search stickers…'; search.setAttribute('aria-label', 'Search stickers'); search.maxLength = 20;
+    const create = mk('button', 'btn sm pri', '✨ Create your own'); create.type = 'button';
+    const showMaker = () => { box.replaceChildren(maker((tok) => onPick(tok, true), () => { box.replaceChildren(top, search, chips, grid); draw(); })); };
+    create.onclick = showMaker; top.append(create);
     const draw = () => {
-      chips.replaceChildren(...cats.map((c) => { const x = mk('button', 'chip' + (c === cat && !q ? ' on' : ''), c); x.type = 'button'; x.onclick = () => { cat = c; q = ''; search.value = ''; draw(); }; return x; }));
-      const list = P.filter((s) => q ? (s[2] + ' ' + s[0] + ' ' + s[3]).toLowerCase().includes(q) : s[3] === cat);
-      grid.replaceChildren(...(list.length ? list.map((s) => { const x = mk('button', 'stkbtn'); x.type = 'button'; x.append(el(s[0], true)); x.setAttribute('aria-label', s[2]); x.onclick = () => onPick(s[0]); return x; }) : [mk('p', 'hint', 'No stickers found')]));
+      chips.replaceChildren(...cats.map((x) => { const b = mk('button', 'chip' + (x === cat && !q ? ' on' : ''), x === 'Mine' ? '⭐ Mine' : x); b.type = 'button'; b.onclick = () => { cat = x; q = ''; search.value = ''; draw(); }; return b; }));
+      if (cat === 'Mine' && !q) { const mine = loadMine(); grid.replaceChildren(...(mine.length ? mine.map((m, i) => { const b = mk('button', 'stkbtn'); b.type = 'button'; b.append(customEl(m[0], m[1], m[2], m[3], true)); b.onclick = () => onPick(skToken(m[0], m[1], m[2], m[3]), true); b.oncontextmenu = (ev) => { ev.preventDefault(); if (confirm('Remove this sticker?')) { const a = loadMine(); a.splice(i, 1); saveMine(a); draw(); } }; let t; b.ontouchstart = () => { t = setTimeout(() => { if (confirm('Remove this sticker?')) { const a = loadMine(); a.splice(i, 1); saveMine(a); draw(); } }, 700); }; b.ontouchend = () => clearTimeout(t); return b; }) : [mk('p', 'hint', 'Nothing here yet. Tap “Create your own” and save it.')])); return; }
+      const list = P.filter((s) => q ? (s[2] + ' ' + s[0] + ' ' + s[3]).toLowerCase().includes(q) : s[3] === (cat === 'Mine' ? 'Chat' : cat));
+      grid.replaceChildren(...(list.length ? list.map((s) => { const x = mk('button', 'stkbtn'); x.type = 'button'; x.append(el(s[0], true)); x.setAttribute('aria-label', s[2]); x.onclick = () => onPick('[st:' + s[0] + ']'); return x; }) : [mk('p', 'hint', 'No stickers found')]));
     };
     search.oninput = () => { q = search.value.trim().toLowerCase(); draw(); };
-    box.append(search, chips, grid); draw(); return box;
+    box.append(top, search, chips, grid); draw(); return box;
   }
-  window.ChatStickers = { el, body, picker, all: P.length };
+  window.ChatStickers = { el, body, picker, isSticker, all: P.length };
 })();

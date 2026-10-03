@@ -509,3 +509,10 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .otile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;color:inherit;text-align:left}
 .otile b{font-size:1.5rem}.otile small{opacity:.8}.otile.warn{border-color:#ff7a00;box-shadow:0 0 0 2px rgba(255,122,0,.25)}
 .ownt{font-size:1.2rem}.ochips{overflow-x:auto;flex-wrap:nowrap}.ochips .chip{white-space:nowrap}.ocard summary{cursor:pointer;list-style:none}
+.chathead .hav:empty{display:none}.chathead .ct small{display:block}
+
+/* sticker maker and shapes */
+.stk.shape-circle{border-radius:50%}.stk.shape-square{border-radius:22px}.stk.shape-burst{border-radius:50% 50% 50% 50%/60% 60% 40% 40%;transform:rotate(3deg)}
+.stkmaker{max-height:70vh;overflow-y:auto}.stkprev{display:flex;justify-content:center;padding:6px}
+.stkemojis{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}.emo{background:none;border:0;font-size:1.4rem;padding:2px;cursor:pointer;border-radius:8px}.emo:hover{background:var(--accent-soft)}
+.dot.on{outline:3px solid #fff}.stkopen{white-space:nowrap}

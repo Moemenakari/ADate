@@ -464,7 +464,7 @@ async function handle(action, ctx) {
       const other = t[0].a === u.id ? t[0].b : t[0].a;
       const rows = after ? await sql`select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and id > ${after} and expires_at > now() order by id limit 100`
         : await sql`select * from (select id, from_user, body, created_at as at from dm_messages where thread_id = ${id} and expires_at > now() order by id desc limit 60) z order by id`;
-      const o = (await sql`select id, nick, last_seen, reply_n, reply_secs from users where id = ${other}`)[0]; o.fast = fastOf(o); delete o.reply_n; delete o.reply_secs;
+      const o = (await sql`select id, nick, avatar, frame, role, selfie_ok, last_seen, reply_n, reply_secs from users where id = ${other}`)[0]; o.tick = tickOf(o); delete o.selfie_ok; o.fast = fastOf(o); delete o.reply_n; delete o.reply_secs;
       return out({ thread: { id, status: t[0].status, started_by: t[0].started_by, ...streakOf(t[0]), locked: threadLocked(t[0]), unlock_price: unlockPrice(t[0]), unlock_until: t[0].unlock_until, unlocked: !!t[0].unlocked, source: t[0].source || null }, balance: await balanceOf(sql, u.id), other: o, messages: rows.map((m) => ({ ...m, mine: m.from_user === u.id })) });
     }
     case 'dm_unlock': { // after the free hour of a match chat: one of them pays 3 points and it stays open
