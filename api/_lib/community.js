@@ -506,7 +506,7 @@ async function handle(action, ctx) {
     }
     /* ------------------------------------------------ cleanup: messages live 3 days, reports 7 days. Points and money are never touched. */
     case 'cleanup': {
-      await sql`delete from match_queue where since < now() - interval '10 minutes'`; await sql`update users set selfie = null, selfie_state = 'none' where selfie_state = 'pending' and selfie_at < now() - interval '7 days'`; await sql`delete from matches where created_at < now() - interval '3 days'`;
+      await sql`delete from match_queue where since < now() - interval '10 minutes'`; await sql`update users set selfie = null, selfie_state = 'none' where selfie_state = 'pending' and selfie_at < now() - interval '7 days'`; await sql`update orders set receipt = null where receipt is not null and status in ('paid', 'rejected') and decided_at < now() - interval '60 days'`; await sql`delete from matches where created_at < now() - interval '3 days'`;
       const a = await sql`delete from messages where expires_at < now() returning id`, d = await sql`delete from dm_messages where expires_at < now() returning id`, r = await sql`delete from reports where created_at < now() - interval '7 days' returning id`;
       return out({ ok: true, messages: a.length, dms: d.length, reports: r.length });
     }

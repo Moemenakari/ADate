@@ -404,3 +404,9 @@ alter table social_unlocks drop constraint if exists social_unlocks_pkey;
 alter table social_unlocks add primary key (viewer, target, kind);
 
 create table if not exists view_reveals (user_id bigint not null references users(id) on delete cascade, viewer bigint not null references users(id) on delete cascade, created_at timestamptz not null default now(), primary key (user_id, viewer));
+
+-- Whish payments: the customer sends the transfer receipt and the transaction id; the owner checks them
+alter table orders add column if not exists txid text;
+alter table orders add column if not exists receipt text;
+alter table orders add column if not exists claimed_at timestamptz;
+create unique index if not exists orders_txid_idx on orders (lower(txid)) where txid is not null and status in ('claimed', 'paid');

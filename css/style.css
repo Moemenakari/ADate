@@ -494,3 +494,8 @@ html[data-ui=light] body.nx .tabbar a.on{color:var(--accent)}
 .authcard{width:min(440px,100%);background:color-mix(in srgb,var(--surface,#14141d) 86%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.28);border-radius:26px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
 @media (prefers-reduced-motion:reduce){.authwall,.flo,.authcat{animation:none}}
 .blurav{filter:blur(3px);background:var(--accent-soft)}.tabbar a{min-width:48px;padding:2px 3px}.tabbar a small{font-size:.64rem}
+
+.backbtn{align-self:flex-start;margin:4px 0}
+.numrow{align-items:center;justify-content:space-between;background:var(--accent-soft);border-radius:14px;padding:10px 12px}.bignum{font-size:1.25rem;font-weight:800;letter-spacing:.5px}
+.receiptprev img{max-width:100%;max-height:260px;border-radius:12px;border:1px solid var(--line)}
+.paycard{gap:10px}

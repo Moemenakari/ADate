@@ -537,26 +537,35 @@ window.CommunityInit = function (ui) {
 
   /* ---------------------------------------------------------------- buy points (Whish, checked by the owner) */
   async function shopPage() {
-    page('#/points', h('p', { class: 'hint spark' }, 'Loading…'));
+    page('#/shop', h('p', { class: 'hint spark' }, 'Loading…'));
     if (!ME) await load();
     const d = await API.shop(), msg = h('div');
     const STATUS = { pending: '⏳ waiting for your payment', claimed: '🔎 being checked', paid: '✅ paid', rejected: '❌ not accepted' };
     const money = (c) => '$' + (c / 100).toFixed(2);
-    const waiting = d.orders.find((o) => o.status === 'pending');
-    const payLink = (kind) => (kind && d.settings['whish_link_' + kind]) || d.settings.whish_link || '';
-    const pay = payLink(waiting && waiting.kind) ? h('a', { class: 'btn pri block', target: '_blank', rel: 'noopener', href: payLink(waiting && waiting.kind) }, '💳 Pay with card or Whish') : h('p', { class: 'hint' }, 'The Whish link is not set yet. Ask the owner on WhatsApp.');
-    const note = h('input', { type: 'text', maxlength: 120, placeholder: 'Whish transaction reference', 'aria-label': 'Whish reference' });
-    const buy = (p) => async () => { try { await API.orderCreate(p.kind); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } };
+    const back = h('a', { class: 'btn sm backbtn', href: '#/', 'aria-label': 'Back', onclick: (e) => { if (history.length > 1) { e.preventDefault(); history.back(); } } }, '← Back');
+    const open = d.orders.find((o) => o.status === 'pending' || o.status === 'claimed');
     const pk = (kind) => d.products.find((x) => x.kind === kind) || {};
+    const buy = (p) => async () => { try { await API.orderCreate(p.kind); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } };
     const packs = d.products.map((p) => h('button', { class: 'pack' + (p.points >= 100 ? ' best' : ''), onclick: buy(p) }, p.points >= 100 ? h('em', null, 'Best value') : null, h('span', { class: 'pk-n' }, '⭐ ' + p.points), h('b', null, money(p.cents)), h('small', null, 'Tap to buy')));
-    const cardBtn = d.card_ready ? h('button', { class: 'btn pri block', onclick: async () => { try { const r = await API.payCard(waiting.id); location.href = r.url; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '💳 Pay with Visa / Mastercard') : null;
-    const whishBox = h('div', { class: 'stack' }, h('b', null, '📲 Pay with Whish'), d.settings.whish_number ? h('p', null, 'Send the money on Whish to ', h('b', null, '+' + d.settings.whish_number), '.') : null, waiting ? h('p', { class: 'hint' }, `Write AD-${waiting.id} in the Whish note.` + (d.settings.whish_note ? ' ' + d.settings.whish_note : '')) : null, waiting ? pay : null, waiting ? note : null,
-      waiting ? h('button', { class: 'btn block', onclick: async () => { try { await API.orderPaid(waiting.id, note.value); toast('Thank you. We will check it.'); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, 'I paid with Whish') : null);
-    page('#/points', h('div', { class: 'h2' }, '🛒 Get more points'), d.first_bonus ? h('div', { class: 'note' }, '🎁 Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null,
-      waiting ? h('div', { class: 'stack' }, h('div', { class: 'note' }, h('b', null, `Order AD-${waiting.id}: ${pk(waiting.kind).label || ''} · ${money(waiting.cents)}`), h('p', { class: 'hint' }, 'Choose how to pay. Your points arrive after the payment is confirmed.')), cardBtn, whishBox, h('button', { class: 'btn sm', onclick: async () => { try { await API.orderCancel(waiting.id); } catch (e) { /* ignore */ } shopPage(); } }, 'Choose a different pack'))
-        : h('div', { class: 'packs' }, ...packs),
-      msg, h('p', { class: 'hint' }, 'We never see or keep your card. Card payments happen on the payment provider’s own page.'), h('button', { class: 'btn block', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '💬 No Whish or card? Chat with the ADate team'), h('div', { class: 'h2' }, 'My orders'), ...(d.orders.length ? d.orders.map((o) => h('div', { class: 'hist' }, h('span', null, `AD-${o.id} · ${STATUS[o.status] || o.status}`), h('b', null, money(o.cents)))) : [h('p', { class: 'hint' }, 'No orders yet.')]));
-    if (waiting) ui.setPoll(async () => { try { const x = await API.shop(); if (!x.orders.find((o) => o.id === waiting.id && (o.status === 'pending' || o.status === 'claimed'))) { const me2 = await API.points(); ME.points = me2.balance; shopPage(); } } catch (e) { /* next time */ } }, 4000);
+    const num = d.settings.whish_number;
+    let receipt = '';
+    const txid = h('input', { type: 'text', maxlength: 24, placeholder: 'Transaction ID from the receipt', 'aria-label': 'Whish transaction ID', autocomplete: 'off', inputmode: 'text' });
+    const prev = h('div', { class: 'receiptprev' }), file = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Screenshot of the Whish receipt', onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { receipt = await ui.shrinkImage(f, 1000, 0.75); prev.replaceChildren(h('img', { src: receipt, alt: 'Receipt preview' })); } catch (x) { msg.replaceChildren(h('div', { class: 'note' }, err(x))); } } });
+    const copyBtn = h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText('+' + num); toast('Number copied ✓'); } catch (e) { toast('Copy it by hand: +' + num, 'bad'); } } }, '📋 Copy');
+    const payCard = open && open.status === 'pending' ? h('div', { class: 'stack paycard' },
+      h('div', { class: 'note' }, h('b', null, `${pk(open.kind).label || ''} · ${money(open.cents)}`), h('p', { class: 'hint' }, 'Order AD-' + open.id)),
+      h('b', null, '1️⃣ Send the money on Whish'), num ? h('div', { class: 'row numrow' }, h('span', { class: 'bignum' }, '+' + num), copyBtn) : h('p', { class: 'hint' }, 'The Whish number is not set yet. Chat with the team below.'),
+      h('p', { class: 'hint' }, 'Send exactly ' + money(open.cents) + '.' + (d.settings.whish_note ? ' ' + d.settings.whish_note : '')),
+      h('b', null, '2️⃣ Add a screenshot of the receipt'), file, prev,
+      h('b', null, '3️⃣ Write the transaction ID'), txid,
+      h('button', { class: 'btn pri block', type: 'button', onclick: async () => { if (!receipt) return msg.replaceChildren(h('div', { class: 'note' }, 'Add the screenshot of your Whish receipt first.')); try { await API.orderPaid(open.id, txid.value, receipt); toast('Sent. We will check it now.'); shopPage(); } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '✅ I paid, check it'),
+      h('p', { class: 'hint' }, 'No receipt, no points. Each transaction ID counts once. A fake receipt means lost points and a ban.'),
+      h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await API.orderCancel(open.id); } catch (e) { /* ignore */ } shopPage(); } }, 'Choose a different pack'))
+      : open ? h('div', { class: 'note stack' }, h('b', null, '🔎 We are checking your payment'), h('p', { class: 'hint' }, `Order AD-${open.id} · ${money(open.cents)}. This usually takes a few minutes. You will get a notification when your points arrive.`)) : null;
+    page('#/shop', back, h('div', { class: 'h2' }, '🛒 Get more points'), !open && d.first_bonus ? h('div', { class: 'note' }, '🎁 Your first purchase gives you ' + d.first_bonus + ' extra points for free.') : null,
+      open ? payCard : h('div', { class: 'packs' }, ...packs),
+      msg, h('button', { class: 'btn block', onclick: async () => { try { const r = await API.supportOpen(); location.hash = '#/dm/' + r.thread; } catch (e) { msg.replaceChildren(h('div', { class: 'note' }, err(e))); } } }, '💬 No Whish? Chat with the team'), h('div', { class: 'h2' }, 'My orders'), ...(d.orders.length ? d.orders.map((o) => h('div', { class: 'hist' }, h('span', null, `AD-${o.id} · ${STATUS[o.status] || o.status}`), h('b', null, money(o.cents)))) : [h('p', { class: 'hint' }, 'No orders yet.')]));
+    if (open && open.status === 'claimed') ui.setPoll(async () => { try { const x = await API.shop(); if (!x.orders.find((o) => o.id === open.id && (o.status === 'pending' || o.status === 'claimed'))) { const me2 = await API.points(); ME.points = me2.balance; shopPage(); toast(x.orders.find((o) => o.id === open.id && o.status === 'paid') ? '🎉 Congratulations! Your points arrived.' : 'Your payment was not accepted.'); } } catch (e) { /* next time */ } }, 4000);
   }
 
   /* ---------------------------------------------------------------- referral landing */

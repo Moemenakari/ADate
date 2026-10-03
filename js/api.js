@@ -42,7 +42,7 @@
     adminTod: (key, o) => call('admin_tod', Object.assign({ key }, o || {})),
     shop: () => call('shop', { session: tok() }),
     orderCreate: (kind) => call('order_create', { session: tok(), kind }),
-    orderPaid: (id, note) => call('order_paid', { session: tok(), id, note }),
+    orderPaid: (id, txid, receipt) => call('order_paid', { session: tok(), id, txid, receipt }),
     adminOrders: (key) => call('admin_orders', { key }),
     adminOrderDecide: (key, id, approve) => call('admin_order_decide', { key, id, approve }),
     photoBuy: () => call('photo_buy', { session: tok() }),
@@ -151,7 +151,6 @@
     muteSet: (kind, id, on) => call('mute_set', { session: tok(), kind, id, on }),
     nudgeSet: (off) => call('nudge_set', { session: tok(), off }),
     installClaim: () => call('install_claim', { session: tok() }),
-    payCard: (id) => call('pay_card', { session: tok(), id }),
     adminMark: (key, id, op, note) => call('admin_mark', { key, id, op, note })
   };
   API.ready = ping().then((ok) => { API.enabled = ok; return ok; });
