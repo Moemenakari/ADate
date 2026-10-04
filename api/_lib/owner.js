@@ -2,7 +2,7 @@
 const prices = require('./prices');
 const { pushUsers, pushOwner, ageOf, bandOf } = require('./community');
 
-const ACTIONS = ['admin_overview', 'admin_people', 'admin_user_delete', 'admin_support_list', 'admin_support_thread', 'admin_support_reply', 'admin_push_save', 'admin_prices', 'admin_price_set'];
+const ACTIONS = ['admin_overview', 'admin_people', 'admin_user_delete', 'admin_support_list', 'admin_support_thread', 'admin_support_reply', 'admin_push_save', 'admin_prices', 'admin_price_set', 'admin_invites', 'admin_invite_detail'];
 
 async function handle(action, ctx) {
   if (!ACTIONS.includes(action)) return false;
@@ -86,6 +86,27 @@ async function handle(action, ctx) {
     return out({ ok: true });
   }
 
+  if (action === 'admin_invites') { // the Truth Date game: every invite, who made it, who it is for, and what came back
+    const invites = await sql`select i.id, i.created_at, i.type, i.sender_name, i.sender_phone, i.to_name, i.to_contact, i.opens, i.first_opened_at, i.last_opened_at, i.config->>'toIg' as to_ig,
+        (select u.email from users u where u.id = i.user_id) as account_email,
+        (select nullif(trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')), '') from users u where u.id = i.user_id) as account_name,
+        (select e.data->>'phone' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'phone', '') <> '' order by e.created_at desc limit 1) as typed_phone,
+        (select e.data->>'ig' from events e where e.invite_id = i.id and e.kind = 'contact' and coalesce(e.data->>'ig', '') <> '' order by e.created_at desc limit 1) as typed_ig,
+        (select count(*) from responses r where r.invite_id = i.id)::int as answers,
+        (select max(created_at) from responses r where r.invite_id = i.id) as last_answer_at,
+        (select r.receiver_phone from responses r where r.invite_id = i.id and r.receiver_phone is not null order by r.created_at desc limit 1) as receiver_phone,
+        (select r.receiver_ig from responses r where r.invite_id = i.id and r.receiver_ig is not null order by r.created_at desc limit 1) as receiver_ig
+      from invites i order by i.created_at desc limit 500`;
+    const stats = { invites: invites.length, opened: invites.filter((r) => r.opens > 0).length, answered: invites.filter((r) => r.answers > 0).length, contacts: invites.filter((r) => r.receiver_phone || r.receiver_ig || r.typed_phone || r.typed_ig).length };
+    return out({ stats, invites });
+  }
+  if (action === 'admin_invite_detail') {
+    const id = String(b.id || ''); if (!/^[a-z0-9]{6,16}$/.test(id)) throw bad('Bad id');
+    const i = (await sql`select id, created_at, opens, first_opened_at, last_opened_at, config from invites where id = ${id}`)[0]; if (!i) throw bad('Not found', 404);
+    const responses = await sql`select created_at as at, answer, message, receiver_phone as phone, receiver_ig as ig from responses where invite_id = ${id} order by created_at desc`;
+    const events = await sql`select created_at as at, kind, data from events where invite_id = ${id} order by created_at asc limit 200`;
+    return out({ invite: i, responses, events });
+  }
   if (action === 'admin_prices') {
     const P = await prices.get(sql);
     return out({ prices: Object.entries(prices.DEFAULTS).map(([key, v]) => ({ key, label: v[1], group: v[2], value: P[key], default: v[0] })) });

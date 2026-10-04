@@ -149,6 +149,8 @@
     adminSupportThread: (key, thread) => call('admin_support_thread', { key, thread }),
     adminSupportReply: (key, thread, body) => call('admin_support_reply', { key, thread, body }),
     adminPushSave: (key, sub) => call('admin_push_save', { key, ...sub }),
+    adminInvites: (key) => call('admin_invites', { key }),
+    adminInviteDetail: (key, id) => call('admin_invite_detail', { key, id }),
     adminPrices: (key) => call('admin_prices', { key }),
     adminPriceSet: (key, name, value) => call('admin_price_set', { key, name, value }),
     adminTestPush: (key) => call('admin_test_push', { key }),

@@ -121,7 +121,7 @@
 
     async more(c, rerender) {
       const sub = h('div', { class: 'stack' }), menu = h('div', { class: 'row ochips' });
-      const draw = () => { menu.replaceChildren(...[['prices', 'Prices'], ['questions', 'Questions'], ['settings', 'Numbers'], ['selfies', 'Selfies'], ['reports', 'Reports']].map(([k, l]) => h('button', { class: 'chip' + (k === moreTab ? ' on' : ''), type: 'button', onclick: () => { moreTab = k; draw(); MORE[k](sub); } }, l))); };
+      const draw = () => { menu.replaceChildren(...[['prices', 'Prices'], ['truthdate', 'Truth Date'], ['questions', 'Questions'], ['settings', 'Numbers'], ['selfies', 'Selfies'], ['reports', 'Reports']].map(([k, l]) => h('button', { class: 'chip' + (k === moreTab ? ' on' : ''), type: 'button', onclick: () => { moreTab = k; draw(); MORE[k](sub); } }, l))); };
       c.replaceChildren(h('div', { class: 'h2' }, 'More'), menu, sub);
       draw(); MORE[moreTab](sub);
     }
@@ -134,6 +134,16 @@
       const d = await API.adminPrices(key), groups = {}; d.prices.forEach((p) => (groups[p.group] = groups[p.group] || []).push(p));
       sub.replaceChildren(h('p', { class: 'hint' }, 'Change any number here. It applies at once, no code. Prices of packs are in US cents (260 = $2.60).'),
         ...Object.entries(groups).map(([g, items]) => h('div', { class: 'stack' }, h('div', { class: 'h2' }, g), ...items.map((p) => { const inp = h('input', { type: 'number', min: 0, value: p.value, inputmode: 'numeric', 'aria-label': p.label }), msg = h('small', { class: 'hint' }, p.value !== p.default ? 'default ' + p.default : ''); return h('div', { class: 'stack' }, h('b', null, p.label), h('div', { class: 'row' }, inp, h('button', { class: 'btn sm pri', type: 'button', onclick: async () => { try { await API.adminPriceSet(key, p.key, inp.value); msg.textContent = '✅ Saved'; } catch (e) { msg.textContent = e.message; } } }, 'Save'), msg)); }))));
+    },
+    async truthdate(sub) { // the Truth Date game: invites made, who they are for, answers and the contacts that came back
+      const d = await API.adminInvites(key), st = d.stats, box = h('div', { class: 'stack' });
+      const csv = () => { const cols = ['created_at', 'type', 'account_name', 'account_email', 'sender_name', 'sender_phone', 'to_name', 'to_contact', 'to_ig', 'opens', 'answers', 'last_answer_at', 'receiver_phone', 'receiver_ig', 'typed_phone', 'typed_ig']; const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; const body = d.invites.map((r) => cols.map((c) => q(r[c])).join(',')); const blob = new Blob([[cols.join(',')].concat(body).join('\n')], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'truth-date-invites.csv'; a.click(); };
+      const open = async (r) => { try { const x = await API.adminInviteDetail(key, r.id); const cfg = x.invite.config || {}; box.replaceChildren(h('button', { class: 'btn sm', type: 'button', onclick: draw }, '← Back'), h('div', { class: 'h2' }, (r.sender_name || '?') + ' → ' + (r.to_name || '?')), h('small', { class: 'hint' }, 'Opened ' + x.invite.opens + ' times'),
+        ...(x.responses.length ? x.responses.map((a) => h('div', { class: 'inv' }, h('div', { class: 'kv' }, h('div', null, h('b', null, 'Answer: '), (a.answer && a.answer.yes === false) ? 'Not right now' : 'Yes'), h('div', null, h('b', null, 'Message: '), a.message || '—'), h('div', null, h('b', null, 'Contact: '), a.phone ? wa(a.phone) : '—', a.ig ? ' · @' + a.ig : ''), h('div', { class: 'hint' }, ago(a.at))))) : [h('p', { class: 'hint' }, 'No answers yet.')]),
+        h('details', null, h('summary', null, 'Steps they went through (' + x.events.length + ')'), ...x.events.map((e) => h('div', { class: 'hist' }, h('span', null, e.kind + (e.data && e.data.s ? ': ' + e.data.s : '')), h('small', { class: 'hint' }, ago(e.at)))))); } catch (e) { alert(e.message); } };
+      const draw = () => box.replaceChildren(h('p', { class: 'hint' }, 'The Truth Date game: invites people made, who they are for and what came back. ' + st.invites + ' invites · ' + st.opened + ' opened · ' + st.answered + ' answered · ' + st.contacts + ' contacts collected.'), h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: csv }, '⬇ Export CSV')),
+        ...(d.invites.length ? d.invites.map((r) => h('button', { class: 'roomcard rowbtn', type: 'button', onclick: () => open(r) }, h('span', { class: 'rc-t' }, h('b', null, (r.sender_name || r.account_name || '?') + ' → ' + (r.to_name || '?')), h('small', null, 'Opened ' + r.opens + ' · answers ' + r.answers + (r.receiver_phone || r.typed_phone ? ' · contact ' + (r.receiver_phone || r.typed_phone) : '') + ' · ' + ago(r.created_at))))) : [h('p', { class: 'hint' }, 'No invites yet.')]));
+      draw(); sub.replaceChildren(box);
     },
     async questions(sub) { // the Truth or Dare question bank
       let qs = (await API.adminTod(key, {})).questions || [];
