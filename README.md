@@ -52,4 +52,4 @@ We store names, the WhatsApp numbers entered, the invite (including uploaded pic
     python3 -m http.server 8000     # demo mode, http://localhost:8000
 
 ## Credits
-Built with AI tools as a coding helper. See `ROADMAP.md` for what comes next.
+Built with AI tools as a coding helper. The story behind it: `STORY.md`. See `ROADMAP.md` for what comes next.
